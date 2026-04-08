@@ -1,0 +1,47 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+
+# Environment Variables
+.env
+.env.local
+.env.*
+!.env.example
+
+# Roitelet Local Data
+# Ignore everything in data/ except the bootstrap folder
+data/*
+!data/bootstrap/
+!data/bootstrap/model_priors.json
+
+# Pytest / Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.tox
+.tox/
+
+# OS / Editor Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.dockerignore
