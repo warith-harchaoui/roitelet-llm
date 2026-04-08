@@ -6,7 +6,7 @@ Chaque semaine, un nouveau modèle toujours plus puissant est publié par un gé
 
 **Roitelet** est un routeur adaptatif qui fait le tri pour vous. Au lieu de choisir manuellement un modèle, vous interrogez Roitelet. Le système détecte la nature de votre question, prédit les 3 meilleurs modèles pour cette tâche, les exécute en parallèle, et utilise un modèle open source local pour fusionner et livrer la meilleure réponse possible.
 
-![Roitelet](assets/roitelet.png)
+![Roitelet](assets/roitelet.jpg)
 
 
 ---
