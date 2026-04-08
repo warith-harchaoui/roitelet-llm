@@ -93,7 +93,7 @@ roitelet-llm/
 ├── scripts/            # Crawler tooling and autonomous updates
 ├── tests/
 │   └── test_roitelet.py              # Pytest battery
-├── streamlit_app.py    # Streamlit dashboard
+├── gui/main.py    # Streamlit dashboard
 ├── start.sh            # Launcher script
 ├── Dockerfile          # Containerization multi-stage build
 ├── docker-compose.yml  # Deploy stack definitions

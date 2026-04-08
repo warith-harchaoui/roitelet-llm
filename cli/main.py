@@ -1,0 +1,74 @@
+"""CLI interface for Roitelet LLM.
+
+This script provides terminal access to the Roitelet LLM router.
+Like gemini-cli, it can be run for single-shot invocations or in an
+interactive REPL mode.
+"""
+
+import argparse
+import asyncio
+import sys
+
+from core.core.pipeline import run_roitelet_chat
+from core.schemas import ChatRequest, RouterPreferences
+
+def print_welcome():
+    print("=======================================")
+    print(" Welcome to Roitelet LLM CLI")
+    print("=======================================")
+
+async def chat_repl():
+    """Interactive chat loop."""
+    print_welcome()
+    print("Type 'exit' or 'quit' to end the session.\n")
+    while True:
+        try:
+            prompt = input("You> ")
+            clean_prompt = prompt.strip()
+            if clean_prompt.lower() in ('exit', 'quit'):
+                break
+            if not clean_prompt:
+                continue
+            
+            request = ChatRequest(prompt=clean_prompt, preferences=RouterPreferences())
+            response = await run_roitelet_chat(request)
+            
+            print(f"\nRoitelet> {response.synthesis.content}\n")
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting...")
+            break
+        except Exception as e:
+            print(f"\nError: {e}\n")
+
+async def single_prompt(prompt: str):
+    """Execute a single prompt."""
+    try:
+        request = ChatRequest(prompt=prompt, preferences=RouterPreferences())
+        response = await run_roitelet_chat(request)
+        print(response.synthesis.content)
+    except Exception as e:
+        print(f"Error processing prompt: {e}")
+        sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="Roitelet LLM CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # Interactive mode
+    subparsers.add_parser("chat", help="Start an interactive chat REPL session")
+    
+    # Single execution mode
+    ask_parser = subparsers.add_parser("ask", help="Send a single question and get an answer")
+    ask_parser.add_argument("prompt", help="The string prompt to evaluate")
+    
+    args = parser.parse_args()
+    
+    if args.command == "chat":
+        asyncio.run(chat_repl())
+    elif args.command == "ask":
+        asyncio.run(single_prompt(args.prompt))
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

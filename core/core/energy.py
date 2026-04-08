@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.core.energy import estimate_energy_and_carbon
+>>> from core.core.energy import estimate_energy_and_carbon
 >>> estimate_energy_and_carbon(runtime_seconds=10.0, average_power_watts=50.0)[0] > 0
 True
 

@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.core.judge import parse_winners
+>>> from core.core.judge import parse_winners
 >>> parse_winners('Candidate 1 is best.\\nWINNERS: 1, 3')
 [1, 3]
 

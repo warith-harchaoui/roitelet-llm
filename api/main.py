@@ -7,7 +7,7 @@ The API exposes three access styles:
 
 Examples
 --------
->>> from app.main import app
+>>> from core.main import app
 >>> app.title
 'Roitelet LLM API'
 
@@ -29,18 +29,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .config import get_settings
-from .core.mcp import handle_mcp_request
-from .core.pipeline import run_roitelet_chat
-from .core.registry import warm_ollama_cache
-from .schemas import (
+from core.config import get_settings
+from core.core.mcp import handle_mcp_request
+from core.core.pipeline import run_roitelet_chat
+from core.core.registry import warm_ollama_cache
+from core.schemas import (
     AppSettingsPayload,
     ChatRequest,
     MCPRequest,
     OpenAIChatCompletionRequest,
     RouterPreferences,
 )
-from .storage import storage
+from core.storage import storage
 
 logger = logging.getLogger(__name__)
 

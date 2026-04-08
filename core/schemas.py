@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.schemas import ChatMessage
+>>> from core.schemas import ChatMessage
 >>> ChatMessage(role="user", content="Bonjour")
 ChatMessage(role='user', content='Bonjour')
 

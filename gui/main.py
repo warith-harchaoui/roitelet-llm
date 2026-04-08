@@ -24,9 +24,9 @@ import pandas as pd
 import requests
 import streamlit as st
 
-from app.config import get_settings
-from app.schemas import AppSettingsPayload
-from app.storage import storage
+from core.config import get_settings
+from core.schemas import AppSettingsPayload
+from core.storage import storage
 
 settings = get_settings()
 API_BASE = settings.public_base_url.rstrip('/')

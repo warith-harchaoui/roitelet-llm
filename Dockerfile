@@ -45,7 +45,7 @@ WORKDIR /app
 # Copy only the application source (data volume is mounted at runtime).
 COPY --chown=roitelet:roitelet app/           ./app/
 COPY --chown=roitelet:roitelet data/bootstrap ./data/bootstrap/
-COPY --chown=roitelet:roitelet streamlit_app.py .
+COPY --chown=roitelet:roitelet gui/main.py .
 COPY --chown=roitelet:roitelet start.sh .
 COPY --chown=roitelet:roitelet .env.example .
 

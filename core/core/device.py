@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.core.device import detect_best_accelerator
+>>> from core.core.device import detect_best_accelerator
 >>> detect_best_accelerator() in {'mps', 'cuda', 'cpu'}
 True
 

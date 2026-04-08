@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.storage import StorageManager
+>>> from core.storage import StorageManager
 >>> storage = StorageManager()
 >>> convo = storage.create_conversation(title="Demo")
 >>> convo.title
@@ -41,7 +41,8 @@ class StorageManager:
         self.conversations_dir = self.root / 'conversations'
         self.telemetry_dir = self.root / 'telemetry'
         self.runtime_dir = self.root / 'runtime'
-        for directory in (self.conversations_dir, self.telemetry_dir, self.runtime_dir):
+        self.cache_dir = self.root / 'cache'
+        for directory in (self.conversations_dir, self.telemetry_dir, self.runtime_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)
 
     def _read_json(self, path: Path, default: Any) -> Any:
@@ -157,6 +158,42 @@ class StorageManager:
             for path in sorted(self.telemetry_dir.glob('*.json'), reverse=True)
         ]
         return sorted(records, key=lambda item: item.created_at, reverse=True)
+
+    def get_cache(self, provider_name: str, payload_str: str) -> Optional[dict]:
+        """Retrieve a cached API response from JSONL."""
+        path = self.cache_dir / f'{provider_name}.jsonl'
+        if not path.exists():
+            return None
+        try:
+            with path.open('r', encoding='utf-8') as f:
+                # Iterate in reverse or just forward; for simple caching forward is fine
+                # Overwriting previous payload cache can be done but JSONL means we just append latest
+                # Let's return the last match if there are multiple.
+                match = None
+                for line in f:
+                    if not line.strip():
+                        continue
+                    record = json.loads(line)
+                    if record.get('payload') == payload_str:
+                        match = record.get('response')
+                return match
+        except Exception:
+            pass
+        return None
+
+    def set_cache(self, provider_name: str, payload_str: str, response_data: dict) -> None:
+        """Append an API response to the provider's JSONL cache."""
+        path = self.cache_dir / f'{provider_name}.jsonl'
+        record = {
+            'payload': payload_str,
+            'response': response_data,
+            'cached_at': datetime.now(timezone.utc).isoformat()
+        }
+        try:
+            with path.open('a', encoding='utf-8') as f:
+                f.write(json.dumps(record, ensure_ascii=False) + '\n')
+        except Exception:
+            pass
 
     def settings_path(self) -> Path:
         """Return the path used for persisted UI settings."""

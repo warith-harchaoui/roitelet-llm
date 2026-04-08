@@ -146,10 +146,10 @@ Cela lance :
 
 ```bash
 # Terminal 1
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Terminal 2
-streamlit run streamlit_app.py --server.port 8501
+streamlit run gui/main.py --server.port 8501
 ```
 
 ---
@@ -238,7 +238,7 @@ roitelet-llm/
 │   └── bootstrap/model_priors.json   # scores a priori inspirés des benchmarks
 ├── tests/
 │   └── test_roitelet.py              # suite pytest (21 tests)
-├── streamlit_app.py    # interface de contrôle Streamlit
+├── gui/main.py    # interface de contrôle Streamlit
 ├── start.sh            # script de lancement
 ├── Dockerfile          # construction multi-étapes
 ├── docker-compose.yml  # pile compose

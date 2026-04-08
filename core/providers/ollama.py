@@ -2,7 +2,7 @@
 
 Examples
 --------
->>> from app.providers.ollama import OllamaClient
+>>> from core.providers.ollama import OllamaClient
 >>> client = OllamaClient(base_url='http://localhost:11434')
 >>> client.base_url.startswith('http')
 True

@@ -5,7 +5,7 @@ local synthesis model, routing preferences, and monitoring defaults.
 
 Examples
 --------
->>> from app.config import get_settings
+>>> from core.config import get_settings
 >>> settings = get_settings()
 >>> settings.default_top_k >= 1
 True

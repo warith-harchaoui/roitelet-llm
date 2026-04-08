@@ -6,7 +6,7 @@ endpoint, provided the expected `/chat/completions` contract is respected.
 Examples
 --------
 >>> # Network access is required for real usage.
->>> from app.providers.openai_compatible import OpenAICompatibleClient
+>>> from core.providers.openai_compatible import OpenAICompatibleClient
 >>> client = OpenAICompatibleClient(base_url='https://example.invalid', api_key='x', provider_name='demo')
 >>> client.provider_name
 'demo'
@@ -18,6 +18,7 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Sequence
 
@@ -25,6 +26,7 @@ import httpx
 
 from ..core.energy import estimate_energy_and_carbon
 from ..schemas import ChatMessage, ModelResponse
+from ..storage import storage
 
 
 class OpenAICompatibleClient:
@@ -58,11 +60,17 @@ class OpenAICompatibleClient:
             'model': model_id.split('/', 1)[-1],
             'messages': [message.model_dump() for message in messages],
         }
+        payload_str = json.dumps(payload, sort_keys=True)
         try:
-            async with httpx.AsyncClient(timeout=180.0) as client:
-                response = await client.post(endpoint, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
+            cached_data = storage.get_cache(self.provider_name, payload_str)
+            if cached_data:
+                data = cached_data
+            else:
+                async with httpx.AsyncClient(timeout=180.0) as client:
+                    response = await client.post(endpoint, headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                storage.set_cache(self.provider_name, payload_str, data)
             runtime = time.perf_counter() - started
             message = data['choices'][0]['message']
             usage = data.get('usage', {})

@@ -5,10 +5,10 @@ HOST="${ROITELET_APP_HOST:-0.0.0.0}"
 API_PORT="${ROITELET_APP_PORT:-8000}"
 UI_PORT="${ROITELET_STREAMLIT_PORT:-8501}"
 
-python -m uvicorn app.main:app --host "$HOST" --port "$API_PORT" &
+python -m uvicorn api.main:app --host "$HOST" --port "$API_PORT" &
 API_PID=$!
 
-streamlit run streamlit_app.py --server.address "$HOST" --server.port "$UI_PORT" --browser.gatherUsageStats false &
+streamlit run gui/main.py --server.address "$HOST" --server.port "$UI_PORT" --browser.gatherUsageStats false &
 UI_PID=$!
 
 cleanup() {

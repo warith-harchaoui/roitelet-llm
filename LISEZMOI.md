@@ -94,7 +94,7 @@ roitelet-llm/
 ├── scripts/            # Crawler de données d'évaluation
 ├── tests/
 │   └── test_roitelet.py              # Suite de tests Pytest automatisés
-├── streamlit_app.py    # Interface Streamlit
+├── gui/main.py    # Interface Streamlit
 ├── start.sh            # Script de lancement
 ├── Dockerfile          # Fichier de build Docker multi-stade
 ├── docker-compose.yml  # Déploiement en conteneur

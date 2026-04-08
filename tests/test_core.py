@@ -21,9 +21,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.capabilities import detect_capabilities, top_capabilities
-from app.core.judge import parse_winners
-from app.schemas import RouterPreferences
+from core.core.capabilities import detect_capabilities, top_capabilities
+from core.core.judge import parse_winners
+from core.schemas import RouterPreferences
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +140,8 @@ class TestRouterPreferences:
 
 def _make_registry(extra_ollama: List[str] = None, extra_openrouter: List[str] = None):
     """Build a registry backed by the real bootstrap file."""
-    from app.schemas import AppSettingsPayload
-    from app.core.registry import ModelRegistry
+    from core.schemas import AppSettingsPayload
+    from core.core.registry import ModelRegistry
 
     payload = AppSettingsPayload(
         selected_ollama_models=extra_ollama or [],
@@ -191,13 +191,13 @@ class TestModelRegistry:
         assert ids.count("ollama/qwen2.5:14b-instruct") == 1
 
     def test_capability_score_in_range(self):
-        from app.core.registry import ModelRegistry
+        from core.core.registry import ModelRegistry
         registry = ModelRegistry()
         score = registry.capability_score("ollama/qwen2.5:14b-instruct", "coding")
         assert 0.0 <= score <= 1.5
 
     def test_elo_update_bounded(self):
-        from app.core.registry import ModelRegistry, KNOWN_CAPABILITIES
+        from core.core.registry import ModelRegistry, KNOWN_CAPABILITIES
         registry = ModelRegistry()
         registry.update_elo(
             winners=["ollama/qwen2.5:14b-instruct"],
@@ -209,8 +209,9 @@ class TestModelRegistry:
             "Unknown capabilities must not pollute Elo state"
 
     def test_elo_winner_score_increases(self):
-        from app.core.registry import ModelRegistry
+        from core.core.registry import ModelRegistry
         registry = ModelRegistry()
+        registry.elo_state = {}  # Start fresh to avoid reaching the 1.5 score cap
         before = registry.capability_score("ollama/qwen2.5:14b-instruct", "coding")
         registry.update_elo(
             winners=["ollama/qwen2.5:14b-instruct"],
@@ -221,8 +222,9 @@ class TestModelRegistry:
         assert after > before, "Winner Elo score should increase after update"
 
     def test_elo_loser_score_decreases(self):
-        from app.core.registry import ModelRegistry
+        from core.core.registry import ModelRegistry
         registry = ModelRegistry()
+        registry.elo_state = {}  # Start fresh to avoid reaching the 0.0 score floor
         before = registry.capability_score("ollama/mistral-small3.1", "coding")
         registry.update_elo(
             winners=["ollama/qwen2.5:14b-instruct"],
@@ -240,7 +242,7 @@ class TestModelRegistry:
 class TestOllamaModelCache:
     def test_cache_returns_empty_when_no_server(self):
         """With no Ollama running, the cache should return [] gracefully."""
-        from app.core.registry import _OllamaModelCache
+        from core.core.registry import _OllamaModelCache
         cache = _OllamaModelCache()
         cache.configure("http://localhost:19999")  # nothing listening
         models = cache.models
@@ -249,7 +251,7 @@ class TestOllamaModelCache:
 
     def test_cache_uses_mocked_response(self):
         """Cache should populate from a mocked Ollama /api/tags response."""
-        from app.core.registry import _OllamaModelCache
+        from core.core.registry import _OllamaModelCache
         import httpx
 
         fake_response_data = {
@@ -262,7 +264,7 @@ class TestOllamaModelCache:
         cache = _OllamaModelCache()
         cache.configure("http://localhost:11434")
 
-        with patch("app.core.registry.httpx.get") as mock_get:
+        with patch("core.core.registry.httpx.get") as mock_get:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_response.json.return_value = fake_response_data
@@ -275,13 +277,13 @@ class TestOllamaModelCache:
 
     def test_cache_respects_ttl(self):
         """Cache should NOT re-fetch when TTL has not expired."""
-        from app.core.registry import _OllamaModelCache, _OLLAMA_CACHE_TTL_S
+        from core.core.registry import _OllamaModelCache, _OLLAMA_CACHE_TTL_S
         import httpx
 
         cache = _OllamaModelCache()
         cache.configure("http://localhost:11434")
 
-        with patch("app.core.registry.httpx.get") as mock_get:
+        with patch("core.core.registry.httpx.get") as mock_get:
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
             mock_response.json.return_value = {"models": [{"name": "phi4:latest"}]}
@@ -297,7 +299,7 @@ class TestOllamaModelCache:
 
     def test_live_discovered_models_appear_in_registry(self):
         """Live-discovered Ollama models should be injected into the registry candidates."""
-        from app.core.registry import ModelRegistry, ollama_cache
+        from core.core.registry import ModelRegistry, ollama_cache
 
         # Manually seed the cache with fake discovered models.
         ollama_cache._models = ["newmodel:7b", "anothermodel:13b"]
@@ -314,7 +316,7 @@ class TestOllamaModelCache:
 
     def test_live_discovered_does_not_override_bootstrap(self):
         """A live-discovered model that is already in bootstrap keeps its curated priors."""
-        from app.core.registry import ModelRegistry, ollama_cache
+        from core.core.registry import ModelRegistry, ollama_cache
 
         # Seed the cache with a model already in the bootstrap.
         ollama_cache._models = ["qwen2.5:14b-instruct"]
@@ -345,9 +347,9 @@ def _fake_settings(data_dir: Path):
 class TestStorageManager:
     def test_conversation_create_and_read(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("app.config.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
             from importlib import reload
-            import app.storage as st_mod
+            import core.storage as st_mod
             reload(st_mod)
             mgr = st_mod.StorageManager()
             convo = mgr.create_conversation(title="Test flight")
@@ -358,9 +360,9 @@ class TestStorageManager:
 
     def test_atomic_write_produces_valid_json(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("app.config.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
             from importlib import reload
-            import app.storage as st_mod
+            import core.storage as st_mod
             reload(st_mod)
             mgr = st_mod.StorageManager()
             target = tmp_path / "test_atomic.json"
@@ -372,9 +374,9 @@ class TestStorageManager:
     def test_no_tmp_file_left_on_success(self, tmp_path):
         """Atomic write must not leave .tmp files behind on success."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("app.config.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
             from importlib import reload
-            import app.storage as st_mod
+            import core.storage as st_mod
             reload(st_mod)
             mgr = st_mod.StorageManager()
             target = tmp_path / "clean.json"
@@ -385,9 +387,9 @@ class TestStorageManager:
     def test_list_conversations_sorted(self, tmp_path):
         """list_conversations must return newest first."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("app.config.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
             from importlib import reload
-            import app.storage as st_mod
+            import core.storage as st_mod
             reload(st_mod)
             mgr = st_mod.StorageManager()
             c1 = mgr.create_conversation(title="First")

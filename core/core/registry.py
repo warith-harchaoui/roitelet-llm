@@ -20,7 +20,7 @@ growth from typos or novel capability strings.
 
 Examples
 --------
->>> from app.core.registry import ModelRegistry
+>>> from core.core.registry import ModelRegistry
 >>> registry = ModelRegistry()
 >>> len(registry.list_models()) >= 1
 True
