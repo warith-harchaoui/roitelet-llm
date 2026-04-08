@@ -6,6 +6,8 @@ Every week, a new frontier model is released by an AI giant. Evaluating, benchma
 
 **Roitelet** (the "Wren") is a local-first adaptive router designed to abstract away this chaos. Instead of choosing a specific model, you prompt Roitelet. It dynamically selects the three most capable models for that specific prompt, queries them in parallel, and uses a local open-source model to synthesize the final, definitive answer. 
 
+![Roitelet](assets/roitelet.png)
+
 ---
 
 ## The "Wren" Metaphor
