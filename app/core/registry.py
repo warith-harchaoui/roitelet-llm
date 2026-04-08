@@ -1,0 +1,365 @@
+"""Model registry, rolling Elo state, and live Ollama discovery for Roitelet.
+
+The registry merges three model sources in priority order:
+
+1. **Bootstrap priors** — curated benchmark-inspired metadata in
+   ``data/bootstrap/model_priors.json``. These are the most accurate and
+   should not be overridden by dynamic sources.
+
+2. **User-configured models** — ``selected_ollama_models`` and
+   ``paid_openrouter_models`` saved from the Streamlit control room. These
+   are merged at every route call (no restart required).
+
+3. **Live Ollama discovery** — models returned by ``GET /api/tags`` on the
+   local Ollama server. This is fetched once at FastAPI startup and then
+   refreshed lazily every 60 seconds. New models pulled via ``ollama pull``
+   appear in the router within one TTL window without any configuration.
+
+Elo state keys are restricted to ``KNOWN_CAPABILITIES`` to prevent unbounded
+growth from typos or novel capability strings.
+
+Examples
+--------
+>>> from app.core.registry import ModelRegistry
+>>> registry = ModelRegistry()
+>>> len(registry.list_models()) >= 1
+True
+
+Notes
+-----
+Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Set
+
+import httpx
+
+from ..config import get_settings
+
+logger = logging.getLogger(__name__)
+
+# Capabilities the router recognises. Elo keys are restricted to this set plus
+# 'global' so that typos or novel capability strings cannot pollute the state file.
+KNOWN_CAPABILITIES: Set[str] = {
+    'coding', 'math', 'reasoning', 'writing', 'analysis',
+    'vision', 'multilingual', 'long_context',
+}
+
+# Default capability profile for a generic chat model not in the bootstrap file.
+_DEFAULT_CAPABILITIES: Dict[str, float] = {cap: 0.65 for cap in KNOWN_CAPABILITIES}
+
+# Default pricing / latency / energy for dynamically-added models.
+_OLLAMA_DEFAULTS: Dict[str, Any] = {
+    'provider': 'ollama',
+    'local': True,
+    'vlm': False,
+    'pricing': {'input_per_1k': 0.0, 'output_per_1k': 0.0},
+    'latency_s': 4.0,
+    'energy_kwh': 0.0009,
+}
+_OPENROUTER_DEFAULTS: Dict[str, Any] = {
+    'provider': 'openrouter',
+    'local': False,
+    'vlm': False,
+    'pricing': {'input_per_1k': 0.003, 'output_per_1k': 0.009},
+    'latency_s': 4.5,
+    'energy_kwh': 0.00060,
+}
+
+# TTL for the live Ollama model cache (seconds). After this delay the next
+# route call will trigger a background refresh.
+_OLLAMA_CACHE_TTL_S: float = 60.0
+
+
+# ---------------------------------------------------------------------------
+# Live Ollama model cache
+# ---------------------------------------------------------------------------
+
+class _OllamaModelCache:
+    """Thread-safe-ish cache for live Ollama model names.
+
+    The cache is populated at application startup via :func:`warm_ollama_cache`
+    and then lazily refreshed after :data:`_OLLAMA_CACHE_TTL_S` seconds on
+    the next read.  A synchronous ``httpx`` call is used deliberately so the
+    refresh is compatible with both async (startup) and sync (import-time)
+    contexts without introducing an event-loop dependency.
+    """
+
+    def __init__(self) -> None:
+        self._models: List[str] = []
+        self._fetched_at: float = 0.0
+        self._base_url: str = ''
+
+    def configure(self, base_url: str) -> None:
+        """Set the Ollama base URL (must be called before first read)."""
+        self._base_url = base_url.rstrip('/')
+
+    def _fetch(self) -> List[str]:
+        """Synchronously fetch the live model list from Ollama."""
+        if not self._base_url:
+            return []
+        try:
+            response = httpx.get(
+                f'{self._base_url}/api/tags',
+                timeout=5.0,
+            )
+            response.raise_for_status()
+            names = [item['name'] for item in response.json().get('models', [])]
+            logger.debug('Live Ollama discovery: %d model(s) found.', len(names))
+            return names
+        except Exception as exc:
+            logger.debug('Ollama discovery skipped (%s).', exc)
+            return []
+
+    def refresh(self, force: bool = False) -> None:
+        """Refresh the cache if TTL has expired or ``force=True``."""
+        if force or (time.monotonic() - self._fetched_at) > _OLLAMA_CACHE_TTL_S:
+            self._models = self._fetch()
+            self._fetched_at = time.monotonic()
+
+    @property
+    def models(self) -> List[str]:
+        """Return cached model names, refreshing lazily if stale."""
+        self.refresh()
+        return list(self._models)
+
+
+# Module-level cache instance shared across all registry objects.
+ollama_cache = _OllamaModelCache()
+
+
+def warm_ollama_cache(base_url: str, force: bool = True) -> None:
+    """Warm the live Ollama model cache eagerly.
+
+    Intended to be called from the FastAPI ``lifespan`` startup hook so that
+    the first request after server boot does not incur discovery latency.
+
+    Parameters
+    ----------
+    base_url:
+        Ollama server base URL (e.g. ``'http://localhost:11434'``).
+    force:
+        When ``True`` (default) fetch unconditionally even if the cache is
+        still fresh.
+    """
+    ollama_cache.configure(base_url)
+    ollama_cache.refresh(force=force)
+    logger.info('Ollama cache warmed: %d model(s).', len(ollama_cache.models))
+
+
+# ---------------------------------------------------------------------------
+# Model data class
+# ---------------------------------------------------------------------------
+
+@dataclass(slots=True)
+class ModelSpec:
+    """Static and slowly-changing metadata for one candidate model."""
+
+    model_id: str
+    provider: str
+    capabilities: Dict[str, float]
+    pricing: Dict[str, float]
+    latency_s: float
+    energy_kwh: float
+    local: bool
+    vlm: bool
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+class ModelRegistry:
+    """Registry of candidate models plus rolling Elo overrides.
+
+    Model sources (merged in this order, lower-priority → higher-priority):
+    1. Bootstrap JSON priors (most curated — never overwritten).
+    2. User-configured models from the Streamlit control room.
+    3. Live-discovered Ollama models (via the module-level cache).
+    """
+
+    def __init__(self, app_settings=None) -> None:
+        """Load model priors and any saved online adjustments.
+
+        Parameters
+        ----------
+        app_settings:
+            Optional :class:`~app.schemas.AppSettingsPayload` pre-loaded from
+            disk. When ``None`` the registry loads it lazily from storage.
+        """
+        settings = get_settings()
+        self.bootstrap_path = settings.data_dir / 'bootstrap' / 'model_priors.json'
+        self.elo_path = settings.data_dir / 'runtime' / 'elo_state.json'
+        if not self.bootstrap_path.exists():
+            raise FileNotFoundError(f'Bootstrap priors not found: {self.bootstrap_path}')
+        payload = json.loads(self.bootstrap_path.read_text(encoding='utf-8'))
+        self.models: Dict[str, ModelSpec] = {
+            model_id: ModelSpec(
+                model_id=model_id,
+                provider=model_payload['provider'],
+                capabilities=model_payload['capabilities'],
+                pricing=model_payload['pricing'],
+                latency_s=model_payload['latency_s'],
+                energy_kwh=model_payload['energy_kwh'],
+                local=model_payload['local'],
+                vlm=model_payload['vlm'],
+            )
+            for model_id, model_payload in payload.items()
+        }
+        self.elo_state = self._load_elo_state()
+
+        # Merge external model sources.
+        if app_settings is not None:
+            self._merge_user_models(app_settings)
+            ollama_base_url = getattr(app_settings, 'ollama_base_url', '')
+        else:
+            ollama_base_url = settings.local_llm_base_url
+
+        # Configure and lazily trigger the live-discovery cache.
+        if ollama_base_url:
+            ollama_cache.configure(ollama_base_url)
+        self._merge_live_ollama()
+
+    # ------------------------------------------------------------------
+    # Model injection
+    # ------------------------------------------------------------------
+
+    def _merge_user_models(self, app_settings) -> None:  # type: ignore[no-untyped-def]
+        """Inject control-room configured Ollama and OpenRouter models."""
+        for model_name in (app_settings.selected_ollama_models or []):
+            model_id = f'ollama/{model_name}' if not model_name.startswith('ollama/') else model_name
+            if model_id not in self.models:
+                self.models[model_id] = ModelSpec(
+                    model_id=model_id,
+                    provider='ollama',
+                    local=True,
+                    vlm=False,
+                    pricing={'input_per_1k': 0.0, 'output_per_1k': 0.0},
+                    latency_s=_OLLAMA_DEFAULTS['latency_s'],
+                    energy_kwh=_OLLAMA_DEFAULTS['energy_kwh'],
+                    capabilities=dict(_DEFAULT_CAPABILITIES),
+                )
+        for model_name in (app_settings.paid_openrouter_models or []):
+            model_id = f'openrouter/{model_name}' if not model_name.startswith('openrouter/') else model_name
+            if model_id not in self.models:
+                self.models[model_id] = ModelSpec(
+                    model_id=model_id,
+                    provider='openrouter',
+                    local=False,
+                    vlm=False,
+                    pricing=dict(_OPENROUTER_DEFAULTS['pricing']),
+                    latency_s=_OPENROUTER_DEFAULTS['latency_s'],
+                    energy_kwh=_OPENROUTER_DEFAULTS['energy_kwh'],
+                    capabilities=dict(_DEFAULT_CAPABILITIES),
+                )
+
+    def _merge_live_ollama(self) -> None:
+        """Merge models discovered live from the Ollama server.
+
+        Models already present (from bootstrap or user config) are left
+        untouched — their existing metadata is more accurate.
+        New models get conservative default priors.
+        """
+        for model_name in ollama_cache.models:
+            model_id = f'ollama/{model_name}' if not model_name.startswith('ollama/') else model_name
+            if model_id not in self.models:
+                logger.debug('Live-discovered Ollama model registered: %s', model_id)
+                self.models[model_id] = ModelSpec(
+                    model_id=model_id,
+                    provider='ollama',
+                    local=True,
+                    vlm=False,
+                    pricing={'input_per_1k': 0.0, 'output_per_1k': 0.0},
+                    latency_s=_OLLAMA_DEFAULTS['latency_s'],
+                    energy_kwh=_OLLAMA_DEFAULTS['energy_kwh'],
+                    capabilities=dict(_DEFAULT_CAPABILITIES),
+                )
+
+    # ------------------------------------------------------------------
+    # Elo state helpers
+    # ------------------------------------------------------------------
+
+    def _load_elo_state(self) -> Dict[str, Dict[str, float]]:
+        """Load rolling Elo adjustments from disk."""
+        if not self.elo_path.exists():
+            state = {model_id: {'global': 0.0} for model_id in self.models}
+            self._save_elo_state(state)
+            return state
+        return json.loads(self.elo_path.read_text(encoding='utf-8'))
+
+    def _save_elo_state(self, state: Dict[str, Dict[str, float]]) -> None:
+        """Persist Elo adjustments to disk."""
+        self.elo_path.parent.mkdir(parents=True, exist_ok=True)
+        self.elo_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
+    def list_models(self) -> List[ModelSpec]:
+        """Return all registered model specs."""
+        return list(self.models.values())
+
+    def get(self, model_id: str) -> ModelSpec:
+        """Return one model spec by identifier."""
+        return self.models[model_id]
+
+    def capability_score(self, model_id: str, capability: str) -> float:
+        """Combine bootstrap capability prior with rolling Elo adjustment."""
+        spec = self.get(model_id)
+        prior = spec.capabilities.get(capability, 0.45)
+        adjustment = self.elo_state.get(model_id, {}).get(capability, 0.0)
+        global_adjustment = self.elo_state.get(model_id, {}).get('global', 0.0)
+        return max(0.0, min(1.5, prior + adjustment + 0.5 * global_adjustment))
+
+    def update_elo(
+        self,
+        winners: Iterable[str],
+        losers: Iterable[str],
+        capabilities: Dict[str, float],
+        k_factor: float = 0.04,
+    ) -> None:
+        """Apply a simple rolling Elo-style update.
+
+        Parameters
+        ----------
+        winners:
+            Model identifiers considered stronger for the observed prompt.
+        losers:
+            Model identifiers considered weaker for the observed prompt.
+        capabilities:
+            Weighted capability distribution for the prompt.
+        k_factor:
+            Update strength. Kept intentionally small for stability.
+        """
+        winners = list(winners)
+        losers = list(losers)
+        if not winners or not losers:
+            return
+        for model_id in set(winners + losers):
+            self.elo_state.setdefault(model_id, {'global': 0.0})
+        winner_delta = k_factor / max(1, len(winners))
+        loser_delta = k_factor / max(1, len(losers))
+        for winner in winners:
+            self.elo_state[winner]['global'] = self.elo_state[winner].get('global', 0.0) + winner_delta
+            for capability, weight in capabilities.items():
+                if capability not in KNOWN_CAPABILITIES:
+                    continue
+                self.elo_state[winner][capability] = self.elo_state[winner].get(capability, 0.0) + winner_delta * weight
+        for loser in losers:
+            self.elo_state[loser]['global'] = self.elo_state[loser].get('global', 0.0) - loser_delta
+            for capability, weight in capabilities.items():
+                if capability not in KNOWN_CAPABILITIES:
+                    continue
+                self.elo_state[loser][capability] = self.elo_state[loser].get(capability, 0.0) - loser_delta * weight
+        self._save_elo_state(self.elo_state)
+
+
+registry = ModelRegistry()

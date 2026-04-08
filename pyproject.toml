@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "roitelet-llm"
+version = "0.1.0"
+description = "Local-first adaptive LLM router with parallel inference and local synthesis."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Warith Harchaoui", email = "warith@deraison.ai"}
+]
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-dotenv>=1.0.1",
+    "httpx>=0.28.1",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.1",
+    "streamlit>=1.44.0",
+    "pandas>=2.2.3",
+    "numpy>=2.2.4",
+    "orjson>=3.10.15",
+    "scikit-learn>=1.6.1",
+    "python-multipart>=0.0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28.1",  # also used in tests
+    "ruff>=0.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # long lines — handled by line-length above
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

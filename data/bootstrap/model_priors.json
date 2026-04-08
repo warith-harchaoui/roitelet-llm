@@ -1,0 +1,83 @@
+{
+  "openrouter/openai/gpt-4.1": {
+    "provider": "openrouter",
+    "local": false,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.005, "output_per_1k": 0.015},
+    "latency_s": 3.8,
+    "energy_kwh": 0.0006,
+    "capabilities": {"coding": 0.94, "math": 0.88, "reasoning": 0.93, "writing": 0.90, "analysis": 0.91, "multilingual": 0.88, "long_context": 0.93}
+  },
+  "openrouter/anthropic/claude-3.7-sonnet": {
+    "provider": "openrouter",
+    "local": false,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.004, "output_per_1k": 0.012},
+    "latency_s": 4.1,
+    "energy_kwh": 0.00065,
+    "capabilities": {"coding": 0.92, "math": 0.84, "reasoning": 0.93, "writing": 0.95, "analysis": 0.90, "vision": 0.84, "multilingual": 0.87, "long_context": 0.94}
+  },
+  "openrouter/google/gemini-2.5-pro": {
+    "provider": "openrouter",
+    "local": false,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.0035, "output_per_1k": 0.0105},
+    "latency_s": 4.0,
+    "energy_kwh": 0.00062,
+    "capabilities": {"coding": 0.90, "math": 0.90, "reasoning": 0.92, "writing": 0.89, "analysis": 0.91, "vision": 0.88, "multilingual": 0.86, "long_context": 0.95}
+  },
+  "openrouter/deepseek/deepseek-r1": {
+    "provider": "openrouter",
+    "local": false,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0015, "output_per_1k": 0.0045},
+    "latency_s": 5.1,
+    "energy_kwh": 0.00055,
+    "capabilities": {"coding": 0.89, "math": 0.93, "reasoning": 0.91, "writing": 0.80, "analysis": 0.87, "multilingual": 0.79, "long_context": 0.81}
+  },
+  "openrouter/meta-llama/llama-3.3-70b-instruct": {
+    "provider": "openrouter",
+    "local": false,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 3.5,
+    "energy_kwh": 0.00050,
+    "capabilities": {"coding": 0.86, "math": 0.78, "reasoning": 0.87, "writing": 0.88, "analysis": 0.84, "multilingual": 0.82, "long_context": 0.80}
+  },
+  "ollama/qwen2.5:14b-instruct": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 3.4,
+    "energy_kwh": 0.0008,
+    "capabilities": {"coding": 0.82, "math": 0.79, "reasoning": 0.84, "writing": 0.86, "analysis": 0.80, "multilingual": 0.78, "long_context": 0.76}
+  },
+  "ollama/llama3.3:70b-instruct": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 4.8,
+    "energy_kwh": 0.0014,
+    "capabilities": {"coding": 0.87, "math": 0.81, "reasoning": 0.86, "writing": 0.88, "analysis": 0.85, "multilingual": 0.84, "long_context": 0.84}
+  },
+  "ollama/mistral-small3.1": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 2.7,
+    "energy_kwh": 0.00055,
+    "capabilities": {"coding": 0.78, "math": 0.72, "reasoning": 0.77, "writing": 0.79, "analysis": 0.77, "multilingual": 0.80, "long_context": 0.73}
+  },
+  "ollama/llava:13b": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 4.2,
+    "energy_kwh": 0.0010,
+    "capabilities": {"vision": 0.84, "reasoning": 0.69, "writing": 0.67, "analysis": 0.70}
+  }
+}

@@ -1,0 +1,36 @@
+services:
+  roitelet-llm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: roitelet-llm:latest
+    container_name: roitelet-llm
+    ports:
+      - "${ROITELET_APP_PORT:-8000}:8000"
+      - "${ROITELET_STREAMLIT_PORT:-8501}:8501"
+    env_file:
+      - .env
+    environment:
+      # Ensure Ollama points to the host machine when running inside Docker.
+      LOCAL_LLM_BASE_URL: "${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434}"
+    volumes:
+      # Persist conversations, telemetry, Elo state, and runtime settings.
+      - roitelet_data:/app/data
+    restart: unless-stopped
+    # Use the HEALTHCHECK defined in the Dockerfile.
+    # docker compose ps will show "healthy" once the API is up.
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    # Allow the container to reach Ollama running on the host (macOS / Windows).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  roitelet_data:
+    driver: local

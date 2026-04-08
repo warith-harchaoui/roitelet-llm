@@ -1,0 +1,247 @@
+# INSTALL — Roitelet LLM
+
+Complete installation guide for every supported setup path.
+
+---
+
+## Prerequisites
+
+| Tool | Minimum version | Purpose |
+|---|---|---|
+| [Ollama](https://ollama.com) | 0.3+ | Local synthesis / judge model |
+| Python | 3.11+ | Runtime |
+| [conda](https://docs.conda.io) **or** venv | any | Environment isolation |
+| [Docker](https://docs.docker.com/get-docker/) | 24+ | Container deployment (optional) |
+
+> **Recommended first model to pull with Ollama:**
+> ```bash
+> ollama pull qwen2.5:14b-instruct
+> ```
+> This is the default local synthesis / judge model. Pull it before starting Roitelet.
+
+---
+
+## Option A — Conda (recommended)
+
+### A1. One-command environment creation
+
+```bash
+conda env create -f environment.yaml
+conda activate roitelet-llm
+```
+
+The `environment.yaml` file pins Python 3.11 and delegates all package
+installation to `requirements.txt` via pip.
+
+### A2. Manual creation (equivalent)
+
+```bash
+conda create -n roitelet-llm python=3.11 -y
+conda activate roitelet-llm
+pip install -r requirements.txt
+```
+
+---
+
+## Option B — pip + venv
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+---
+
+## Option C — Docker
+
+### C1. Build and start
+
+```bash
+cp .env.example .env          # then edit .env with your credentials
+docker compose up --build -d
+```
+
+The container exposes:
+- **API**: `http://localhost:8000`
+- **Streamlit UI**: `http://localhost:8501`
+
+> **Ollama on the host machine**
+> The compose file pre-configures `LOCAL_LLM_BASE_URL=http://host.docker.internal:11434`
+> so Roitelet inside Docker can reach Ollama running natively on your machine
+> (macOS, Windows, and Linux with Docker 20.10+).
+
+### C2. Persistent data
+
+Conversations, telemetry, Elo state, and settings are written to the Docker
+named volume `roitelet_data`. To inspect or back up:
+
+```bash
+docker volume inspect roitelet_data
+```
+
+### C3. Useful commands
+
+```bash
+docker compose logs -f                  # live logs
+docker compose ps                       # check health status
+docker compose down                     # stop
+docker compose down -v                  # stop + delete volume
+docker compose pull && docker compose up -d   # update image
+```
+
+---
+
+## Configuration
+
+### 1. Copy the env template
+
+```bash
+cp .env.example .env
+```
+
+### 2. Minimum recommended settings
+
+```env
+# Paid frontier models via OpenRouter
+OPENROUTER_API_KEY=sk-or-...
+
+# Local synthesis / judge model
+LOCAL_LLM_PROVIDER=ollama
+LOCAL_LLM_BASE_URL=http://localhost:11434
+LOCAL_LLM_MODEL=qwen2.5:14b-instruct
+
+# Streamlit login
+ROITELET_ADMIN_USERNAME=roitelet
+ROITELET_ADMIN_PASSWORD=change-me-please
+```
+
+> **Local-only mode (zero cost)**
+> You can run entirely offline with no API keys. Set
+> `ROITELET_CANDIDATE_POOL_SIZE=4` and add local Ollama models
+> through the Streamlit configuration page.
+
+### 3. Full variable reference
+
+See [`.env.example`](.env.example) for all available variables and their defaults.
+
+---
+
+## Starting the service
+
+### Direct (conda or venv)
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+This launches:
+- FastAPI on `http://localhost:8000`
+- Streamlit on `http://localhost:8501`
+
+### Separate processes
+
+```bash
+# Terminal 1
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Terminal 2
+streamlit run streamlit_app.py --server.port 8501
+```
+
+---
+
+## First-run verification
+
+```bash
+# 1. API health check
+curl http://localhost:8000/
+
+# 2. List registered models
+curl http://localhost:8000/v1/models
+
+# 3. Send a test prompt (requires Ollama running)
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "What is the capital of France?", "top_k": 1}'
+```
+
+Expected health response:
+```json
+{"status": "ok", "service": "roitelet-llm", "base_url": "http://localhost:8000"}
+```
+
+---
+
+## Running the test suite
+
+```bash
+# Install dev dependencies first
+pip install pytest pytest-asyncio
+
+# Run all tests
+pytest tests/ -q
+```
+
+All 21 tests are network-free and complete in under a second.
+
+---
+
+## Updating
+
+### pip / conda
+
+```bash
+git pull
+pip install -r requirements.txt   # pick up any new packages
+./start.sh
+```
+
+### Docker
+
+```bash
+git pull
+docker compose build --no-cache
+docker compose up -d
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `FileNotFoundError: Bootstrap priors not found` | Corrupted clone | Re-clone the repo |
+| `Connection refused` on port 8000 | API not started | Run `./start.sh` |
+| Synthesis always returns empty | Ollama not running | `ollama serve` |
+| `401 Unauthorized` from OpenRouter | Wrong key | Update `OPENROUTER_API_KEY` in `.env` |
+| Streamlit login fails | Wrong credentials | Check `ROITELET_ADMIN_USERNAME` / `_PASSWORD` |
+| Models don't appear in router despite `ollama pull` | Cache TTL | Wait up to 60 s or restart API |
+
+---
+
+## Folder layout
+
+```text
+roitelet-llm/
+├── app/
+│   ├── core/           # router, registry, judge, pipeline, capabilities
+│   ├── providers/      # Ollama and OpenAI-compatible clients
+│   ├── config.py       # pydantic-settings
+│   ├── main.py         # FastAPI app
+│   ├── schemas.py      # shared Pydantic models
+│   └── storage.py      # JSON persistence layer
+├── data/
+│   └── bootstrap/model_priors.json   # benchmark-inspired prior scores
+├── tests/
+│   └── test_roitelet.py              # pytest suite (21 tests)
+├── streamlit_app.py    # Streamlit control room
+├── start.sh            # launcher script
+├── Dockerfile          # multi-stage build
+├── docker-compose.yml  # compose stack
+├── environment.yaml    # conda environment
+├── requirements.txt    # pip dependencies
+└── .env.example        # environment variable template
+```

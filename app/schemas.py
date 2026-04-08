@@ -1,0 +1,212 @@
+"""Pydantic schemas shared by the API, Streamlit UI, and orchestration code.
+
+Examples
+--------
+>>> from app.schemas import ChatMessage
+>>> ChatMessage(role="user", content="Bonjour")
+ChatMessage(role='user', content='Bonjour')
+
+Notes
+-----
+Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
+
+
+Role = Literal['system', 'user', 'assistant']
+
+
+class ChatMessage(BaseModel):
+    """A single chat message.
+
+    Parameters
+    ----------
+    role:
+        Message role in chat history.
+    content:
+        Free-form text content.
+    """
+
+    role: Role
+    content: str
+
+
+class ModelCapabilityScore(BaseModel):
+    """Capability-specific score for a model on a prompt."""
+
+    capability: str
+    score: float
+    rationale: str
+
+
+class ModelCandidate(BaseModel):
+    """A candidate model and the router metadata attached to it."""
+
+    model_id: str
+    provider: str
+    selected: bool = False
+    score: float
+    estimated_cost_usd: float = 0.0
+    estimated_latency_s: float = 0.0
+    capability_scores: List[ModelCapabilityScore] = Field(default_factory=list)
+
+
+class RouterPreferences(BaseModel):
+    """User-configurable preferences that influence the router.
+
+    Parameters
+    ----------
+    raw_power:
+        Weight given to pure quality and benchmark strength.
+    frugality:
+        Weight given to low cost and low energy usage.
+    independence:
+        If true, remote models are filtered out and only local models are used.
+    allow_vlms:
+        If true, visual-language models can be considered.
+    """
+
+    raw_power: float = 0.7
+    frugality: float = 0.3
+    independence: bool = False
+    allow_vlms: bool = False
+
+
+class RouterDecision(BaseModel):
+    """Structured result of prompt routing."""
+
+    prompt: str
+    categories: Dict[str, float]
+    candidates: List[ModelCandidate]
+    selected_model_ids: List[str]
+    reasoning: List[str]
+
+
+class ModelResponse(BaseModel):
+    """An answer emitted by an upstream model."""
+
+    model_id: str
+    provider: str
+    content: str
+    latency_s: float
+    usage: Dict[str, float] = Field(default_factory=dict)
+    energy_kwh: float = 0.0
+    carbon_g: float = 0.0
+    cost_usd: float = 0.0
+    error: Optional[str] = None
+
+
+class SynthesisResult(BaseModel):
+    """Final fused answer produced by the local synthesis model."""
+
+    model_id: str
+    provider: str
+    content: str
+    judge_summary: str
+    winning_model_ids: List[str]
+
+
+class TelemetryRecord(BaseModel):
+    """Per-turn telemetry written to disk for monitoring and shadow evaluation."""
+
+    record_id: str
+    created_at: datetime
+    conversation_id: str
+    prompt: str
+    router_decision: RouterDecision
+    model_responses: List[ModelResponse]
+    synthesis: SynthesisResult
+    reward_model_ids: List[str]
+    shadow_reference_model_ids: List[str]
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationMessage(BaseModel):
+    """A stored conversation message for the simple prompt interface."""
+
+    role: Literal['user', 'assistant']
+    content: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class Conversation(BaseModel):
+    """Persistent conversation state."""
+
+    conversation_id: str
+    title: str
+    created_at: datetime
+    messages: List[ConversationMessage] = Field(default_factory=list)
+
+
+class AppSettingsPayload(BaseModel):
+    """Settings payload edited from the Streamlit control room."""
+
+    openrouter_api_key: str = ''
+    openai_api_key: str = ''
+    anthropic_api_key: str = ''
+    gemini_api_key: str = ''
+    perplexity_api_key: str = ''
+    openai_compatible_api_key: str = ''
+    openai_compatible_base_url: str = ''
+    openai_compatible_model: str = ''
+    ollama_base_url: str = 'http://localhost:11434'
+    local_synthesis_model: str = 'qwen2.5:14b-instruct'
+    local_vlm_model: str = 'llava:13b'
+    enable_vlms: bool = False
+    raw_power_weight: float = 0.7
+    frugality_weight: float = 0.3
+    independence_local_only: bool = False
+    selected_ollama_models: List[str] = Field(default_factory=list)
+    paid_openrouter_models: List[str] = Field(default_factory=list)
+
+
+class ChatRequest(BaseModel):
+    """Roitelet-native chat request payload."""
+
+    prompt: str
+    conversation_id: Optional[str] = None
+    preferences: RouterPreferences = Field(default_factory=RouterPreferences)
+    top_k: int = 3
+    shadow_full_pool: bool = True
+
+
+class ChatResponse(BaseModel):
+    """Roitelet-native chat response payload."""
+
+    conversation_id: str
+    router: RouterDecision
+    responses: List[ModelResponse]
+    synthesis: SynthesisResult
+    telemetry_id: str
+
+
+class OpenAIChatMessage(BaseModel):
+    """OpenAI-compatible chat message."""
+
+    role: str
+    content: str
+
+
+class OpenAIChatCompletionRequest(BaseModel):
+    """Subset of the OpenAI Chat Completions API accepted by Roitelet."""
+
+    model: str = 'roitelet-llm'
+    messages: List[OpenAIChatMessage]
+    stream: bool = False
+    temperature: Optional[float] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MCPRequest(BaseModel):
+    """Minimal JSON-RPC payload used by the embedded MCP endpoint."""
+
+    jsonrpc: str = '2.0'
+    id: Optional[str | int] = None
+    method: str
+    params: Dict[str, Any] = Field(default_factory=dict)
