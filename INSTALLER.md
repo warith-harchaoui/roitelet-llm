@@ -227,18 +227,18 @@ docker compose up -d
 
 ```text
 roitelet-llm/
-├── app/
-│   ├── core/           # routeur, registre, juge, pipeline, capacités
-│   ├── providers/      # clients Ollama et OpenAI-compatible
-│   ├── config.py       # paramètres pydantic-settings
-│   ├── main.py         # application FastAPI
-│   ├── schemas.py      # modèles Pydantic partagés
-│   └── storage.py      # couche de persistance JSON
+roitelet-llm/
+├── core/               # routeur, registre, juge, pipeline, capacités
+├── api/                # Application FastAPI (OpenAI-compatible & MCP)
+├── gui/                # Interface Streamlit
+├── cli/                # Interface en ligne de commande (REPL)
 ├── data/
 │   └── bootstrap/model_priors.json   # scores a priori inspirés des benchmarks
 ├── tests/
-│   └── test_roitelet.py              # suite pytest (21 tests)
-├── gui/main.py    # interface de contrôle Streamlit
+│   ├── test_core.py    # Suite pytest (Moteur central)
+│   ├── test_api.py     # Suite pytest (API)
+│   ├── test_gui.py     # Suite pytest (GUI)
+│   └── test_cli.py     # Suite pytest (CLI)
 ├── start.sh            # script de lancement
 ├── Dockerfile          # construction multi-étapes
 ├── docker-compose.yml  # pile compose

@@ -48,6 +48,18 @@ async def judge_and_synthesize(prompt: str, responses: List[ModelResponse]) -> S
 
     Respects the ``local_llm_provider`` runtime setting so that non-Ollama
     local backends (e.g. a local OpenAI-compatible server) are also supported.
+
+    Parameters
+    ----------
+    prompt : str
+        The original query requested by the user.
+    responses : List[ModelResponse]
+        The collection of raw model responses gathered from candidate engines.
+
+    Returns
+    -------
+    SynthesisResult
+        The formulated answer merging the top qualities among valid responses.
     """
     runtime_settings = storage.load_app_settings()
     local_synthesis_model = runtime_settings.local_synthesis_model

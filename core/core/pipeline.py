@@ -33,13 +33,39 @@ router = RoiteletRouter()
 
 
 def build_title(prompt: str, max_length: int = 60) -> str:
-    """Build a compact conversation title from the first prompt."""
+    """Build a compact conversation title from the first prompt.
+
+    Parameters
+    ----------
+    prompt : str
+        The initial query sent to the LLM.
+    max_length : int, default=60
+        Max string length for the truncated title.
+
+    Returns
+    -------
+    str
+        A short alphanumeric snippet suitable for sidebar display.
+    """
     cleaned = ' '.join(prompt.strip().split())
     return cleaned[:max_length] or 'New flight'
 
 
 async def _query_one(model_id: str, messages: Sequence[ChatMessage]) -> ModelResponse:
-    """Query one registered model through the correct provider client."""
+    """Query one registered model through the correct provider client.
+
+    Parameters
+    ----------
+    model_id : str
+        The unique registered string identifier.
+    messages : Sequence[ChatMessage]
+        The fully baked sequence of textual context or user instructions.
+
+    Returns
+    -------
+    ModelResponse
+        A populated unified schema model output payload with injected cost logic.
+    """
     spec = registry.get(model_id)
     client = get_provider_client(spec.provider)
     response = await client.generate(model_id=model_id, messages=messages)
@@ -48,7 +74,20 @@ async def _query_one(model_id: str, messages: Sequence[ChatMessage]) -> ModelRes
 
 
 def _estimate_cost(model_id: str, response: ModelResponse) -> float:
-    """Estimate request cost from stored pricing priors and token usage."""
+    """Estimate request cost from stored pricing priors and token usage.
+
+    Parameters
+    ----------
+    model_id : str
+        The target identifier fetched from the registry.
+    response : ModelResponse
+        The payload returned by provider APIs, exposing token metrics.
+
+    Returns
+    -------
+    float
+        Total sum of inference transactions in USD.
+    """
     spec = registry.get(model_id)
     usage = response.usage
     prompt_tokens = usage.get('prompt_tokens', usage.get('prompt_eval_count', 0.0))

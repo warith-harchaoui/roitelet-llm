@@ -49,7 +49,23 @@ class OpenAICompatibleClient:
         self.provider_name = provider_name
 
     async def generate(self, model_id: str, messages: Sequence[ChatMessage]) -> ModelResponse:
-        """Send a chat completion request and normalize the response."""
+        """Send a chat completion request and normalize the response.
+
+        Leverages local caching to avoid duplicate paid API calls if the identical
+        payload sequence has been fetched before.
+
+        Parameters
+        ----------
+        model_id : str
+            Target remote model tag.
+        messages : Sequence[ChatMessage]
+            Multi-turn instructions submitted via standard JSON.
+
+        Returns
+        -------
+        ModelResponse
+            Parsed inference response appended with hardware cost estimations.
+        """
         started = time.perf_counter()
         endpoint = f'{self.base_url}/chat/completions'
         headers = {

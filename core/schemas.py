@@ -46,7 +46,25 @@ class ModelCapabilityScore(BaseModel):
 
 
 class ModelCandidate(BaseModel):
-    """A candidate model and the router metadata attached to it."""
+    """A candidate model and the router metadata attached to it.
+    
+    Attributes
+    ----------
+    model_id : str
+        The full string identifier for the model.
+    provider : str
+        Local provider (e.g. 'ollama') or remote (e.g. 'openai-compatible').
+    selected : bool, default=False
+        Whether the routing algorithm picked this candidate for query dispatch.
+    score : float
+        The computed score evaluating its suitability.
+    estimated_cost_usd : float
+        Pessimistic cost computation assuming context bounds.
+    estimated_latency_s : float
+        Latency estimated through historical benchmarks.
+    capability_scores : List[ModelCapabilityScore]
+        Specific scores broken down by distinct capabilities.
+    """
 
     model_id: str
     provider: str
@@ -79,7 +97,21 @@ class RouterPreferences(BaseModel):
 
 
 class RouterDecision(BaseModel):
-    """Structured result of prompt routing."""
+    """Structured result of prompt routing.
+    
+    Attributes
+    ----------
+    prompt : str
+        The raw text provided by the human context.
+    categories : Dict[str, float]
+        Detected capabilities mapped to their probability weights.
+    candidates : List[ModelCandidate]
+        Evaluated model candidates and respective meta attributes.
+    selected_model_ids : List[str]
+        IDs of models ultimately picked for query.
+    reasoning : List[str]
+        Verbalized traces of the routing decisions for audit logs.
+    """
 
     prompt: str
     categories: Dict[str, float]
@@ -89,7 +121,29 @@ class RouterDecision(BaseModel):
 
 
 class ModelResponse(BaseModel):
-    """An answer emitted by an upstream model."""
+    """An answer emitted by an upstream model.
+    
+    Attributes
+    ----------
+    model_id : str
+        String identifier matched with the candidate.
+    provider : str
+        The platform queried (OpenRouter, local Ollama, etc.).
+    content : str
+        The raw LLM response.
+    latency_s : float
+        Round-trip inference time locally measured.
+    usage : Dict[str, float]
+        Inbound/outbound token accounting given by the provider.
+    energy_kwh : float
+        Watt-hours consumed during the specific query transaction.
+    carbon_g : float
+        Grams of CO2 dynamically approximated based on grid intensity.
+    cost_usd : float
+        Real invoiced cost based strictly on token counts.
+    error : Optional[str]
+        Description if the request abruptly halted.
+    """
 
     model_id: str
     provider: str

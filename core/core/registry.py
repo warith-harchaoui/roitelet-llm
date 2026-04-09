@@ -312,7 +312,20 @@ class ModelRegistry:
         return self.models[model_id]
 
     def capability_score(self, model_id: str, capability: str) -> float:
-        """Combine bootstrap capability prior with rolling Elo adjustment."""
+        """Combine bootstrap capability prior with rolling Elo adjustment.
+
+        Parameters
+        ----------
+        model_id : str
+            The registered model identifier.
+        capability : str
+            The name of the capability to query.
+
+        Returns
+        -------
+        float
+            A clamped Elo score floating point value between 0.0 and 1.5.
+        """
         spec = self.get(model_id)
         prior = spec.capabilities.get(capability, 0.45)
         adjustment = self.elo_state.get(model_id, {}).get(capability, 0.0)

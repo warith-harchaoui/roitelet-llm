@@ -160,7 +160,20 @@ class StorageManager:
         return sorted(records, key=lambda item: item.created_at, reverse=True)
 
     def get_cache(self, provider_name: str, payload_str: str) -> Optional[dict]:
-        """Retrieve a cached API response from JSONL."""
+        """Retrieve a cached API response from JSONL.
+
+        Parameters
+        ----------
+        provider_name : str
+            The name or identifier of the LLM provider.
+        payload_str : str
+            The serialized request payload acting as the cache key.
+
+        Returns
+        -------
+        Optional[dict]
+            The cached response dictionary if a match is found; otherwise None.
+        """
         path = self.cache_dir / f'{provider_name}.jsonl'
         if not path.exists():
             return None
@@ -182,7 +195,17 @@ class StorageManager:
         return None
 
     def set_cache(self, provider_name: str, payload_str: str, response_data: dict) -> None:
-        """Append an API response to the provider's JSONL cache."""
+        """Append an API response to the provider's JSONL cache.
+
+        Parameters
+        ----------
+        provider_name : str
+            The name or identifier of the LLM provider.
+        payload_str : str
+            The serialized request payload acting as the cache key.
+        response_data : dict
+            The full JSON response data to cache.
+        """
         path = self.cache_dir / f'{provider_name}.jsonl'
         record = {
             'payload': payload_str,
@@ -200,7 +223,13 @@ class StorageManager:
         return self.runtime_dir / 'settings.json'
 
     def load_app_settings(self) -> AppSettingsPayload:
-        """Load UI-edited settings, falling back to environment defaults."""
+        """Load UI-edited settings, falling back to environment defaults.
+
+        Returns
+        -------
+        AppSettingsPayload
+            The active global configuration settings for the system.
+        """
         settings = get_settings()
         payload = self._read_json(self.settings_path(), None)
         if payload is None:

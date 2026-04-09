@@ -33,7 +33,20 @@ class OllamaClient:
         self.base_url = base_url.rstrip('/')
 
     async def generate(self, model_id: str, messages: Sequence[ChatMessage]) -> ModelResponse:
-        """Generate one chat completion using the Ollama REST API."""
+        """Generate one chat completion using the Ollama REST API.
+
+        Parameters
+        ----------
+        model_id : str
+            The target local model format (e.g. `ollama/phi3`).
+        messages : Sequence[ChatMessage]
+            Chat thread history used to ground the LLM completion.
+
+        Returns
+        -------
+        ModelResponse
+            Inference response packaged with energy estimations.
+        """
         started = time.perf_counter()
         settings = get_settings()
         endpoint = f'{self.base_url}/api/chat'

@@ -69,7 +69,19 @@ The monitoring page aggregates:
 - cost estimate,
 - top detected prompt capability.
 
-## 6. OpenAI-compatible serving
+## 6. Command-line interface (CLI)
+
+Run an interactive terminal chat (inspired by Gemini CLI):
+```bash
+python -m cli chat
+```
+
+Single-shot mode:
+```bash
+python -m cli ask "What is the capital of France?"
+```
+
+## 7. OpenAI-compatible serving
 
 Endpoint:
 

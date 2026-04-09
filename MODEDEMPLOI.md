@@ -72,7 +72,19 @@ Vous voyez :
 - l’énergie estimée,
 - le CO₂ estimé.
 
-## 6. API compatible OpenAI
+## 6. Utilisation en ligne de commande (CLI)
+
+Mode REPL interactif (inspiré par Gemini CLI) :
+```bash
+python -m cli chat
+```
+
+Mode requête unique :
+```bash
+python -m cli ask "Quelle est la capitale de la France ?"
+```
+
+## 7. API compatible OpenAI
 
 Point d’entrée :
 

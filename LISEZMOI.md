@@ -82,19 +82,19 @@ chmod +x start.sh
 
 ```text
 roitelet-llm/
-├── app/
-│   ├── core/           # routeur, registre, juge, pipeline, capacités
-│   ├── providers/      # clients Ollama et intégrations diverses
-│   ├── config.py       # paramètres (pydantic-settings)
-│   ├── main.py         # application FastAPI
-│   ├── schemas.py      # modèles Pydantic partagés
-│   └── storage.py      # couche de persistance structurée (JSON)
+roitelet-llm/
+├── core/               # Logique backend, routeur, stockage, capacités
+├── api/                # Application FastAPI (Endpoints compatibles OpenAI & MCP)
+├── gui/                # Interface Streamlit (Tableau de bord)
+├── cli/                # Interface en ligne de commande (REPL terminal)
 ├── data/
 │   └── bootstrap/model_priors.json   # Base d'informations avec scores Elo
 ├── scripts/            # Crawler de données d'évaluation
 ├── tests/
-│   └── test_roitelet.py              # Suite de tests Pytest automatisés
-├── gui/main.py    # Interface Streamlit
+│   ├── test_core.py    # Suite de tests Pytest (Moteur central)
+│   ├── test_api.py     # Suite de tests Pytest (API)
+│   ├── test_gui.py     # Suite de tests Pytest (GUI)
+│   └── test_cli.py     # Suite de tests Pytest (CLI)
 ├── start.sh            # Script de lancement
 ├── Dockerfile          # Fichier de build Docker multi-stade
 ├── docker-compose.yml  # Déploiement en conteneur

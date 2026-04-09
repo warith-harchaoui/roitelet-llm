@@ -33,7 +33,12 @@ API_BASE = settings.public_base_url.rstrip('/')
 
 
 def require_login() -> None:
-    """Display a simple login gate before showing the control room."""
+    """Display a simple login gate before showing the control room.
+    
+    Checks the session state for authentication. If unauthenticated, it presents
+    a login form requiring the globally configured admin credentials. Stops
+    Streamlit script execution if authentication fails.
+    """
     st.session_state.setdefault('authenticated', False)
     if st.session_state['authenticated']:
         return
@@ -54,21 +59,49 @@ def require_login() -> None:
 
 
 def api_get(path: str) -> Any:
-    """Perform a GET request against the local API."""
+    """Perform a GET request against the local API.
+
+    Parameters
+    ----------
+    path : str
+        The URL path relative to the configured API base URL (e.g., '/api/settings').
+
+    Returns
+    -------
+    Any
+        The JSON-decoded response payload from the API.
+    """
     response = requests.get(f'{API_BASE}{path}', timeout=30)
     response.raise_for_status()
     return response.json()
 
 
 def api_post(path: str, payload: Dict[str, Any]) -> Any:
-    """Perform a POST request against the local API."""
+    """Perform a POST request against the local API.
+
+    Parameters
+    ----------
+    path : str
+        The URL path relative to the configured API base URL.
+    payload : Dict[str, Any]
+        The dictionary to serialize directly as JSON in the request body.
+
+    Returns
+    -------
+    Any
+        The JSON-decoded response payload from the API.
+    """
     response = requests.post(f'{API_BASE}{path}', json=payload, timeout=300)
     response.raise_for_status()
     return response.json()
 
 
 def page_config() -> None:
-    """Configure Streamlit page metadata and sidebar brand."""
+    """Configure Streamlit page metadata and sidebar branding.
+    
+    Sets the global page title, icon, and wide layout mode. Also injects 
+    standard descriptive sidebar text.
+    """
     st.set_page_config(page_title='Roitelet LLM', page_icon='🐦', layout='wide')
     st.sidebar.title('🐦 Roitelet LLM')
     st.sidebar.markdown('[Roitelet project page](https://deraison.ai/en/roitelet)')

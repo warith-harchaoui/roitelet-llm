@@ -70,32 +70,77 @@ app.add_middleware(
 
 @app.get('/')
 async def root() -> Dict[str, Any]:
-    """Return a lightweight health payload."""
+    """Return a lightweight health payload to indicate the server is alive.
+    
+    Returns
+    -------
+    Dict[str, Any]
+        A dictionary containing the status, service name, and public base URL.
+    """
     return {'status': 'ok', 'service': 'roitelet-llm', 'base_url': settings.public_base_url}
 
 
 @app.get('/api/settings')
 async def get_app_settings() -> Dict[str, Any]:
-    """Return persisted control-room settings."""
+    """Return persisted control-room settings.
+
+    Returns
+    -------
+    Dict[str, Any]
+        The settings serialized as a dictionary.
+    """
     return storage.load_app_settings().model_dump()
 
 
 @app.post('/api/settings')
 async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
-    """Persist control-room settings edited from Streamlit."""
+    """Persist control-room settings edited from Streamlit.
+
+    Parameters
+    ----------
+    payload : AppSettingsPayload
+        The updated settings derived from the frontend.
+
+    Returns
+    -------
+    Dict[str, Any]
+        A success status message.
+    """
     storage.save_app_settings(payload)
     return {'status': 'saved'}
 
 
 @app.get('/api/conversations')
 async def list_conversations() -> List[Dict[str, Any]]:
-    """List all stored conversations."""
+    """List all stored conversations via the local storage manager.
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        A list of serialized conversation payloads.
+    """
     return [conversation.model_dump() for conversation in storage.list_conversations()]
 
 
 @app.get('/api/conversations/{conversation_id}')
 async def get_conversation(conversation_id: str) -> Dict[str, Any]:
-    """Fetch one conversation by identifier."""
+    """Fetch one conversation by its unique identifier.
+
+    Parameters
+    ----------
+    conversation_id : str
+        The UUID of the conversation to load.
+
+    Returns
+    -------
+    Dict[str, Any]
+        The requested conversation payload.
+
+    Raises
+    ------
+    HTTPException
+        If the conversation could not be located on disk.
+    """
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail='Conversation not found')
@@ -104,13 +149,30 @@ async def get_conversation(conversation_id: str) -> Dict[str, Any]:
 
 @app.get('/api/telemetry')
 async def list_telemetry() -> List[Dict[str, Any]]:
-    """Return all telemetry records."""
+    """Return all telemetry records containing performance data.
+
+    Returns
+    -------
+    List[Dict[str, Any]]
+        A chronological list of metric snapshots.
+    """
     return [record.model_dump() for record in storage.list_telemetry()]
 
 
 @app.post('/api/chat')
 async def roitelet_chat(payload: ChatRequest) -> Dict[str, Any]:
-    """Run one native Roitelet chat turn."""
+    """Run one native Roitelet chat turn using the advanced routing logic.
+
+    Parameters
+    ----------
+    payload : ChatRequest
+        The prompt and router preferences.
+
+    Returns
+    -------
+    Dict[str, Any]
+        The resulting synthesis, full conversation body, and model decisions.
+    """
     response = await run_roitelet_chat(payload)
     return response.model_dump()
 
@@ -132,7 +194,18 @@ async def list_models() -> Dict[str, Any]:
 
 @app.post('/v1/chat/completions')
 async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
-    """OpenAI-compatible chat completions endpoint."""
+    """OpenAI-compatible chat completions endpoint.
+
+    Parameters
+    ----------
+    payload : OpenAIChatCompletionRequest
+        Data strictly adhering to the standard OpenAI `/v1/chat/completions` spec.
+
+    Returns
+    -------
+    Union[Dict[str, Any], StreamingResponse]
+        Standard static completions response dict, or a Server-Sent Events stream.
+    """
     prompt = '\n'.join(message.content for message in payload.messages if message.role == 'user')
     response = await run_roitelet_chat(
         ChatRequest(
@@ -203,7 +276,18 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
 
 @app.post('/mcp')
 async def mcp_endpoint(payload: MCPRequest):
-    """Handle MCP-like JSON-RPC requests over plain HTTP."""
+    """Handle MCP-like JSON-RPC requests over plain HTTP.
+
+    Parameters
+    ----------
+    payload : MCPRequest
+        A JSON-RPC 2.0 conformant request carrying an arbitrary method and params.
+
+    Returns
+    -------
+    Union[Dict[str, Any], JSONResponse]
+        The computed JSON-RPC protocol response.
+    """
     try:
         return await handle_mcp_request(payload)
     except Exception as exc:
