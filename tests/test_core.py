@@ -345,12 +345,18 @@ def _fake_settings(data_dir: Path):
 
 
 class TestStorageManager:
+    """Patch ``core.storage.get_settings`` directly (the in-module binding
+    used by ``StorageManager.__init__``). The earlier pattern of patching
+    ``core.config.get_settings`` and then ``reload(core.storage)`` leaked
+    the lambda permanently into ``core.storage``'s namespace, because the
+    monkeypatch only un-patched ``core.config`` while the reload had
+    re-bound ``core.storage.get_settings`` independently.
+    """
+
     def test_conversation_create_and_read(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
-            from importlib import reload
+            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
             import core.storage as st_mod
-            reload(st_mod)
             mgr = st_mod.StorageManager()
             convo = mgr.create_conversation(title="Test flight")
             assert convo.title == "Test flight"
@@ -360,10 +366,8 @@ class TestStorageManager:
 
     def test_atomic_write_produces_valid_json(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
-            from importlib import reload
+            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
             import core.storage as st_mod
-            reload(st_mod)
             mgr = st_mod.StorageManager()
             target = tmp_path / "test_atomic.json"
             mgr._write_json(target, {"key": "value", "number": 42})
@@ -374,10 +378,8 @@ class TestStorageManager:
     def test_no_tmp_file_left_on_success(self, tmp_path):
         """Atomic write must not leave .tmp files behind on success."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
-            from importlib import reload
+            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
             import core.storage as st_mod
-            reload(st_mod)
             mgr = st_mod.StorageManager()
             target = tmp_path / "clean.json"
             mgr._write_json(target, {"ok": True})
@@ -387,10 +389,8 @@ class TestStorageManager:
     def test_list_conversations_sorted(self, tmp_path):
         """list_conversations must return newest first."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.config.get_settings", lambda: _fake_settings(tmp_path))
-            from importlib import reload
+            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
             import core.storage as st_mod
-            reload(st_mod)
             mgr = st_mod.StorageManager()
             c1 = mgr.create_conversation(title="First")
             c2 = mgr.create_conversation(title="Second")
