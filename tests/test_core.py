@@ -12,17 +12,70 @@ live discovery cache, and storage logic in total isolation.
 
 from __future__ import annotations
 
+import http.server
 import json
+import threading
 import time
 from pathlib import Path
-from typing import List
-from unittest.mock import MagicMock, patch
+from typing import Callable, List
 
 import pytest
 
+from core.config import Settings
 from core.core.capabilities import detect_capabilities, top_capabilities
 from core.core.judge import parse_winners
 from core.schemas import RouterPreferences
+
+
+# ---------------------------------------------------------------------------
+# Test fixtures: real HTTP server for Ollama /api/tags
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def ollama_http_server():
+    """Start a real HTTP server that mimics Ollama's ``/api/tags`` endpoint.
+
+    Yields a dict with ``base_url`` and a ``set_models`` callable so each test
+    can drive the response body deterministically without mocking ``httpx``.
+    """
+    state = {'models': []}
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802 — stdlib name
+            if self.path == '/api/tags':
+                body = json.dumps(
+                    {'models': [{'name': name} for name in state['models']]}
+                ).encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *args, **kwargs):  # silence default access log
+            return
+
+    server = http.server.HTTPServer(('127.0.0.1', 0), _Handler)
+    server.allow_reuse_address = True
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def set_models(names: List[str]) -> None:
+        state['models'] = list(names)
+
+    try:
+        yield {
+            'base_url': f'http://127.0.0.1:{port}',
+            'set_models': set_models,
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1.0)
 
 
 # ---------------------------------------------------------------------------
