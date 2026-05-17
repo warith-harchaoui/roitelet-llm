@@ -36,10 +36,9 @@ def isolated_state(tmp_path, monkeypatch):
     from disk. We rebind their on-disk paths to a per-test temporary directory
     so tests don't pollute the real ``./data/`` tree and stay independent.
 
-    This fixture is also defensive against a known cross-test leak: another
-    test in the suite reloads ``core.storage`` while ``core.config.get_settings``
-    is monkeypatched, which permanently rebinds ``core.storage.get_settings``
-    to a stale lambda. We restore the real ``get_settings`` here.
+    Defensive against any other test that may rebind
+    ``core.storage.get_settings`` and forget to restore it: we re-anchor it
+    to the real ``core.config.get_settings`` here.
     """
     import core.config as config_mod
     import core.core.pipeline as pipeline_mod
@@ -47,7 +46,6 @@ def isolated_state(tmp_path, monkeypatch):
     import core.storage as storage_mod
     from core.core.registry import registry as registry_singleton
 
-    # --- Heal any leaked monkeypatch from a prior test's reload. ---
     monkeypatch.setattr(storage_mod, 'get_settings', config_mod.get_settings)
 
     # --- Fresh storage instance scoped to tmp_path. ---
