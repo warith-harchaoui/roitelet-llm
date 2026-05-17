@@ -12,14 +12,11 @@ conversation persistence, telemetry round-tripping, and Elo updates.
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 
 import pytest
 
 from core.schemas import (
-    ChatMessage,
     ChatRequest,
-    ConversationMessage,
     ModelResponse,
     RouterPreferences,
     SynthesisResult,
@@ -38,25 +35,44 @@ def isolated_state(tmp_path, monkeypatch):
     (``core.storage.storage`` and ``core.core.registry.registry``) that read
     from disk. We rebind their on-disk paths to a per-test temporary directory
     so tests don't pollute the real ``./data/`` tree and stay independent.
+
+    This fixture is also defensive against a known cross-test leak: another
+    test in the suite reloads ``core.storage`` while ``core.config.get_settings``
+    is monkeypatched, which permanently rebinds ``core.storage.get_settings``
+    to a stale lambda. We restore the real ``get_settings`` here.
     """
-    from core.storage import storage as storage_singleton
+    import core.config as config_mod
+    import core.core.pipeline as pipeline_mod
+    import core.core.router as router_mod
+    import core.storage as storage_mod
     from core.core.registry import registry as registry_singleton
 
-    # --- Storage: conversations, telemetry, runtime, cache ---
-    storage_singleton.root = tmp_path
-    storage_singleton.conversations_dir = tmp_path / 'conversations'
-    storage_singleton.telemetry_dir = tmp_path / 'telemetry'
-    storage_singleton.runtime_dir = tmp_path / 'runtime'
-    storage_singleton.cache_dir = tmp_path / 'cache'
+    # --- Heal any leaked monkeypatch from a prior test's reload. ---
+    monkeypatch.setattr(storage_mod, 'get_settings', config_mod.get_settings)
+
+    # --- Fresh storage instance scoped to tmp_path. ---
+    fresh_storage = storage_mod.StorageManager()
+    fresh_storage.root = tmp_path
+    fresh_storage.conversations_dir = tmp_path / 'conversations'
+    fresh_storage.telemetry_dir = tmp_path / 'telemetry'
+    fresh_storage.runtime_dir = tmp_path / 'runtime'
+    fresh_storage.cache_dir = tmp_path / 'cache'
     for directory in (
-        storage_singleton.conversations_dir,
-        storage_singleton.telemetry_dir,
-        storage_singleton.runtime_dir,
-        storage_singleton.cache_dir,
+        fresh_storage.conversations_dir,
+        fresh_storage.telemetry_dir,
+        fresh_storage.runtime_dir,
+        fresh_storage.cache_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
-    # --- Registry Elo: redirect to tmp + snapshot for clean restore ---
+    # Inject the fresh instance into every module that imported the singleton
+    # by name. ``from ..storage import storage`` binds at import time, so each
+    # importer holds its own reference and must be updated explicitly.
+    monkeypatch.setattr(storage_mod, 'storage', fresh_storage)
+    monkeypatch.setattr(pipeline_mod, 'storage', fresh_storage)
+    monkeypatch.setattr(router_mod, 'storage', fresh_storage)
+
+    # --- Registry Elo: redirect to tmp + snapshot for clean restore. ---
     original_elo_path = registry_singleton.elo_path
     original_elo_state = copy.deepcopy(registry_singleton.elo_state)
     registry_singleton.elo_path = tmp_path / 'runtime' / 'elo_state.json'
@@ -65,7 +81,7 @@ def isolated_state(tmp_path, monkeypatch):
     try:
         yield {
             'tmp_path': tmp_path,
-            'storage': storage_singleton,
+            'storage': fresh_storage,
             'registry': registry_singleton,
         }
     finally:
