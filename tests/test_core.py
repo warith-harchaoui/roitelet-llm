@@ -17,7 +17,7 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import Callable, List
+from typing import List
 
 import pytest
 
@@ -301,53 +301,36 @@ class TestOllamaModelCache:
         assert isinstance(models, list)
         assert models == []
 
-    def test_cache_uses_mocked_response(self):
-        """Cache should populate from a mocked Ollama /api/tags response."""
+    def test_cache_populates_from_real_response(self, ollama_http_server):
+        """Cache should populate from a real /api/tags HTTP response."""
         from core.core.registry import _OllamaModelCache
-        import httpx
 
-        fake_response_data = {
-            "models": [
-                {"name": "phi4:latest"},
-                {"name": "llama3.2:3b"},
-            ]
-        }
+        ollama_http_server['set_models'](['phi4:latest', 'llama3.2:3b'])
 
         cache = _OllamaModelCache()
-        cache.configure("http://localhost:11434")
+        cache.configure(ollama_http_server['base_url'])
+        cache.refresh(force=True)
 
-        with patch("core.core.registry.httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.raise_for_status.return_value = None
-            mock_response.json.return_value = fake_response_data
-            mock_get.return_value = mock_response
+        assert 'phi4:latest' in cache.models
+        assert 'llama3.2:3b' in cache.models
 
-            cache.refresh(force=True)
-
-        assert "phi4:latest" in cache.models
-        assert "llama3.2:3b" in cache.models
-
-    def test_cache_respects_ttl(self):
+    def test_cache_respects_ttl(self, ollama_http_server):
         """Cache should NOT re-fetch when TTL has not expired."""
-        from core.core.registry import _OllamaModelCache, _OLLAMA_CACHE_TTL_S
-        import httpx
+        from core.core.registry import _OllamaModelCache
+
+        ollama_http_server['set_models'](['phi4:latest'])
 
         cache = _OllamaModelCache()
-        cache.configure("http://localhost:11434")
+        cache.configure(ollama_http_server['base_url'])
+        cache.refresh(force=True)
+        snapshot = list(cache.models)
 
-        with patch("core.core.registry.httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.raise_for_status.return_value = None
-            mock_response.json.return_value = {"models": [{"name": "phi4:latest"}]}
-            mock_get.return_value = mock_response
+        # Change the server's response — a fresh fetch would see ['other:7b'].
+        ollama_http_server['set_models'](['other:7b'])
 
-            # First fetch.
-            cache.refresh(force=True)
-            assert mock_get.call_count == 1
-
-            # Second fetch within TTL — should be skipped.
-            cache.refresh(force=False)
-            assert mock_get.call_count == 1, "Should not re-fetch within TTL"
+        # Refresh without force, well within TTL — must not hit the server.
+        cache.refresh(force=False)
+        assert cache.models == snapshot, 'Cache must not re-fetch within TTL'
 
     def test_live_discovered_models_appear_in_registry(self):
         """Live-discovered Ollama models should be injected into the registry candidates."""
@@ -388,12 +371,16 @@ class TestOllamaModelCache:
 # Storage: atomic writes and conversation CRUD
 # ---------------------------------------------------------------------------
 
-def _fake_settings(data_dir: Path):
-    """Minimal settings object for storage tests."""
-    obj = MagicMock()
-    obj.data_dir = data_dir
+def _real_settings(data_dir: Path) -> Settings:
+    """Build a real :class:`Settings` instance with ``data_dir`` redirected.
+
+    Only the ``data_dir`` field is needed by :class:`StorageManager` for the
+    tests below; everything else inherits its real default (or env value).
+    """
+    settings = Settings()
+    settings.data_dir = data_dir
     data_dir.mkdir(parents=True, exist_ok=True)
-    return obj
+    return settings
 
 
 class TestStorageManager:
@@ -407,7 +394,7 @@ class TestStorageManager:
 
     def test_conversation_create_and_read(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
             import core.storage as st_mod
             mgr = st_mod.StorageManager()
             convo = mgr.create_conversation(title="Test flight")
@@ -418,7 +405,7 @@ class TestStorageManager:
 
     def test_atomic_write_produces_valid_json(self, tmp_path):
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
             import core.storage as st_mod
             mgr = st_mod.StorageManager()
             target = tmp_path / "test_atomic.json"
@@ -430,7 +417,7 @@ class TestStorageManager:
     def test_no_tmp_file_left_on_success(self, tmp_path):
         """Atomic write must not leave .tmp files behind on success."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
             import core.storage as st_mod
             mgr = st_mod.StorageManager()
             target = tmp_path / "clean.json"
@@ -441,7 +428,7 @@ class TestStorageManager:
     def test_list_conversations_sorted(self, tmp_path):
         """list_conversations must return newest first."""
         with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _fake_settings(tmp_path))
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
             import core.storage as st_mod
             mgr = st_mod.StorageManager()
             c1 = mgr.create_conversation(title="First")

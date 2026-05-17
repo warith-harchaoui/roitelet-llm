@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+
 
 def test_gui_imports():
     """Ensure gui main does not fail on import when executed."""
