@@ -4,11 +4,19 @@ from api.main import app
 
 client = TestClient(app)
 
-def test_read_root():
-    response = client.get("/")
+def test_healthz():
+    response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
     assert "roitelet" in response.json().get("service", "")
+
+
+def test_root_serves_spa():
+    """The vanilla JS client is mounted at '/' and must be served as HTML."""
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "<title>Roitelet</title>" in response.text
 
 def test_v1_models():
     response = client.get("/v1/models")

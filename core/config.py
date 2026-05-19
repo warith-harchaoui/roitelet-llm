@@ -95,7 +95,6 @@ class Settings(BaseSettings):
     candidate_pool_size: int = Field(default=8, alias='ROITELET_CANDIDATE_POOL_SIZE')
     app_host: str = Field(default='0.0.0.0', alias='ROITELET_APP_HOST')
     app_port: int = Field(default=8000, alias='ROITELET_APP_PORT')
-    streamlit_port: int = Field(default=8501, alias='ROITELET_STREAMLIT_PORT')
     public_base_url: str = Field(default='http://localhost:8000', alias='ROITELET_PUBLIC_BASE_URL')
 
     admin_username: str = Field(default='roitelet', alias='ROITELET_ADMIN_USERNAME')

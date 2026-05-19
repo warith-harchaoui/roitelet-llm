@@ -23,11 +23,13 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from core.config import get_settings
 from core.core.mcp import handle_mcp_request
@@ -68,10 +70,13 @@ app.add_middleware(
 )
 
 
-@app.get('/')
-async def root() -> Dict[str, Any]:
+@app.get('/healthz')
+async def health() -> Dict[str, Any]:
     """Return a lightweight health payload to indicate the server is alive.
-    
+
+    The web client is mounted at ``/`` as static files, so the health probe
+    moved to ``/healthz``.
+
     Returns
     -------
     Dict[str, Any]
@@ -295,3 +300,13 @@ async def mcp_endpoint(payload: MCPRequest):
             status_code=400,
             content={'jsonrpc': '2.0', 'id': payload.id, 'error': {'code': -32000, 'message': str(exc)}},
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Static SPA. Mounted at '/' so the vanilla JS client lives at the root URL.
+# Must be declared after all API routes to avoid shadowing them.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
+if _WEB_DIR.is_dir():
+    app.mount('/', StaticFiles(directory=_WEB_DIR, html=True), name='web')
