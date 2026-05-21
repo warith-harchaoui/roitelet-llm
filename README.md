@@ -41,7 +41,7 @@ From your perspective, it feels like using one unified super-brain API. The rest
 
 ## User Interface & Control Room
 
-Roitelet ships with a **Streamlit** control room that provides a transparent view into your LLM fleet:
+Roitelet ships with a web-based control room (vanilla JS, served by the API at `/`) that provides a transparent view into your LLM fleet:
 
 * **Configuration:** Inject your API keys, tune local model selection, and set routing parameters (Raw Power vs. Frugality vs. Independence).
 * **Usage & Monitoring:** Monitor how models are routing and verify energy estimations and carbon intensity.
@@ -73,7 +73,7 @@ chmod +x start.sh
 ```
 
 - **API Base URL:** `http://localhost:8000`
-- **Streamlit Control Room:** `http://localhost:8501`
+- **Web Control Room:** `http://localhost:8000/` (served by the API)
 
 ---
 
@@ -81,10 +81,9 @@ chmod +x start.sh
 
 ```text
 roitelet-llm/
-roitelet-llm/
 ├── core/               # Shared backend logic, router, storage, capabilities
 ├── api/                # FastAPI application (OpenAI-compatible & MCP endpoints)
-├── gui/                # Streamlit dashboard and control room
+├── web/                # Vanilla-JS control room served at `/` by the API
 ├── cli/                # Command-line interface and terminal REPL
 ├── data/
 │   └── bootstrap/model_priors.json   # Benchmark-inspired default Elo priors
@@ -92,7 +91,7 @@ roitelet-llm/
 ├── tests/
 │   ├── test_core.py    # Pytest for core engine
 │   ├── test_api.py     # Pytest for API layer
-│   ├── test_gui.py     # Pytest for Streamlit helpers
+│   ├── test_pipeline.py# Pytest for the end-to-end pipeline
 │   └── test_cli.py     # Pytest for CLI tools
 ├── start.sh            # Launcher script
 ├── Dockerfile          # Containerization multi-stage build

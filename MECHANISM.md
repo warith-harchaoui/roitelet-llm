@@ -15,7 +15,7 @@ GUI sits on top of the API over HTTP. The CLI imports the pipeline directly.
 ```mermaid
 flowchart LR
     CLI["cli/main.py<br/>roitelet ask / chat"]
-    GUI["gui/main.py<br/>Streamlit :8501"]
+    WEB["web/index.html + web/app.js<br/>served by the API at /"]
     EXT["External clients<br/>OpenAI-compat · MCP"]
 
     subgraph API["api/main.py — FastAPI :8000"]
@@ -47,7 +47,7 @@ flowchart LR
     end
 
     CLI --> PIPE
-    GUI -- "HTTP" --> API
+    WEB -- "HTTP" --> API
     EXT -- "HTTP" --> API
     API --> PIPE
 
@@ -172,7 +172,7 @@ flowchart LR
         B["data/bootstrap/model_priors.json<br/>curated benchmark-inspired priors:<br/>capabilities · pricing · latency · energy"]
     end
     subgraph S2["2 · User configuration"]
-        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>(edited from Streamlit)"]
+        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>(edited from the web UI)"]
     end
     subgraph S3["3 · Live discovery"]
         L["GET http://&lt;ollama&gt;/api/tags<br/>60 s TTL cache<br/>(warmed at API startup)"]

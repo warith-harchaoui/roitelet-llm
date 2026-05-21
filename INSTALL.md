@@ -64,8 +64,7 @@ docker compose up --build -d
 ```
 
 The container exposes:
-- **API**: `http://localhost:8000`
-- **Streamlit UI**: `http://localhost:8501`
+- **API + Web UI**: `http://localhost:8000` (the FastAPI process serves the JSON API and the static web client at the same origin)
 
 > **Ollama on the host machine**
 > The compose file pre-configures `LOCAL_LLM_BASE_URL=http://host.docker.internal:11434`
@@ -112,15 +111,12 @@ LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
 LOCAL_LLM_MODEL=qwen2.5:14b-instruct
 
-# Streamlit login
-ROITELET_ADMIN_USERNAME=roitelet
-ROITELET_ADMIN_PASSWORD=change-me-please
 ```
 
 > **Local-only mode (zero cost)**
 > You can run entirely offline with no API keys. Set
 > `ROITELET_CANDIDATE_POOL_SIZE=4` and add local Ollama models
-> through the Streamlit configuration page.
+> through the web configuration page.
 
 ### 3. Full variable reference
 
@@ -137,18 +133,12 @@ chmod +x start.sh
 ./start.sh
 ```
 
-This launches:
-- FastAPI on `http://localhost:8000`
-- Streamlit on `http://localhost:8501`
+This launches a single uvicorn process on `http://localhost:8000` which serves both the JSON API and the static web client at `/`.
 
-### Separate processes
+### Manual
 
 ```bash
-# Terminal 1
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2
-streamlit run gui/main.py --server.port 8501
 ```
 
 ---
@@ -217,7 +207,6 @@ docker compose up -d
 | `Connection refused` on port 8000 | API not started | Run `./start.sh` |
 | Synthesis always returns empty | Ollama not running | `ollama serve` |
 | `401 Unauthorized` from OpenRouter | Wrong key | Update `OPENROUTER_API_KEY` in `.env` |
-| Streamlit login fails | Wrong credentials | Check `ROITELET_ADMIN_USERNAME` / `_PASSWORD` |
 | Models don't appear in router despite `ollama pull` | Cache TTL | Wait up to 60 s or restart API |
 
 ---

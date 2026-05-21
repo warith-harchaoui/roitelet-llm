@@ -368,3 +368,35 @@ class TestRunRoiteletChat:
 
         # Synthesis still came back.
         assert response.synthesis.content == 'Synthesized from survivors.'
+
+
+class TestEstimateCost:
+    """Defensive coercion in _estimate_cost — some providers return strings."""
+
+    def test_string_token_counts_do_not_crash(self):
+        from core.core.pipeline import _estimate_cost
+
+        response = ModelResponse(
+            model_id='ollama/qwen2.5:14b-instruct',
+            provider='ollama',
+            content='ok',
+            latency_s=0.0,
+            usage={'prompt_tokens': '12', 'completion_tokens': '24'},
+        )
+        cost = _estimate_cost(response.model_id, response)
+        # Local model has zero pricing — coercion must succeed and yield 0.0
+        # without raising TypeError on the string division.
+        assert isinstance(cost, float)
+
+    def test_malformed_token_counts_default_to_zero(self):
+        from core.core.pipeline import _estimate_cost
+
+        response = ModelResponse(
+            model_id='ollama/qwen2.5:14b-instruct',
+            provider='ollama',
+            content='ok',
+            latency_s=0.0,
+            usage={'prompt_tokens': 'not-a-number', 'completion_tokens': None},
+        )
+        cost = _estimate_cost(response.model_id, response)
+        assert cost == 0.0
