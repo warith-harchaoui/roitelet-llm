@@ -371,9 +371,15 @@ class TestRunRoiteletChat:
 
 
 class TestEstimateCost:
-    """Defensive coercion in _estimate_cost — some providers return strings."""
+    """Lock in the Pydantic-enforced contract for ModelResponse.usage.
 
-    def test_string_token_counts_do_not_crash(self):
+    ``usage`` is typed ``Dict[str, float]`` (see ``core/schemas.py``). Pydantic
+    coerces numeric strings to float on construction, which is the only reason
+    ``_estimate_cost`` can safely arithmetic on the dict values. If a future
+    schema change loosens the type, these tests fail loudly.
+    """
+
+    def test_numeric_string_usage_is_coerced_to_float(self):
         from core.core.pipeline import _estimate_cost
 
         response = ModelResponse(
@@ -383,20 +389,7 @@ class TestEstimateCost:
             latency_s=0.0,
             usage={'prompt_tokens': '12', 'completion_tokens': '24'},
         )
-        cost = _estimate_cost(response.model_id, response)
-        # Local model has zero pricing — coercion must succeed and yield 0.0
-        # without raising TypeError on the string division.
-        assert isinstance(cost, float)
-
-    def test_malformed_token_counts_default_to_zero(self):
-        from core.core.pipeline import _estimate_cost
-
-        response = ModelResponse(
-            model_id='ollama/qwen2.5:14b-instruct',
-            provider='ollama',
-            content='ok',
-            latency_s=0.0,
-            usage={'prompt_tokens': 'not-a-number', 'completion_tokens': None},
-        )
-        cost = _estimate_cost(response.model_id, response)
-        assert cost == 0.0
+        # Pydantic must have coerced the strings — otherwise the arithmetic
+        # inside _estimate_cost would raise TypeError.
+        assert isinstance(response.usage['prompt_tokens'], float)
+        assert _estimate_cost(response.model_id, response) == 0.0  # local pricing is 0

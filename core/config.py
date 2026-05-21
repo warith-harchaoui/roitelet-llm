@@ -39,10 +39,6 @@ class Settings(BaseSettings):
         Maximum number of candidate models scored by the router.
     public_base_url:
         Base URL displayed in docs and returned by the API.
-    admin_username:
-        Username used by the Streamlit control room.
-    admin_password:
-        Password used by the Streamlit control room.
     local_llm_provider:
         Provider used for local judging and synthesis.
     local_llm_base_url:
@@ -96,9 +92,6 @@ class Settings(BaseSettings):
     app_host: str = Field(default='0.0.0.0', alias='ROITELET_APP_HOST')
     app_port: int = Field(default=8000, alias='ROITELET_APP_PORT')
     public_base_url: str = Field(default='http://localhost:8000', alias='ROITELET_PUBLIC_BASE_URL')
-
-    admin_username: str = Field(default='roitelet', alias='ROITELET_ADMIN_USERNAME')
-    admin_password: str = Field(default='roitelet-demo-password', alias='ROITELET_ADMIN_PASSWORD')
 
     local_llm_provider: str = Field(default='ollama', alias='LOCAL_LLM_PROVIDER')
     local_llm_base_url: str = Field(default='http://localhost:11434', alias='LOCAL_LLM_BASE_URL')

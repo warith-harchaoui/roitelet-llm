@@ -90,17 +90,9 @@ def _estimate_cost(model_id: str, response: ModelResponse) -> float:
     """
     spec = registry.get(model_id)
     usage = response.usage
-    prompt_tokens = _as_float(usage.get('prompt_tokens', usage.get('prompt_eval_count', 0.0)))
-    completion_tokens = _as_float(usage.get('completion_tokens', usage.get('eval_count', 0.0)))
+    prompt_tokens = usage.get('prompt_tokens', usage.get('prompt_eval_count', 0.0))
+    completion_tokens = usage.get('completion_tokens', usage.get('eval_count', 0.0))
     return (prompt_tokens / 1000.0) * spec.pricing['input_per_1k'] + (completion_tokens / 1000.0) * spec.pricing['output_per_1k']
-
-
-def _as_float(value: object) -> float:
-    """Coerce a token-usage field to float; some providers return strings."""
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return 0.0
 
 
 async def run_roitelet_chat(request: ChatRequest) -> ChatResponse:

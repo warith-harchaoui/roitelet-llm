@@ -99,7 +99,7 @@ async def get_app_settings() -> Dict[str, Any]:
 
 @app.post('/api/settings')
 async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
-    """Persist control-room settings edited from Streamlit.
+    """Persist control-room settings edited from the web UI.
 
     Parameters
     ----------

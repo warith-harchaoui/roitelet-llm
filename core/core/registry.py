@@ -7,7 +7,7 @@ The registry merges three model sources in priority order:
    should not be overridden by dynamic sources.
 
 2. **User-configured models** — ``selected_ollama_models`` and
-   ``paid_openrouter_models`` saved from the Streamlit control room. These
+   ``paid_openrouter_models`` saved from the web control room. These
    are merged at every route call (no restart required).
 
 3. **Live Ollama discovery** — models returned by ``GET /api/tags`` on the
@@ -181,7 +181,7 @@ class ModelRegistry:
 
     Model sources (merged in this order, lower-priority → higher-priority):
     1. Bootstrap JSON priors (most curated — never overwritten).
-    2. User-configured models from the Streamlit control room.
+    2. User-configured models from the web control room.
     3. Live-discovered Ollama models (via the module-level cache).
     """
 

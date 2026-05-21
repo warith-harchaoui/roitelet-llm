@@ -255,7 +255,7 @@ class StorageManager:
         return AppSettingsPayload.model_validate(payload)
 
     def save_app_settings(self, payload: AppSettingsPayload) -> None:
-        """Persist the control-room settings edited from Streamlit."""
+        """Persist the control-room settings edited from the web UI."""
         self._write_json(self.settings_path(), payload.model_dump())
 
 

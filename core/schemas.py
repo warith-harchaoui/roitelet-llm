@@ -1,4 +1,4 @@
-"""Pydantic schemas shared by the API, Streamlit UI, and orchestration code.
+"""Pydantic schemas shared by the API, web UI, and orchestration code.
 
 Examples
 --------
@@ -199,7 +199,7 @@ class Conversation(BaseModel):
 
 
 class AppSettingsPayload(BaseModel):
-    """Settings payload edited from the Streamlit control room."""
+    """Settings payload edited from the web control room."""
 
     openrouter_api_key: str = ''
     openai_api_key: str = ''
