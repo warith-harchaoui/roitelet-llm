@@ -30,8 +30,6 @@ OPENROUTER_API_KEY=...
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
 LOCAL_LLM_MODEL=qwen2.5:14b-instruct
-ROITELET_ADMIN_USERNAME=roitelet
-ROITELET_ADMIN_PASSWORD=changez-moi
 ```
 
 ## 3. Lancer le projet
@@ -40,9 +38,7 @@ ROITELET_ADMIN_PASSWORD=changez-moi
 ./start.sh
 ```
 
-Cela lance :
-- FastAPI sur `8000`
-- Streamlit sur `8501`
+Cela lance un unique processus FastAPI sur le port `8000` qui sert l'API JSON et le tableau de bord web sur `/`.
 
 ## 4. Déploiement Docker
 
