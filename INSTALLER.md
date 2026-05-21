@@ -112,15 +112,12 @@ LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
 LOCAL_LLM_MODEL=qwen2.5:14b-instruct
 
-# Connexion Streamlit
-ROITELET_ADMIN_USERNAME=roitelet
-ROITELET_ADMIN_PASSWORD=changez-moi
 ```
 
 > **Mode local uniquement (coût zéro)**
 > Vous pouvez fonctionner entièrement hors ligne, sans clé API. Définissez
 > `ROITELET_CANDIDATE_POOL_SIZE=4` et ajoutez des modèles Ollama via
-> la page de configuration Streamlit.
+> la page de configuration web.
 
 ### 3. Référence complète des variables
 
@@ -137,18 +134,12 @@ chmod +x start.sh
 ./start.sh
 ```
 
-Cela lance :
-- FastAPI sur `http://localhost:8000`
-- Streamlit sur `http://localhost:8501`
+Cela lance un unique processus uvicorn sur `http://localhost:8000` qui sert à la fois l'API JSON et le client web statique sur `/`.
 
-### Processus séparés
+### Lancement manuel
 
 ```bash
-# Terminal 1
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2
-streamlit run gui/main.py --server.port 8501
 ```
 
 ---
@@ -217,7 +208,6 @@ docker compose up -d
 | `Connection refused` sur le port 8000 | API non démarrée | Lancer `./start.sh` |
 | La synthèse retourne toujours vide | Ollama non démarré | `ollama serve` |
 | `401 Unauthorized` depuis OpenRouter | Clé incorrecte | Mettre à jour `OPENROUTER_API_KEY` dans `.env` |
-| Connexion Streamlit échoue | Identifiants incorrects | Vérifier `ROITELET_ADMIN_USERNAME` / `_PASSWORD` |
 | Les modèles n'apparaissent pas après `ollama pull` | TTL du cache | Attendre jusqu'à 60 s ou redémarrer l'API |
 
 ---
@@ -226,17 +216,16 @@ docker compose up -d
 
 ```text
 roitelet-llm/
-roitelet-llm/
 ├── core/               # routeur, registre, juge, pipeline, capacités
 ├── api/                # Application FastAPI (OpenAI-compatible & MCP)
-├── gui/                # Interface Streamlit
+├── web/                # Client web statique servi sur `/` par l'API
 ├── cli/                # Interface en ligne de commande (REPL)
 ├── data/
 │   └── bootstrap/model_priors.json   # scores a priori inspirés des benchmarks
 ├── tests/
 │   ├── test_core.py    # Suite pytest (Moteur central)
 │   ├── test_api.py     # Suite pytest (API)
-│   ├── test_gui.py     # Suite pytest (GUI)
+│   ├── test_pipeline.py# Suite pytest (Pipeline end-to-end)
 │   └── test_cli.py     # Suite pytest (CLI)
 ├── start.sh            # script de lancement
 ├── Dockerfile          # construction multi-étapes

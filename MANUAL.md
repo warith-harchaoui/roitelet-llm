@@ -28,8 +28,6 @@ OPENROUTER_API_KEY=...
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
 LOCAL_LLM_MODEL=qwen2.5:14b-instruct
-ROITELET_ADMIN_USERNAME=roitelet
-ROITELET_ADMIN_PASSWORD=change-me
 ```
 
 ## 3. Start the project
@@ -38,9 +36,7 @@ ROITELET_ADMIN_PASSWORD=change-me
 ./start.sh
 ```
 
-This launches:
-- FastAPI on port `8000`
-- Streamlit on port `8501`
+This launches a single FastAPI process on port `8000` that serves the JSON API and the web control room at `/`.
 
 ## 4. Docker setup
 
@@ -48,7 +44,7 @@ This launches:
 docker compose up --build
 ```
 
-## 5. Streamlit control room
+## 5. Web control room
 
 ### Configuration page
 Use it to:
