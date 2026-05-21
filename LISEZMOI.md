@@ -42,7 +42,7 @@ De votre point de vue, vous recevez une réponse unique comme si vous interrogie
 
 ## Interface Utilisateur & Contrôle
 
-Roitelet est fourni avec un tableau de bord **Streamlit** offrant une vue transparente sur votre flotte d'IA :
+Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur `/`) offrant une vue transparente sur votre flotte d'IA :
 
 * **Configuration :** Sauvegardez vos clés API, calibrez le choix du modèle local, et modifiez vos paramètres de routage (Puissance Pure, Frugalité, Indépendance).
 * **Usage & Dashboard :** Surveillez l'utilisation de vos modèles et vérifiez vos estimations de consommation énergétique.
@@ -74,7 +74,7 @@ chmod +x start.sh
 ```
 
 - **API :** `http://localhost:8000`
-- **Interface Streamlit :** `http://localhost:8501`
+- **Interface web :** `http://localhost:8000/` (servie par l'API)
 
 ---
 

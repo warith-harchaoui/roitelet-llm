@@ -215,17 +215,16 @@ docker compose up -d
 
 ```text
 roitelet-llm/
-roitelet-llm/
 ├── core/               # router, registry, judge, pipeline, capabilities
 ├── api/                # FastAPI application (OpenAI-compatible & MCP)
-├── gui/                # Streamlit control room
+├── web/                # Static control room served at `/` by the API
 ├── cli/                # Command-line interface and terminal REPL
 ├── data/
 │   └── bootstrap/model_priors.json   # benchmark-inspired prior scores
 ├── tests/
 │   ├── test_core.py    # Pytest for core engine
 │   ├── test_api.py     # Pytest for API layer
-│   ├── test_gui.py     # Pytest for Streamlit helpers
+│   ├── test_pipeline.py# Pytest for the end-to-end pipeline
 │   └── test_cli.py     # Pytest for CLI tools
 ├── start.sh            # launcher script
 ├── Dockerfile          # multi-stage build
