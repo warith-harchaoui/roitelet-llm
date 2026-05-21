@@ -45,3 +45,6 @@ Thumbs.db
 
 # Docker
 .dockerignore
+
+# Private working notes (never committed)
+.private/

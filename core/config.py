@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     app_host: str = Field(default='0.0.0.0', alias='ROITELET_APP_HOST')
     app_port: int = Field(default=8000, alias='ROITELET_APP_PORT')
     public_base_url: str = Field(default='http://localhost:8000', alias='ROITELET_PUBLIC_BASE_URL')
+    # Comma-separated list of allowed CORS origins. Defaults to same-origin
+    # (the web UI is served from the API). Set to ``*`` to allow any origin.
+    cors_allowed_origins: str = Field(
+        default='http://localhost:8000',
+        alias='ROITELET_CORS_ALLOWED_ORIGINS',
+    )
 
     local_llm_provider: str = Field(default='ollama', alias='LOCAL_LLM_PROVIDER')
     local_llm_base_url: str = Field(default='http://localhost:11434', alias='LOCAL_LLM_BASE_URL')

@@ -18,7 +18,11 @@ from typing import Tuple
 from ..config import get_settings
 
 
-def estimate_energy_and_carbon(runtime_seconds: float, average_power_watts: float, memory_gb: float = 0.0) -> Tuple[float, float]:
+def estimate_energy_and_carbon(
+    runtime_seconds: float,
+    average_power_watts: float,
+    memory_gb: float = 0.0,
+) -> Tuple[float, float]:
     """Estimate energy usage and carbon footprint for a single completion.
 
     Parameters

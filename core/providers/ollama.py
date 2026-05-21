@@ -62,8 +62,14 @@ class OllamaClient:
                 data = response.json()
             runtime = time.perf_counter() - started
             accelerator = detect_best_accelerator()
-            average_power = settings.default_gpu_power_watts if accelerator in {'mps', 'cuda'} else settings.default_cpu_power_watts
-            energy_kwh, carbon_g = estimate_energy_and_carbon(runtime, average_power_watts=average_power, memory_gb=6.0)
+            on_accelerator = accelerator in {'mps', 'cuda'}
+            average_power = (
+                settings.default_gpu_power_watts if on_accelerator
+                else settings.default_cpu_power_watts
+            )
+            energy_kwh, carbon_g = estimate_energy_and_carbon(
+                runtime, average_power_watts=average_power, memory_gb=6.0,
+            )
             usage = {
                 'prompt_eval_count': float(data.get('prompt_eval_count', 0) or 0),
                 'eval_count': float(data.get('eval_count', 0) or 0),
@@ -82,7 +88,11 @@ class OllamaClient:
             )
         except Exception as exc:  # pragma: no cover - network dependent
             runtime = time.perf_counter() - started
-            energy_kwh, carbon_g = estimate_energy_and_carbon(runtime, average_power_watts=settings.default_cpu_power_watts, memory_gb=2.0)
+            energy_kwh, carbon_g = estimate_energy_and_carbon(
+                runtime,
+                average_power_watts=settings.default_cpu_power_watts,
+                memory_gb=2.0,
+            )
             return ModelResponse(
                 model_id=model_id,
                 provider='ollama',

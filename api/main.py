@@ -61,10 +61,18 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title='Roitelet LLM API', version='0.1.0', lifespan=lifespan)
+
+_cors_raw = settings.cors_allowed_origins.strip()
+_cors_origins = ['*'] if _cors_raw == '*' else [
+    origin.strip() for origin in _cors_raw.split(',') if origin.strip()
+]
+# `allow_credentials=True` is incompatible with wildcard origins per CORS spec;
+# downgrade automatically when the operator opts into the wildcard.
+_allow_credentials = _cors_origins != ['*']
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['*'],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=['*'],
     allow_headers=['*'],
 )
@@ -87,31 +95,26 @@ async def health() -> Dict[str, Any]:
 
 @app.get('/api/settings')
 async def get_app_settings() -> Dict[str, Any]:
-    """Return persisted control-room settings.
+    """Return persisted control-room settings with API keys masked.
 
-    Returns
-    -------
-    Dict[str, Any]
-        The settings serialized as a dictionary.
+    Stored credentials never leave the server — any client (even on the same
+    machine) sees a fixed mask in place of real keys. The web UI round-trips
+    that mask back through POST, and the server reuses the stored value.
     """
-    return storage.load_app_settings().model_dump()
+    return storage.load_app_settings().masked().model_dump()
 
 
 @app.post('/api/settings')
 async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
     """Persist control-room settings edited from the web UI.
 
-    Parameters
-    ----------
-    payload : AppSettingsPayload
-        The updated settings derived from the frontend.
-
-    Returns
-    -------
-    Dict[str, Any]
-        A success status message.
+    Fields whose value still equals the secret mask sentinel are preserved
+    from the previously stored payload — the UI may submit masked values
+    untouched without wiping credentials.
     """
-    storage.save_app_settings(payload)
+    stored = storage.load_app_settings()
+    merged = stored.merge_unmasked(payload)
+    storage.save_app_settings(merged)
     return {'status': 'saved'}
 
 

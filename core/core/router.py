@@ -79,7 +79,12 @@ class RoiteletRouter:
                         rationale=f'Bootstrap prior + rolling Elo for {capability}.',
                     )
                 )
-            frugality_bonus = 1.0 / (1.0 + spec.pricing['output_per_1k'] * 100.0 + spec.energy_kwh * 1000.0 + spec.latency_s)
+            frugality_bonus = 1.0 / (
+                1.0
+                + spec.pricing['output_per_1k'] * 100.0
+                + spec.energy_kwh * 1000.0
+                + spec.latency_s
+            )
             local_bonus = 0.15 if spec.local else 0.0
             final_score = (
                 preferences.raw_power * quality_score

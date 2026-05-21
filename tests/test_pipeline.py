@@ -370,6 +370,54 @@ class TestRunRoiteletChat:
         assert response.synthesis.content == 'Synthesized from survivors.'
 
 
+class TestJudgeFallback:
+    """When the local judge returns empty content, the synthesis result
+    must surface the top candidate verbatim and admit the judge was
+    unreachable — never echo the meta-message back to the user as content."""
+
+    async def test_empty_judge_returns_top_candidate_verbatim(self, isolated_state, monkeypatch):
+        class _EmptyJudgeClient:
+            async def generate(self, *, model_id, messages):
+                return ModelResponse(
+                    model_id=model_id,
+                    provider='ollama',
+                    content='',  # judge unreachable / blank completion
+                    latency_s=0.0,
+                    usage={},
+                )
+
+        # Real judge call path; fake only the local-judge provider.
+        monkeypatch.setattr(
+            'core.core.judge.get_provider_client', lambda _key: _EmptyJudgeClient(),
+        )
+
+        from core.core.judge import judge_and_synthesize
+
+        top = ModelResponse(
+            model_id='openrouter/test/model-a',
+            provider='openrouter',
+            content='THE-TOP-CANDIDATE-ANSWER',
+            latency_s=0.0,
+            usage={},
+        )
+        runner_up = ModelResponse(
+            model_id='openrouter/test/model-b',
+            provider='openrouter',
+            content='runner-up answer',
+            latency_s=0.0,
+            usage={},
+        )
+
+        result = await judge_and_synthesize('any prompt', [top, runner_up])
+
+        # The user must get the real top candidate, not a meta-message.
+        assert result.content == 'THE-TOP-CANDIDATE-ANSWER'
+        # The judge_summary must admit the judge was unreachable.
+        assert 'unavailable' in result.judge_summary.lower()
+        # Winners reflect reality: the top candidate.
+        assert result.winning_model_ids == [top.model_id]
+
+
 class TestEstimateCost:
     """Lock in the Pydantic-enforced contract for ModelResponse.usage.
 

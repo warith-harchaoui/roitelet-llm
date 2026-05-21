@@ -92,7 +92,10 @@ def _estimate_cost(model_id: str, response: ModelResponse) -> float:
     usage = response.usage
     prompt_tokens = usage.get('prompt_tokens', usage.get('prompt_eval_count', 0.0))
     completion_tokens = usage.get('completion_tokens', usage.get('eval_count', 0.0))
-    return (prompt_tokens / 1000.0) * spec.pricing['input_per_1k'] + (completion_tokens / 1000.0) * spec.pricing['output_per_1k']
+    return (
+        (prompt_tokens / 1000.0) * spec.pricing['input_per_1k']
+        + (completion_tokens / 1000.0) * spec.pricing['output_per_1k']
+    )
 
 
 async def run_roitelet_chat(request: ChatRequest) -> ChatResponse:
@@ -120,7 +123,9 @@ async def run_roitelet_chat(request: ChatRequest) -> ChatResponse:
     shadow_reference = [candidate.model_id for candidate in decision.candidates[:max(request.top_k, 5)]]
     messages = [ChatMessage(role='user', content=request.prompt)]
 
-    selected_responses = await asyncio.gather(*[_query_one(model_id, messages) for model_id in decision.selected_model_ids])
+    selected_responses = await asyncio.gather(
+        *[_query_one(model_id, messages) for model_id in decision.selected_model_ids]
+    )
 
     # Filter out responses that failed entirely before sending to the judge.
     # Always keep at least one candidate so synthesis has content to work with.

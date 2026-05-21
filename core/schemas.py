@@ -198,6 +198,23 @@ class Conversation(BaseModel):
     messages: List[ConversationMessage] = Field(default_factory=list)
 
 
+# Placeholder shown to the web UI in place of stored API keys. When the UI
+# POSTs settings back with this sentinel, the server preserves the on-disk
+# key rather than overwriting it. The exact string must be stable across
+# releases — changing it would silently blank existing keys.
+SECRET_MASK = '••••••••'
+
+# AppSettingsPayload fields that hold credentials and must be masked on read.
+SECRET_FIELDS = (
+    'openrouter_api_key',
+    'openai_api_key',
+    'anthropic_api_key',
+    'gemini_api_key',
+    'perplexity_api_key',
+    'openai_compatible_api_key',
+)
+
+
 class AppSettingsPayload(BaseModel):
     """Settings payload edited from the web control room."""
 
@@ -218,6 +235,29 @@ class AppSettingsPayload(BaseModel):
     independence_local_only: bool = False
     selected_ollama_models: List[str] = Field(default_factory=list)
     paid_openrouter_models: List[str] = Field(default_factory=list)
+
+    def masked(self) -> 'AppSettingsPayload':
+        """Return a copy with non-empty secret fields replaced by ``SECRET_MASK``."""
+        replacements = {
+            field: SECRET_MASK
+            for field in SECRET_FIELDS
+            if getattr(self, field)
+        }
+        return self.model_copy(update=replacements)
+
+    def merge_unmasked(self, incoming: 'AppSettingsPayload') -> 'AppSettingsPayload':
+        """Merge an incoming payload over self, preserving secrets where the
+        incoming value still equals ``SECRET_MASK``.
+
+        This lets the web UI round-trip settings without ever seeing the real
+        API keys: it reads masked values, sends them back unchanged, and the
+        server keeps the stored credentials.
+        """
+        replacements = {}
+        for field in SECRET_FIELDS:
+            if getattr(incoming, field) == SECRET_MASK:
+                replacements[field] = getattr(self, field)
+        return incoming.model_copy(update=replacements)
 
 
 class ChatRequest(BaseModel):

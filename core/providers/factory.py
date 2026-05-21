@@ -32,7 +32,7 @@ def get_provider_client(provider: str):
         return OllamaClient(base_url=runtime_settings.ollama_base_url or settings.local_llm_base_url)
     if provider == 'openrouter':
         return OpenAICompatibleClient(
-            base_url=runtime_settings.openrouter_api_key and settings.openrouter_base_url or settings.openrouter_base_url,
+            base_url=settings.openrouter_base_url,
             api_key=runtime_settings.openrouter_api_key or settings.openrouter_api_key,
             provider_name='openrouter',
         )
