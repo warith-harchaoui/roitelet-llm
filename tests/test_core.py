@@ -437,3 +437,15 @@ class TestStorageManager:
             listed = mgr.list_conversations()
             # Newest is created last, so c2 should be first in the list.
             assert listed[0].conversation_id == c2.conversation_id
+
+    def test_conversation_path_rejects_traversal(self, tmp_path):
+        """Non-UUID conversation ids must be refused so callers cannot escape the data dir."""
+        with pytest.MonkeyPatch().context() as m:
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
+            import core.storage as st_mod
+            mgr = st_mod.StorageManager()
+            for evil_id in ("../../../etc/passwd", "..", "a/b", ""):
+                with pytest.raises(ValueError):
+                    mgr.conversation_path(evil_id)
+            # get_conversation must fail closed (404-shaped) rather than crash.
+            assert mgr.get_conversation("../../../etc/passwd") is None
