@@ -46,7 +46,7 @@ Cela lance un unique processus FastAPI sur le port `8000` qui sert l'API JSON et
 docker compose up --build
 ```
 
-## 5. Interface Streamlit
+## 5. Interface web
 
 ### Page de configuration
 Vous pouvez :
