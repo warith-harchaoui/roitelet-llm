@@ -115,7 +115,13 @@ class StorageManager:
         return conversation
 
     def conversation_path(self, conversation_id: str) -> Path:
-        """Return the JSON path for a conversation."""
+        """Return the JSON path for a conversation.
+
+        Validates the identifier is a UUID so untrusted callers (HTTP path
+        params) cannot escape ``conversations_dir`` via traversal sequences.
+        """
+        # UUID() rejects traversal payloads ("..", slashes, NULs) by construction.
+        uuid.UUID(str(conversation_id))
         return self.conversations_dir / f'{conversation_id}.json'
 
     def save_conversation(self, conversation: Conversation) -> None:
@@ -125,7 +131,11 @@ class StorageManager:
 
     def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         """Load a conversation if it exists."""
-        payload = self._read_json(self.conversation_path(conversation_id), None)
+        try:
+            path = self.conversation_path(conversation_id)
+        except ValueError:
+            return None
+        payload = self._read_json(path, None)
         return Conversation.model_validate(payload) if payload else None
 
     def list_conversations(self) -> List[Conversation]:

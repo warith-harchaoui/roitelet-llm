@@ -147,13 +147,14 @@ class TestParseWinners:
         assert parse_winners("No winners line here.") == [1]
 
     def test_ignores_non_digits(self):
-        # The regex [0-9, ]+ stops at the first non-numeric non-space character.
-        # "WINNERS: 1, x, 3" → the regex captures "1, " (stops at 'x'), so only [1] is returned.
-        # This is expected behavior; well-formed judge output never contains letters in WINNERS.
-        result = parse_winners("WINNERS: 1, x, 3")
-        assert result == [1]
+        # Non-digit garbage between indices must not drop later winners.
+        assert parse_winners("WINNERS: 1, x, 3") == [1, 3]
         # A clean numeric list should work fine.
         assert parse_winners("WINNERS: 2, 3") == [2, 3]
+
+    def test_prose_separators_between_winners(self):
+        # The judge sometimes writes things like "WINNERS: 1 and 3".
+        assert parse_winners("WINNERS: 1 and 3") == [1, 3]
 
     def test_trailing_whitespace(self):
         assert parse_winners("WINNERS: 1 ") == [1]

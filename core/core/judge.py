@@ -35,11 +35,11 @@ def parse_winners(text: str) -> List[int]:
     list of int
         1-based winning candidate indices.
     """
-    match = re.search(r'WINNERS:\s*([0-9, ]+)', text)
+    match = re.search(r'WINNERS:\s*(.+)', text)
     if not match:
         return [1]
-    values = [chunk.strip() for chunk in match.group(1).split(',') if chunk.strip()]
-    winners = [int(value) for value in values if value.isdigit()]
+    # Tolerate non-digit junk between indices so a stray word doesn't drop later winners.
+    winners = [int(value) for value in re.findall(r'\d+', match.group(1))]
     return winners or [1]
 
 
