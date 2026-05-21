@@ -82,10 +82,9 @@ chmod +x start.sh
 
 ```text
 roitelet-llm/
-roitelet-llm/
 ├── core/               # Logique backend, routeur, stockage, capacités
 ├── api/                # Application FastAPI (Endpoints compatibles OpenAI & MCP)
-├── gui/                # Interface Streamlit (Tableau de bord)
+├── web/                # Interface web (JS vanilla, servie sur `/` par l'API)
 ├── cli/                # Interface en ligne de commande (REPL terminal)
 ├── data/
 │   └── bootstrap/model_priors.json   # Base d'informations avec scores Elo
@@ -93,7 +92,7 @@ roitelet-llm/
 ├── tests/
 │   ├── test_core.py    # Suite de tests Pytest (Moteur central)
 │   ├── test_api.py     # Suite de tests Pytest (API)
-│   ├── test_gui.py     # Suite de tests Pytest (GUI)
+│   ├── test_pipeline.py# Suite de tests Pytest (Pipeline end-to-end)
 │   └── test_cli.py     # Suite de tests Pytest (CLI)
 ├── start.sh            # Script de lancement
 ├── Dockerfile          # Fichier de build Docker multi-stade
