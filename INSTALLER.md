@@ -64,8 +64,7 @@ docker compose up --build -d
 ```
 
 Le conteneur expose :
-- **API** : `http://localhost:8000`
-- **Interface Streamlit** : `http://localhost:8501`
+- **API + interface web** : `http://localhost:8000` (le processus FastAPI sert l'API JSON et le client web statique sur la même origine)
 
 > **Ollama sur la machine hôte**
 > Le fichier compose configure automatiquement
