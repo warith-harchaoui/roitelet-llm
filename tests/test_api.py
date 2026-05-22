@@ -215,9 +215,8 @@ def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
                 ModelCandidate(
                     model_id='ollama/qwen3:8b-instruct',
                     provider='ollama',
-                    final_score=0.9,
-                    quality_score=0.85,
-                    frugality_bonus=0.5,
+                    selected=True,
+                    score=0.9,
                     capability_scores=[],
                 ),
             ],
