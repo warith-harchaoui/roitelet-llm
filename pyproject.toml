@@ -37,6 +37,16 @@ dev = [
 eval = [
     "deepeval>=2.0.0",
 ]
+# Multimodal inputs. Audio = whisper.cpp (transcription) + NeMo Sortformer
+# (diarization). NeMo pulls PyTorch + Lightning + Hydra (~2 GB), kept
+# optional so the OSS quick-start stays light. Install with:
+#   pip install -e .[multimodal]
+multimodal = [
+    "pywhispercpp>=1.4",
+    "nemo-toolkit[asr]>=2.1",
+    "soundfile>=0.12",
+    "audio-helper>=0.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

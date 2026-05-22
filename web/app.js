@@ -13,6 +13,7 @@ const state = {
   messages: [],          // {role, content, metadata?}
   conversations: [],
   busy: false,
+  attachments: [],       // File objects queued for the next send
 };
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -29,6 +30,12 @@ async function apiPost(path, body) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body),
   });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText} — ${await r.text()}`);
+  return r.json();
+}
+
+async function apiPostMultipart(path, formData) {
+  const r = await fetch(path, {method: 'POST', body: formData});
   if (!r.ok) throw new Error(`${r.status} ${r.statusText} — ${await r.text()}`);
   return r.json();
 }
@@ -196,6 +203,8 @@ async function loadConversation(id) {
 function newChat() {
   state.conversationId = null;
   state.messages = [];
+  state.attachments = [];
+  renderAttachments();
   $('conversationTitle').textContent = 'New chat';
   renderMessages();
   renderConversationList();
@@ -204,23 +213,38 @@ function newChat() {
 
 async function send() {
   const prompt = $('prompt').value.trim();
-  if (!prompt || state.busy) return;
+  const files = state.attachments;
+  if ((!prompt && files.length === 0) || state.busy) return;
 
-  state.messages.push({role: 'user', content: prompt});
+  const fileLabel = files.length ? files.map(f => `📎 ${f.name}`).join('\n') : '';
+  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || '(audio attachment)';
+  state.messages.push({role: 'user', content: userBubble});
   $('prompt').value = '';
   renderMessages();
   showThinking();
   setBusy(true);
 
   try {
-    const payload = {
-      prompt,
-      conversation_id: state.conversationId,
-      preferences: {raw_power: 0.7, frugality: 0.3, independence: false, allow_vlms: false},
-      top_k: 3,
-    };
-    const res = await apiPost('/api/chat', payload);
+    let res;
+    if (files.length) {
+      const fd = new FormData();
+      fd.append('prompt', prompt);
+      if (state.conversationId) fd.append('conversation_id', state.conversationId);
+      fd.append('top_k', '3');
+      for (const f of files) fd.append('audio_files', f);
+      res = await apiPostMultipart('/api/chat/multimodal', fd);
+    } else {
+      const payload = {
+        prompt,
+        conversation_id: state.conversationId,
+        preferences: {raw_power: 0.7, frugality: 0.3, independence: false, allow_vlms: false},
+        top_k: 3,
+      };
+      res = await apiPost('/api/chat', payload);
+    }
     state.conversationId = res.conversation_id;
+    state.attachments = [];
+    renderAttachments();
     state.messages.push({
       role: 'assistant',
       content: res.synthesis?.content || '(no answer)',
@@ -241,6 +265,42 @@ async function send() {
     setBusy(false);
     $('prompt').focus();
   }
+}
+
+// ─── Attachments ─────────────────────────────────────────────────────────────
+
+function renderAttachments() {
+  const box = $('attachmentChips');
+  if (!state.attachments.length) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.remove('hidden');
+  box.classList.add('flex');
+  box.innerHTML = state.attachments.map((f, i) => `
+    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <span class="truncate max-w-[180px]">${escapeHtml(f.name)}</span>
+      <button data-i="${i}" class="attachRm text-gray-400 hover:text-red-500" title="Remove">×</button>
+    </span>`).join('');
+  for (const btn of box.querySelectorAll('.attachRm')) {
+    btn.addEventListener('click', () => {
+      state.attachments.splice(parseInt(btn.dataset.i, 10), 1);
+      renderAttachments();
+    });
+  }
+}
+
+function onFilesPicked(fileList) {
+  for (const f of fileList) {
+    if (f.type.startsWith('audio/') || /\.(wav|mp3|m4a|flac|ogg|opus|aac)$/i.test(f.name)) {
+      state.attachments.push(f);
+    } else {
+      showToast(`Skipped ${f.name} — only audio is supported for now.`);
+    }
+  }
+  renderAttachments();
 }
 
 // ─── Settings sheet ──────────────────────────────────────────────────────────
@@ -322,6 +382,8 @@ async function saveSettings(ev) {
 
 document.addEventListener('DOMContentLoaded', () => {
   $('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
+  $('attachBtn').addEventListener('click', () => $('fileInput').click());
+  $('fileInput').addEventListener('change', (e) => { onFilesPicked(e.target.files); e.target.value = ''; });
   $('newChatBtn').addEventListener('click', newChat);
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);

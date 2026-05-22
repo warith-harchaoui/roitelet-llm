@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -219,6 +220,53 @@ async def roitelet_chat(payload: ChatRequest):
         })
 
     return StreamingResponse(event_stream(), media_type='text/event-stream')
+
+
+@app.post('/api/chat/multimodal')
+async def roitelet_chat_multimodal(
+    prompt: str = Form(''),
+    conversation_id: str | None = Form(None),
+    top_k: int = Form(3),
+    audio_files: List[UploadFile] = File(default_factory=list),
+):
+    """Run one chat turn with attached audio files.
+
+    Each audio file is transcribed and diarized locally (whisper.cpp +
+    NeMo Sortformer); the resulting speaker-labelled transcript is
+    prepended to the user prompt, then the standard Roitelet pipeline
+    runs unmodified.
+    """
+    import tempfile
+    from core.multimodal.audio import transcribe_audio
+
+    transcripts: List[str] = []
+    for upload in audio_files:
+        if not upload.filename:
+            continue
+        suffix = Path(upload.filename).suffix or '.wav'
+        fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(await upload.read())
+            transcript = await transcribe_audio(Path(tmp_path))
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        if transcript:
+            transcripts.append(f'[Audio: {upload.filename}]\n{transcript}')
+
+    augmented = '\n\n'.join([*transcripts, prompt]).strip() if transcripts else prompt
+    if not augmented:
+        raise HTTPException(status_code=400, detail='Empty prompt and no usable audio.')
+
+    response = await run_roitelet_chat(
+        ChatRequest(
+            prompt=augmented,
+            conversation_id=conversation_id,
+            top_k=top_k,
+        )
+    )
+    return response.model_dump()
 
 
 @app.get('/v1/models')
