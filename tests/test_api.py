@@ -210,7 +210,8 @@ def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
     return ChatResponse(
         conversation_id='conv-stub',
         router=RouterDecision(
-            selected_model_ids=['ollama/qwen3:8b-instruct'],
+            prompt='hi',
+            categories={'coding': 1.0},
             candidates=[
                 ModelCandidate(
                     model_id='ollama/qwen3:8b-instruct',
@@ -220,7 +221,8 @@ def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
                     capability_scores=[],
                 ),
             ],
-            categories={'coding': 1.0},
+            selected_model_ids=['ollama/qwen3:8b-instruct'],
+            reasoning=['stub'],
         ),
         responses=[
             ModelResponse(
