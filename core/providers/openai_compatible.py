@@ -24,7 +24,7 @@ from typing import Sequence
 
 import httpx
 
-from ..core.energy import estimate_energy_and_carbon
+from ..energy import estimate_energy_and_carbon
 from ..schemas import ChatMessage, ModelResponse
 from ..storage import storage
 

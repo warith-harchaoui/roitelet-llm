@@ -20,8 +20,8 @@ from typing import Sequence
 import httpx
 
 from ..config import get_settings
-from ..core.device import detect_best_accelerator
-from ..core.energy import estimate_energy_and_carbon
+from ..device import detect_best_accelerator
+from ..energy import estimate_energy_and_carbon
 from ..schemas import ChatMessage, ModelResponse
 
 
