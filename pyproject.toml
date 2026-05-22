@@ -32,6 +32,11 @@ dev = [
     "httpx>=0.28.1",  # also used in tests
     "ruff>=0.4.0",
 ]
+# Answer-quality evaluation suite. Not loaded by the default test run.
+# Install with: pip install -e .[eval]   then: pytest -m eval -q
+eval = [
+    "deepeval>=2.0.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -47,3 +52,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "eval: answer-quality tests that hit a real local Ollama judge — slow, network-dependent, excluded from the default run",
+]
+# Default run skips the eval marker. Use `pytest -m eval` to include it.
+addopts = "-m 'not eval'"

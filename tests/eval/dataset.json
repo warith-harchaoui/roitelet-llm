@@ -1,0 +1,32 @@
+[
+  {
+    "id": "coding-fizzbuzz",
+    "category": "coding",
+    "prompt": "Write a Python function `fizzbuzz(n)` that prints FizzBuzz from 1 to n. Use 'Fizz' for multiples of 3, 'Buzz' for multiples of 5, and 'FizzBuzz' for multiples of both.",
+    "expected_output": "A Python function that iterates from 1 to n inclusive, printing 'FizzBuzz' when divisible by 15, 'Fizz' when divisible by 3, 'Buzz' when divisible by 5, and the number otherwise."
+  },
+  {
+    "id": "math-quadratic",
+    "category": "math",
+    "prompt": "Solve x^2 - 5x + 6 = 0 and explain the steps.",
+    "expected_output": "The roots are x = 2 and x = 3, obtained by factoring (x-2)(x-3) = 0 or by the quadratic formula with a=1, b=-5, c=6."
+  },
+  {
+    "id": "reasoning-monty-hall",
+    "category": "reasoning",
+    "prompt": "In the Monty Hall problem with 3 doors, is it better to switch your choice after the host reveals a goat? Explain why.",
+    "expected_output": "Yes, switching wins 2/3 of the time. The reason is that your initial choice has a 1/3 chance of being right; the remaining 2/3 probability concentrates on the unopened door after the host reveals a goat."
+  },
+  {
+    "id": "multilingual-french-translation",
+    "category": "multilingual",
+    "prompt": "Translate to French: 'The early bird catches the worm.' Provide the idiomatic French equivalent, not a literal translation.",
+    "expected_output": "L'avenir appartient à ceux qui se lèvent tôt. (The literal translation would be different; the idiomatic French equivalent is preferred.)"
+  },
+  {
+    "id": "summarization-photosynthesis",
+    "category": "summarization",
+    "prompt": "In two sentences, summarize what photosynthesis is and why it matters for life on Earth.",
+    "expected_output": "Photosynthesis is the process by which plants, algae, and some bacteria convert light energy, carbon dioxide, and water into glucose and oxygen. It underpins nearly all life on Earth because it produces the atmospheric oxygen animals breathe and the organic energy that food chains depend on."
+  }
+]
