@@ -343,6 +343,10 @@ async def mcp_endpoint(payload: MCPRequest):
 # Must be declared after all API routes to avoid shadowing them.
 # ──────────────────────────────────────────────────────────────────────────────
 
+_ASSETS_DIR = Path(__file__).resolve().parent.parent / 'assets'
+if _ASSETS_DIR.is_dir():
+    app.mount('/assets', StaticFiles(directory=_ASSETS_DIR), name='assets')
+
 _WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
 if _WEB_DIR.is_dir():
     app.mount('/', StaticFiles(directory=_WEB_DIR, html=True), name='web')

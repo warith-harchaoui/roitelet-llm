@@ -41,9 +41,7 @@ function renderMessages() {
   if (state.messages.length === 0) {
     inner.innerHTML = `
       <div id="welcome" class="text-center py-24">
-        <div class="inline-flex items-center justify-center w-14 h-14 mb-5 bg-gradient-to-br from-sysblue to-violet-500 text-white shadow-lg">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 22h18z"/></svg>
-        </div>
+        <img src="/assets/roitelet.png" alt="Roitelet" width="72" height="72" class="mx-auto mb-5 rounded-[10px] shadow-lg">
         <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
         <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Three frontier models answer in parallel. A local model picks the best.</p>
       </div>`;

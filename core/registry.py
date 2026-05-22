@@ -227,6 +227,7 @@ class ModelRegistry:
         if ollama_base_url:
             ollama_cache.configure(ollama_base_url)
         self._merge_live_ollama()
+        self._prune_unauthorized_remotes(app_settings)
 
     # ------------------------------------------------------------------
     # Model injection
@@ -307,6 +308,42 @@ class ModelRegistry:
             for model_id in stale:
                 logger.debug('Dropping un-pulled Ollama model: %s', model_id)
                 self.models.pop(model_id, None)
+
+    def _prune_unauthorized_remotes(self, app_settings) -> None:  # type: ignore[no-untyped-def]
+        """Drop non-local model specs whose provider has no API key set.
+
+        Why: otherwise a high-prior remote (e.g. ``openai/gpt-4.1``) wins
+        routing, the provider call 401s, and the synthesis judge has nothing
+        to fuse — surfacing as "(no answer)" in the UI.
+        """
+        settings = get_settings()
+        runtime = app_settings
+        def _key(*names: str) -> str:
+            for n in names:
+                val = getattr(runtime, n, '') if runtime is not None else ''
+                if val:
+                    return val
+                val = getattr(settings, n, '') if settings is not None else ''
+                if val:
+                    return val
+            return ''
+        provider_keys = {
+            'openai': _key('openai_api_key'),
+            'openrouter': _key('openrouter_api_key'),
+            'openai-compatible': _key('openai_compatible_api_key'),
+            'anthropic': _key('anthropic_api_key'),
+            'gemini': _key('gemini_api_key'),
+            'perplexity': _key('perplexity_api_key'),
+        }
+        to_drop = [
+            mid for mid, spec in self.models.items()
+            if not spec.local
+            and spec.provider in provider_keys
+            and not provider_keys[spec.provider]
+        ]
+        for mid in to_drop:
+            logger.debug('Dropping remote model without API key: %s', mid)
+            self.models.pop(mid, None)
 
     # ------------------------------------------------------------------
     # Elo state helpers

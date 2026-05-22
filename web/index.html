@@ -6,15 +6,15 @@
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
   <title>Roitelet</title>
-  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%230a84ff' d='M12 2L3 22h18z'/></svg>">
+  <link rel="icon" type="image/png" href="/assets/roitelet.png">
   <!-- Self-hosted vendored assets so offline mode (a local-first value prop)
        works and there's no third-party JS supply chain. Refresh with
        scripts/vendor_web_assets.sh. -->
   <script src="/vendor/tailwindcss.js"></script>
   <script src="/vendor/marked.min.js"></script>
   <script>
-    // Tailwind: every border-radius utility resolves to 10px, except rounded-full
-    // (kept for genuine circles like the status dot and the send button).
+    // Tailwind: every border-radius utility — including rounded-full —
+    // resolves to 10px per design directive.
     tailwind.config = {
       darkMode: 'media',
       theme: {
@@ -30,7 +30,7 @@
           borderRadius: {
             none: '0', sm: '10px', DEFAULT: '10px', md: '10px',
             lg: '10px', xl: '10px', '2xl': '10px', '3xl': '10px',
-            full: '9999px',
+            full: '10px',
           },
         },
       },
@@ -75,7 +75,7 @@
     <aside class="hidden md:flex md:w-[260px] flex-col border-r border-gray-200/80 dark:border-white/[0.08] bg-[#fbfbfd]/80 dark:bg-black/30 backdrop-blur-xl">
       <div class="px-3 py-3 flex items-center justify-between">
         <div class="flex items-center gap-2 px-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" class="text-sysblue"><path fill="currentColor" d="M12 2L3 22h18z"/></svg>
+          <img src="/assets/roitelet.png" alt="Roitelet" width="22" height="22" class="rounded-[10px]">
           <span class="text-[13px] font-semibold tracking-tight">Roitelet</span>
         </div>
         <button id="newChatBtn" class="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors" title="New chat — ⌘N">
@@ -116,9 +116,7 @@
       <div id="messages" class="flex-1 overflow-y-auto scrollbar-thin">
         <div id="messagesInner" class="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-4">
           <div id="welcome" class="text-center py-24">
-            <div class="inline-flex items-center justify-center w-14 h-14 mb-5 bg-gradient-to-br from-sysblue to-violet-500 text-white shadow-lg">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 22h18z"/></svg>
-            </div>
+            <img src="/assets/roitelet.png" alt="Roitelet" width="72" height="72" class="mx-auto mb-5 rounded-[10px] shadow-lg">
             <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
             <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Three frontier models answer in parallel. A local model picks the best.</p>
           </div>
