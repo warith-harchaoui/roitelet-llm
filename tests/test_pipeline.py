@@ -133,7 +133,7 @@ def _make_fake_judge(winner_index: int = 0):
         idx = min(winner_index, max(0, len(responses) - 1))
         winner = responses[idx]
         return SynthesisResult(
-            model_id='ollama/qwen2.5:14b-instruct',
+            model_id='ollama/qwen3:8b',
             provider='ollama',
             content=f'Synthesized: {winner.content}',
             judge_summary=f'Candidate {idx + 1} wins.\nWINNERS: {idx + 1}',
@@ -330,7 +330,7 @@ class TestRunRoiteletChat:
             captured['responses'] = list(responses)
             # Always crown index 0 of whatever the judge actually receives.
             return SynthesisResult(
-                model_id='ollama/qwen2.5:14b-instruct',
+                model_id='ollama/qwen3:8b',
                 provider='ollama',
                 content='Synthesized from survivors.',
                 judge_summary='WINNERS: 1',
@@ -422,7 +422,7 @@ class TestEstimateCost:
         from core.pipeline import _estimate_cost
 
         response = ModelResponse(
-            model_id='ollama/qwen2.5:14b-instruct',
+            model_id='ollama/qwen3:8b',
             provider='ollama',
             content='ok',
             latency_s=0.0,
