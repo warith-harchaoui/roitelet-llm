@@ -22,8 +22,8 @@ from typing import List
 import pytest
 
 from core.config import Settings
-from core.core.capabilities import detect_capabilities, top_capabilities
-from core.core.judge import parse_winners
+from core.capabilities import detect_capabilities, top_capabilities
+from core.judge import parse_winners
 from core.schemas import RouterPreferences
 
 
@@ -194,7 +194,7 @@ class TestRouterPreferences:
 def _make_registry(extra_ollama: List[str] = None, extra_openrouter: List[str] = None):
     """Build a registry backed by the real bootstrap file."""
     from core.schemas import AppSettingsPayload
-    from core.core.registry import ModelRegistry
+    from core.registry import ModelRegistry
 
     payload = AppSettingsPayload(
         selected_ollama_models=extra_ollama or [],
@@ -244,13 +244,13 @@ class TestModelRegistry:
         assert ids.count("ollama/qwen2.5:14b-instruct") == 1
 
     def test_capability_score_in_range(self):
-        from core.core.registry import ModelRegistry
+        from core.registry import ModelRegistry
         registry = ModelRegistry()
         score = registry.capability_score("ollama/qwen2.5:14b-instruct", "coding")
         assert 0.0 <= score <= 1.5
 
     def test_elo_update_bounded(self):
-        from core.core.registry import ModelRegistry, KNOWN_CAPABILITIES
+        from core.registry import ModelRegistry, KNOWN_CAPABILITIES
         registry = ModelRegistry()
         registry.update_elo(
             winners=["ollama/qwen2.5:14b-instruct"],
@@ -262,7 +262,7 @@ class TestModelRegistry:
             "Unknown capabilities must not pollute Elo state"
 
     def test_elo_winner_score_increases(self):
-        from core.core.registry import ModelRegistry
+        from core.registry import ModelRegistry
         registry = ModelRegistry()
         registry.elo_state = {}  # Start fresh to avoid reaching the 1.5 score cap
         before = registry.capability_score("ollama/qwen2.5:14b-instruct", "coding")
@@ -275,7 +275,7 @@ class TestModelRegistry:
         assert after > before, "Winner Elo score should increase after update"
 
     def test_elo_loser_score_decreases(self):
-        from core.core.registry import ModelRegistry
+        from core.registry import ModelRegistry
         registry = ModelRegistry()
         registry.elo_state = {}  # Start fresh to avoid reaching the 0.0 score floor
         before = registry.capability_score("ollama/mistral-small3.1", "coding")
@@ -295,7 +295,7 @@ class TestModelRegistry:
 class TestOllamaModelCache:
     def test_cache_returns_empty_when_no_server(self):
         """With no Ollama running, the cache should return [] gracefully."""
-        from core.core.registry import _OllamaModelCache
+        from core.registry import _OllamaModelCache
         cache = _OllamaModelCache()
         cache.configure("http://localhost:19999")  # nothing listening
         models = cache.models
@@ -304,7 +304,7 @@ class TestOllamaModelCache:
 
     def test_cache_populates_from_real_response(self, ollama_http_server):
         """Cache should populate from a real /api/tags HTTP response."""
-        from core.core.registry import _OllamaModelCache
+        from core.registry import _OllamaModelCache
 
         ollama_http_server['set_models'](['phi4:latest', 'llama3.2:3b'])
 
@@ -317,7 +317,7 @@ class TestOllamaModelCache:
 
     def test_cache_respects_ttl(self, ollama_http_server):
         """Cache should NOT re-fetch when TTL has not expired."""
-        from core.core.registry import _OllamaModelCache
+        from core.registry import _OllamaModelCache
 
         ollama_http_server['set_models'](['phi4:latest'])
 
@@ -335,7 +335,7 @@ class TestOllamaModelCache:
 
     def test_live_discovered_models_appear_in_registry(self):
         """Live-discovered Ollama models should be injected into the registry candidates."""
-        from core.core.registry import ModelRegistry, ollama_cache
+        from core.registry import ModelRegistry, ollama_cache
 
         # Manually seed the cache with fake discovered models.
         ollama_cache._models = ["newmodel:7b", "anothermodel:13b"]
@@ -352,7 +352,7 @@ class TestOllamaModelCache:
 
     def test_live_discovered_does_not_override_bootstrap(self):
         """A live-discovered model that is already in bootstrap keeps its curated priors."""
-        from core.core.registry import ModelRegistry, ollama_cache
+        from core.registry import ModelRegistry, ollama_cache
 
         # Seed the cache with a model already in the bootstrap.
         ollama_cache._models = ["qwen2.5:14b-instruct"]

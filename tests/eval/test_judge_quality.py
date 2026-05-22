@@ -32,7 +32,7 @@ import pytest
 from deepeval.metrics import FaithfulnessMetric, GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
-from core.core.pipeline import run_roitelet_chat
+from core.pipeline import run_roitelet_chat
 from core.schemas import ChatRequest, RouterPreferences
 
 

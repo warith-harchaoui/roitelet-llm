@@ -32,9 +32,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.config import get_settings
-from core.core.mcp import handle_mcp_request
-from core.core.pipeline import run_roitelet_chat
-from core.core.registry import warm_ollama_cache
+from core.mcp import handle_mcp_request
+from core.pipeline import run_roitelet_chat
+from core.registry import warm_ollama_cache
 from core.schemas import (
     AppSettingsPayload,
     ChatRequest,

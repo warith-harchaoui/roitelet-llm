@@ -32,7 +32,7 @@ def isolated_state(tmp_path, monkeypatch):
     """Redirect singleton storage + registry state to ``tmp_path``.
 
     The Roitelet pipeline depends on two module-level singletons
-    (``core.storage.storage`` and ``core.core.registry.registry``) that read
+    (``core.storage.storage`` and ``core.registry.registry``) that read
     from disk. We rebind their on-disk paths to a per-test temporary directory
     so tests don't pollute the real ``./data/`` tree and stay independent.
 
@@ -41,10 +41,10 @@ def isolated_state(tmp_path, monkeypatch):
     to the real ``core.config.get_settings`` here.
     """
     import core.config as config_mod
-    import core.core.pipeline as pipeline_mod
-    import core.core.router as router_mod
+    import core.pipeline as pipeline_mod
+    import core.router as router_mod
     import core.storage as storage_mod
-    from core.core.registry import registry as registry_singleton
+    from core.registry import registry as registry_singleton
 
     monkeypatch.setattr(storage_mod, 'get_settings', config_mod.get_settings)
 
@@ -165,13 +165,13 @@ class TestRunRoiteletChat:
         """A single coding prompt round-trips through router, providers,
         judge, conversation log, and telemetry log."""
         monkeypatch.setattr(
-            'core.core.pipeline.get_provider_client', _make_fake_provider()
+            'core.pipeline.get_provider_client', _make_fake_provider()
         )
         monkeypatch.setattr(
-            'core.core.pipeline.judge_and_synthesize', _make_fake_judge()
+            'core.pipeline.judge_and_synthesize', _make_fake_judge()
         )
 
-        from core.core.pipeline import run_roitelet_chat
+        from core.pipeline import run_roitelet_chat
 
         prompt = 'Write a Python function to compute Fibonacci numbers.'
         request = ChatRequest(prompt=prompt, preferences=RouterPreferences())
@@ -217,13 +217,13 @@ class TestRunRoiteletChat:
     ):
         """The winning model's rolling Elo adjustment must grow after a turn."""
         monkeypatch.setattr(
-            'core.core.pipeline.get_provider_client', _make_fake_provider()
+            'core.pipeline.get_provider_client', _make_fake_provider()
         )
         monkeypatch.setattr(
-            'core.core.pipeline.judge_and_synthesize', _make_fake_judge(winner_index=0)
+            'core.pipeline.judge_and_synthesize', _make_fake_judge(winner_index=0)
         )
 
-        from core.core.pipeline import run_roitelet_chat
+        from core.pipeline import run_roitelet_chat
 
         registry = isolated_state['registry']
         # Sanity: snapshot fixture starts with an empty Elo state.
@@ -253,13 +253,13 @@ class TestRunRoiteletChat:
     ):
         """Passing ``conversation_id`` appends to the existing flight."""
         monkeypatch.setattr(
-            'core.core.pipeline.get_provider_client', _make_fake_provider()
+            'core.pipeline.get_provider_client', _make_fake_provider()
         )
         monkeypatch.setattr(
-            'core.core.pipeline.judge_and_synthesize', _make_fake_judge()
+            'core.pipeline.judge_and_synthesize', _make_fake_judge()
         )
 
-        from core.core.pipeline import run_roitelet_chat
+        from core.pipeline import run_roitelet_chat
 
         first = await run_roitelet_chat(
             ChatRequest(prompt='First question.', preferences=RouterPreferences())
@@ -297,13 +297,13 @@ class TestRunRoiteletChat:
     ):
         """``preferences.independence=True`` filters out remote candidates."""
         monkeypatch.setattr(
-            'core.core.pipeline.get_provider_client', _make_fake_provider()
+            'core.pipeline.get_provider_client', _make_fake_provider()
         )
         monkeypatch.setattr(
-            'core.core.pipeline.judge_and_synthesize', _make_fake_judge()
+            'core.pipeline.judge_and_synthesize', _make_fake_judge()
         )
 
-        from core.core.pipeline import run_roitelet_chat
+        from core.pipeline import run_roitelet_chat
 
         request = ChatRequest(
             prompt='Help me refactor this Python module.',
@@ -322,14 +322,14 @@ class TestRunRoiteletChat:
         """If one provider errors, the judge still runs on the remaining
         valid responses and the pipeline returns a synthesis."""
         # Decide failure target after a dry-run route so we hit a real selected id.
-        from core.core.router import RoiteletRouter
+        from core.router import RoiteletRouter
 
         prompt = 'Write a Python function to compute Fibonacci numbers.'
         dry_run = RoiteletRouter().route(prompt, RouterPreferences(), top_k=3)
         failing_id = dry_run.selected_model_ids[0]
 
         monkeypatch.setattr(
-            'core.core.pipeline.get_provider_client',
+            'core.pipeline.get_provider_client',
             _make_fake_provider(failures={failing_id}),
         )
 
@@ -346,9 +346,9 @@ class TestRunRoiteletChat:
                 winning_model_ids=[responses[0].model_id],
             )
 
-        monkeypatch.setattr('core.core.pipeline.judge_and_synthesize', _spy_judge)
+        monkeypatch.setattr('core.pipeline.judge_and_synthesize', _spy_judge)
 
-        from core.core.pipeline import run_roitelet_chat
+        from core.pipeline import run_roitelet_chat
 
         response = await run_roitelet_chat(
             ChatRequest(prompt=prompt, preferences=RouterPreferences())
@@ -388,10 +388,10 @@ class TestJudgeFallback:
 
         # Real judge call path; fake only the local-judge provider.
         monkeypatch.setattr(
-            'core.core.judge.get_provider_client', lambda _key: _EmptyJudgeClient(),
+            'core.judge.get_provider_client', lambda _key: _EmptyJudgeClient(),
         )
 
-        from core.core.judge import judge_and_synthesize
+        from core.judge import judge_and_synthesize
 
         top = ModelResponse(
             model_id='openrouter/test/model-a',
@@ -428,7 +428,7 @@ class TestEstimateCost:
     """
 
     def test_numeric_string_usage_is_coerced_to_float(self):
-        from core.core.pipeline import _estimate_cost
+        from core.pipeline import _estimate_cost
 
         response = ModelResponse(
             model_id='ollama/qwen2.5:14b-instruct',

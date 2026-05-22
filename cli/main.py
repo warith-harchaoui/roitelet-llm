@@ -9,7 +9,7 @@ import argparse
 import asyncio
 import sys
 
-from core.core.pipeline import run_roitelet_chat
+from core.pipeline import run_roitelet_chat
 from core.schemas import ChatRequest, RouterPreferences
 
 def print_welcome() -> None:
