@@ -170,57 +170,66 @@ class StorageManager:
         return sorted(records, key=lambda item: item.created_at, reverse=True)
 
     def get_cache(self, provider_name: str, payload_str: str) -> Optional[dict]:
-        """Retrieve a cached API response from JSONL.
+        """Retrieve a cached provider response, honouring the configured TTL.
 
-        Parameters
-        ----------
-        provider_name : str
-            The name or identifier of the LLM provider.
-        payload_str : str
-            The serialized request payload acting as the cache key.
+        Returns ``None`` (cache miss) when:
+        * the cache file doesn't exist,
+        * no record matches ``payload_str``,
+        * the most recent matching record is older than the configured TTL,
+        * caching is disabled (``ROITELET_PROVIDER_CACHE_TTL`` = 0).
 
-        Returns
-        -------
-        Optional[dict]
-            The cached response dictionary if a match is found; otherwise None.
+        A negative TTL means "cache forever" — the pre-TTL behaviour, kept
+        as an explicit opt-in so an unintended default can't silently serve
+        stale answers in perpetuity.
         """
+        ttl = get_settings().provider_cache_ttl_seconds
+        if ttl == 0:
+            return None  # cache disabled
         path = self.cache_dir / f'{provider_name}.jsonl'
         if not path.exists():
             return None
+        match = None
+        match_cached_at: Optional[datetime] = None
         try:
             with path.open('r', encoding='utf-8') as f:
-                # Iterate in reverse or just forward; for simple caching forward is fine
-                # Overwriting previous payload cache can be done but JSONL means we just append latest
-                # Let's return the last match if there are multiple.
-                match = None
+                # JSONL accumulates duplicates on cache overwrite; the *last*
+                # matching record wins so updates supersede old ones.
                 for line in f:
                     if not line.strip():
                         continue
                     record = json.loads(line)
-                    if record.get('payload') == payload_str:
-                        match = record.get('response')
-                return match
+                    if record.get('payload') != payload_str:
+                        continue
+                    match = record.get('response')
+                    raw_ts = record.get('cached_at')
+                    match_cached_at = (
+                        datetime.fromisoformat(raw_ts) if raw_ts else None
+                    )
         except Exception:
-            pass
-        return None
+            return None
+        if match is None:
+            return None
+        # ttl < 0 = cache forever; skip the freshness check entirely.
+        if ttl < 0:
+            return match
+        if match_cached_at is None:
+            return None  # legacy record without a timestamp — treat as stale
+        age = (datetime.now(timezone.utc) - match_cached_at).total_seconds()
+        return match if age <= ttl else None
 
     def set_cache(self, provider_name: str, payload_str: str, response_data: dict) -> None:
-        """Append an API response to the provider's JSONL cache.
+        """Append a provider response to the JSONL cache.
 
-        Parameters
-        ----------
-        provider_name : str
-            The name or identifier of the LLM provider.
-        payload_str : str
-            The serialized request payload acting as the cache key.
-        response_data : dict
-            The full JSON response data to cache.
+        No-op when caching is disabled (``ROITELET_PROVIDER_CACHE_TTL`` = 0)
+        so the cache file doesn't grow when reads never hit.
         """
+        if get_settings().provider_cache_ttl_seconds == 0:
+            return
         path = self.cache_dir / f'{provider_name}.jsonl'
         record = {
             'payload': payload_str,
             'response': response_data,
-            'cached_at': datetime.now(timezone.utc).isoformat()
+            'cached_at': datetime.now(timezone.utc).isoformat(),
         }
         try:
             with path.open('a', encoding='utf-8') as f:

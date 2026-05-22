@@ -268,6 +268,10 @@ class ChatRequest(BaseModel):
     preferences: RouterPreferences = Field(default_factory=RouterPreferences)
     top_k: int = 3
     shadow_full_pool: bool = True
+    # When true, ``/api/chat`` returns a ``text/event-stream`` NDJSON-style
+    # progressive response so clients can render the synthesis as it lands
+    # rather than blocking on the full fusion call.
+    stream: bool = False
 
 
 class ChatResponse(BaseModel):

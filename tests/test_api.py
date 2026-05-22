@@ -150,3 +150,164 @@ def test_api_settings_post_accepts_new_secret():
         assert storage.load_app_settings().openrouter_api_key == new_secret
     finally:
         storage.save_app_settings(stored)
+
+
+# ---------------------------------------------------------------------------
+# /mcp JSON-RPC endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_initialize():
+    """The MCP handshake must advertise the protocol version and server info."""
+    body = {'jsonrpc': '2.0', 'id': 'init-1', 'method': 'initialize', 'params': {}}
+    payload = client.post('/mcp', json=body).json()
+    assert payload['id'] == 'init-1'
+    assert payload['result']['serverInfo']['name'] == 'roitelet-llm'
+    assert 'protocolVersion' in payload['result']
+
+
+def test_mcp_tools_list_contains_roitelet_chat():
+    """tools/list must expose the single roitelet.chat tool."""
+    body = {'jsonrpc': '2.0', 'id': 'list-1', 'method': 'tools/list', 'params': {}}
+    payload = client.post('/mcp', json=body).json()
+    tools = payload['result']['tools']
+    assert [t['name'] for t in tools] == ['roitelet.chat']
+    assert 'prompt' in tools[0]['inputSchema']['required']
+
+
+def test_mcp_tools_call_unknown_tool_errors():
+    """An unknown tool name must surface as a JSON-RPC error, not a crash."""
+    body = {
+        'jsonrpc': '2.0',
+        'id': 'call-1',
+        'method': 'tools/call',
+        'params': {'name': 'does-not-exist', 'arguments': {'prompt': 'x'}},
+    }
+    response = client.post('/mcp', json=body)
+    assert response.status_code == 400
+    payload = response.json()
+    assert 'error' in payload
+    assert payload['error']['code'] == -32000
+
+
+def test_mcp_unsupported_method_errors():
+    body = {'jsonrpc': '2.0', 'id': 'm-1', 'method': 'does/not/exist', 'params': {}}
+    response = client.post('/mcp', json=body)
+    assert response.status_code == 400
+    assert 'error' in response.json()
+
+
+# ---------------------------------------------------------------------------
+# /v1/chat/completions streaming branch
+# ---------------------------------------------------------------------------
+
+
+def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
+    """Build a ChatResponse the streaming/non-streaming branches can render."""
+    from core.schemas import (
+        ChatResponse, ModelResponse, ModelCandidate, RouterDecision, SynthesisResult,
+    )
+    return ChatResponse(
+        conversation_id='conv-stub',
+        router=RouterDecision(
+            selected_model_ids=['ollama/qwen3:8b-instruct'],
+            candidates=[
+                ModelCandidate(
+                    model_id='ollama/qwen3:8b-instruct',
+                    provider='ollama',
+                    final_score=0.9,
+                    quality_score=0.85,
+                    frugality_bonus=0.5,
+                    capability_scores=[],
+                ),
+            ],
+            categories={'coding': 1.0},
+        ),
+        responses=[
+            ModelResponse(
+                model_id='ollama/qwen3:8b-instruct',
+                provider='ollama',
+                content=content,
+                latency_s=0.0,
+                usage={'prompt_tokens': 5.0, 'completion_tokens': 5.0},
+            ),
+        ],
+        synthesis=SynthesisResult(
+            model_id='ollama/qwen3:8b-instruct',
+            provider='ollama',
+            content=content,
+            judge_summary='WINNERS: 1',
+            winning_model_ids=['ollama/qwen3:8b-instruct'],
+        ),
+        telemetry_id='tel-stub',
+    )
+
+
+@pytest.fixture
+def stub_pipeline(monkeypatch):
+    """Replace the pipeline with a deterministic stub so endpoint tests
+    don't touch real providers, registries, or storage."""
+    async def _fake(_request):
+        return _stub_pipeline_response('Stub synthesis answer.')
+
+    monkeypatch.setattr('api.main.run_roitelet_chat', _fake)
+
+
+def test_openai_streaming_returns_sse(stub_pipeline):
+    """stream=True must emit an SSE stream with delta chunks and a [DONE] sentinel."""
+    body = {
+        'model': 'roitelet-llm',
+        'messages': [{'role': 'user', 'content': 'hi'}],
+        'stream': True,
+    }
+    with client.stream('POST', '/v1/chat/completions', json=body) as response:
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('text/event-stream')
+        body_text = ''.join(response.iter_text())
+
+    # Frames must each start with "data: " per the SSE spec.
+    frames = [f for f in body_text.split('\n\n') if f.startswith('data: ')]
+    assert len(frames) >= 2, f'expected several delta frames + final [DONE], got {frames!r}'
+    assert frames[-1].strip() == 'data: [DONE]'
+
+    # Recombining the delta payloads must reproduce the stubbed content.
+    import json as _json
+    reconstructed = ''
+    for frame in frames[:-2]:  # last two are the finish chunk + [DONE]
+        chunk = _json.loads(frame[len('data: '):])
+        reconstructed += chunk['choices'][0]['delta'].get('content', '')
+    assert reconstructed == 'Stub synthesis answer.'
+
+
+def test_openai_non_streaming_returns_json(stub_pipeline):
+    """stream=False (default) must keep returning a plain JSON completion."""
+    body = {'model': 'roitelet-llm', 'messages': [{'role': 'user', 'content': 'hi'}]}
+    response = client.post('/v1/chat/completions', json=body)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['choices'][0]['message']['content'] == 'Stub synthesis answer.'
+
+
+def test_native_chat_streaming_returns_sse(stub_pipeline):
+    """/api/chat with stream=True must emit delta frames + a structured done frame."""
+    body = {'prompt': 'hi', 'stream': True}
+    with client.stream('POST', '/api/chat', json=body) as response:
+        assert response.status_code == 200
+        assert response.headers['content-type'].startswith('text/event-stream')
+        body_text = ''.join(response.iter_text())
+
+    frames = [f for f in body_text.split('\n\n') if f.startswith('data: ')]
+    assert frames, 'no frames emitted'
+
+    import json as _json
+    parsed = [_json.loads(f[len('data: '):]) for f in frames]
+    # Every frame must carry a recognised type.
+    types = {f['type'] for f in parsed}
+    assert types == {'delta', 'done'}, f'unexpected frame types: {types}'
+
+    deltas = [f['content'] for f in parsed if f['type'] == 'delta']
+    assert ''.join(deltas) == 'Stub synthesis answer.'
+
+    final = [f for f in parsed if f['type'] == 'done'][0]
+    assert final['conversation_id'] == 'conv-stub'
+    assert final['telemetry_id'] == 'tel-stub'

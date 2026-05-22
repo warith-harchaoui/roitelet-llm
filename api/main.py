@@ -184,22 +184,59 @@ async def list_telemetry() -> List[Dict[str, Any]]:
     return [record.model_dump() for record in storage.list_telemetry()]
 
 
+def _sse(event: Dict[str, Any]) -> str:
+    """Format one Server-Sent Events frame from a JSON-serialisable payload."""
+    return f'data: {json.dumps(event)}\n\n'
+
+
+async def _stream_synthesis_content(content: str, chunk_size: int = 8) -> AsyncGenerator[str, None]:
+    """Yield the synthesis content as small character-aligned chunks.
+
+    Character (not word) splitting preserves markdown structure: code
+    fences, newlines, and inline punctuation survive intact. The chunk
+    size is a perceptual setting — bigger = fewer events but choppier UX.
+    """
+    for i in range(0, len(content), chunk_size):
+        yield content[i:i + chunk_size]
+
+
 @app.post('/api/chat')
-async def roitelet_chat(payload: ChatRequest) -> Dict[str, Any]:
-    """Run one native Roitelet chat turn using the advanced routing logic.
+async def roitelet_chat(payload: ChatRequest):
+    """Run one native Roitelet chat turn.
+
+    When ``payload.stream`` is true the response is a Server-Sent Events
+    stream: ``{type: "delta", content: ...}`` frames followed by a final
+    ``{type: "done", conversation_id, telemetry_id, router, responses, synthesis}``
+    summary so the client gets every piece the non-streaming JSON would
+    have returned, just split in time.
 
     Parameters
     ----------
     payload : ChatRequest
-        The prompt and router preferences.
+        The prompt, router preferences, and optional ``stream`` flag.
 
     Returns
     -------
-    Dict[str, Any]
+    Dict[str, Any] | StreamingResponse
         The resulting synthesis, full conversation body, and model decisions.
     """
     response = await run_roitelet_chat(payload)
-    return response.model_dump()
+    if not payload.stream:
+        return response.model_dump()
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        async for token in _stream_synthesis_content(response.synthesis.content):
+            yield _sse({'type': 'delta', 'content': token})
+        yield _sse({
+            'type': 'done',
+            'conversation_id': response.conversation_id,
+            'telemetry_id': response.telemetry_id,
+            'router': response.router.model_dump(),
+            'responses': [r.model_dump() for r in response.responses],
+            'synthesis': response.synthesis.model_dump(),
+        })
+
+    return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 
 @app.get('/v1/models')
@@ -240,14 +277,10 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
     )
 
     if payload.stream:
+        completion_id = f'chatcmpl-{uuid.uuid4().hex}'
+
         async def event_stream() -> AsyncGenerator[str, None]:
-            content = response.synthesis.content
-            completion_id = f'chatcmpl-{uuid.uuid4().hex}'
-            # Stream in small character chunks to preserve markdown formatting.
-            # Word-splitting destroys code blocks, newlines, and bullet points.
-            chunk_size = 8
-            for i in range(0, len(content), chunk_size):
-                token = content[i:i + chunk_size]
+            async for token in _stream_synthesis_content(response.synthesis.content):
                 chunk = {
                     'id': completion_id,
                     'object': 'chat.completion.chunk',
@@ -255,7 +288,7 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
                     'model': 'roitelet-llm',
                     'choices': [{'index': 0, 'delta': {'content': token}, 'finish_reason': None}],
                 }
-                yield f'data: {json.dumps(chunk)}\n\n'
+                yield _sse(chunk)
             done = {
                 'id': completion_id,
                 'object': 'chat.completion.chunk',
@@ -263,8 +296,9 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
                 'model': 'roitelet-llm',
                 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}],
             }
-            yield f'data: {json.dumps(done)}\n\n'
+            yield _sse(done)
             yield 'data: [DONE]\n\n'
+
         return StreamingResponse(event_stream(), media_type='text/event-stream')
 
     return {

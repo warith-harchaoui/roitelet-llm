@@ -438,6 +438,50 @@ class TestStorageManager:
             # Newest is created last, so c2 should be first in the list.
             assert listed[0].conversation_id == c2.conversation_id
 
+    def test_cache_disabled_by_default(self, tmp_path):
+        """TTL=0 (default) must short-circuit both reads and writes."""
+        with pytest.MonkeyPatch().context() as m:
+            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
+            import core.storage as st_mod
+            mgr = st_mod.StorageManager()
+            mgr.set_cache('demo', 'k', {'response': 'v'})
+            assert mgr.get_cache('demo', 'k') is None
+            # No file written when caching disabled.
+            assert not (tmp_path / 'cache' / 'demo.jsonl').exists()
+
+    def test_cache_honours_ttl(self, tmp_path):
+        """A fresh entry hits, a stale entry misses."""
+        settings = _real_settings(tmp_path)
+        settings.provider_cache_ttl_seconds = 60
+        with pytest.MonkeyPatch().context() as m:
+            m.setattr("core.storage.get_settings", lambda: settings)
+            import core.storage as st_mod
+            mgr = st_mod.StorageManager()
+            mgr.set_cache('demo', 'k', {'r': 1})
+            assert mgr.get_cache('demo', 'k') == {'r': 1}
+            # Backdate the on-disk record to 1 hour ago to simulate staleness.
+            path = tmp_path / 'cache' / 'demo.jsonl'
+            from datetime import timedelta
+            from datetime import datetime, timezone
+            stale = datetime.now(timezone.utc) - timedelta(hours=1)
+            lines = path.read_text().splitlines()
+            import json as _json
+            record = _json.loads(lines[-1])
+            record['cached_at'] = stale.isoformat()
+            path.write_text(_json.dumps(record) + '\n')
+            assert mgr.get_cache('demo', 'k') is None
+
+    def test_cache_forever_when_ttl_negative(self, tmp_path):
+        """TTL < 0 keeps the historical 'cache forever' behaviour."""
+        settings = _real_settings(tmp_path)
+        settings.provider_cache_ttl_seconds = -1
+        with pytest.MonkeyPatch().context() as m:
+            m.setattr("core.storage.get_settings", lambda: settings)
+            import core.storage as st_mod
+            mgr = st_mod.StorageManager()
+            mgr.set_cache('demo', 'k', {'r': 1})
+            assert mgr.get_cache('demo', 'k') == {'r': 1}
+
     def test_conversation_path_rejects_traversal(self, tmp_path):
         """Non-UUID conversation ids must be refused so callers cannot escape the data dir."""
         with pytest.MonkeyPatch().context() as m:
