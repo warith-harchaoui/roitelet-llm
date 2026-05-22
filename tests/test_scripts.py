@@ -105,3 +105,42 @@ def test_update_priors_only_touches_known_models(crawl_arena, tmp_path, monkeypa
     )
     # No new entries should have been added.
     assert set(updated.keys()) == {'openrouter/openai/gpt-4.1'}
+
+
+def test_update_priors_writes_meta_block(crawl_arena, tmp_path, monkeypatch):
+    """Touched entries must gain a ``_meta`` block recording provenance."""
+    import json as _json
+
+    fixture = tmp_path / 'data' / 'bootstrap'
+    fixture.mkdir(parents=True)
+    fake_priors = {
+        'openrouter/openai/gpt-4.1': {
+            'provider': 'openrouter',
+            'local': False,
+            'vlm': False,
+            'pricing': {'input_per_1k': 0.005, 'output_per_1k': 0.015},
+            'latency_s': 3.8,
+            'energy_kwh': 0.0006,
+            'capabilities': {'reasoning': 0.93, 'analysis': 0.91},
+        }
+    }
+    priors_path = fixture / 'model_priors.json'
+    priors_path.write_text(_json.dumps(fake_priors), encoding='utf-8')
+
+    monkeypatch.setattr(crawl_arena, '__file__', str(tmp_path / 'scripts' / 'crawl_arena.py'))
+    (tmp_path / 'scripts').mkdir(exist_ok=True)
+
+    crawl_arena.update_priors(
+        [{'model': 'gpt-4.1', 'elo': 1280}],
+        source='https://example.com/leaderboard',
+    )
+
+    updated = _json.loads(priors_path.read_text())
+    meta = updated['openrouter/openai/gpt-4.1'].get('_meta')
+    assert meta is not None, '_meta block missing on a touched entry'
+    assert meta['source'] == 'https://example.com/leaderboard'
+    assert meta['elo_raw'] == 1280
+    assert 'refreshed_at' in meta
+    # Timestamp must be a parseable ISO-8601 string.
+    import datetime
+    datetime.datetime.fromisoformat(meta['refreshed_at'])

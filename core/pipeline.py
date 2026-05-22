@@ -20,16 +20,33 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import List, Sequence
 
-from .providers.factory import get_provider_client
-from .schemas import ChatMessage, ChatRequest, ChatResponse, ConversationMessage, ModelResponse, TelemetryRecord
-from .storage import storage
+from . import registry as _registry_mod
+from . import storage as _storage_mod
 from .judge import judge_and_synthesize
-from .registry import registry
+from .providers.factory import get_provider_client
 from .router import RoiteletRouter
+from .router_protocol import Router
+from .schemas import ChatMessage, ChatRequest, ChatResponse, ConversationMessage, ModelResponse, TelemetryRecord
 
-router = RoiteletRouter()
+
+@lru_cache(maxsize=1)
+def get_router() -> RoiteletRouter:
+    """Return the process-wide :class:`RoiteletRouter` instance.
+
+    The router is stateless (every ``route()`` call rebuilds candidates
+    from the live registry), so a singleton is safe and cheap.
+    """
+    return RoiteletRouter()
+
+
+def __getattr__(name: str):
+    """Backwards-compatible lazy access for ``from core.pipeline import router``."""
+    if name == 'router':
+        return get_router()
+    raise AttributeError(f"module 'core.pipeline' has no attribute {name!r}")
 
 
 def build_title(prompt: str, max_length: int = 60) -> str:
@@ -66,7 +83,7 @@ async def _query_one(model_id: str, messages: Sequence[ChatMessage]) -> ModelRes
     ModelResponse
         A populated unified schema model output payload with injected cost logic.
     """
-    spec = registry.get(model_id)
+    spec = _registry_mod.get_registry().get(model_id)
     client = get_provider_client(spec.provider)
     response = await client.generate(model_id=model_id, messages=messages)
     response.cost_usd = _estimate_cost(model_id, response)
@@ -88,7 +105,7 @@ def _estimate_cost(model_id: str, response: ModelResponse) -> float:
     float
         Total sum of inference transactions in USD.
     """
-    spec = registry.get(model_id)
+    spec = _registry_mod.get_registry().get(model_id)
     usage = response.usage
     prompt_tokens = usage.get('prompt_tokens', usage.get('prompt_eval_count', 0.0))
     completion_tokens = usage.get('completion_tokens', usage.get('eval_count', 0.0))
@@ -98,19 +115,32 @@ def _estimate_cost(model_id: str, response: ModelResponse) -> float:
     )
 
 
-async def run_roitelet_chat(request: ChatRequest) -> ChatResponse:
+async def run_roitelet_chat(
+    request: ChatRequest,
+    router: Router | None = None,
+) -> ChatResponse:
     """Run the full Roitelet prompt pipeline.
 
     Parameters
     ----------
     request:
         Native chat request with prompt and user preferences.
+    router:
+        Optional override for the :class:`Router` implementation. Defaults
+        to the singleton returned by :func:`get_router` — pass a custom
+        one (a learned classifier, an A/B router, a test double) without
+        touching globals.
 
     Returns
     -------
     ChatResponse
         Routed, executed, judged, and persisted turn result.
     """
+    storage = _storage_mod.get_storage()
+    registry = _registry_mod.get_registry()
+    if router is None:
+        router = get_router()
+
     conversation = storage.get_conversation(request.conversation_id) if request.conversation_id else None
     if conversation is None:
         conversation = storage.create_conversation(title=build_title(request.prompt))
@@ -165,6 +195,7 @@ async def run_roitelet_chat(request: ChatRequest) -> ChatResponse:
         },
     )
     storage.save_telemetry(telemetry)
+
 
     return ChatResponse(
         conversation_id=conversation.conversation_id,

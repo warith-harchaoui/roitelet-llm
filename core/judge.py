@@ -19,9 +19,9 @@ from __future__ import annotations
 import re
 from typing import List
 
+from . import storage as _storage_mod
 from .providers.factory import get_provider_client
 from .schemas import ChatMessage, ModelResponse, SynthesisResult
-from .storage import storage
 
 
 _JUDGE_SYSTEM_PROMPT = (
@@ -81,7 +81,7 @@ async def judge_and_synthesize(prompt: str, responses: List[ModelResponse]) -> S
     candidate verbatim, and ``judge_summary`` records that fact instead of
     pretending the judge spoke.
     """
-    runtime_settings = storage.load_app_settings()
+    runtime_settings = _storage_mod.get_storage().load_app_settings()
     local_synthesis_model = runtime_settings.local_synthesis_model
 
     # Derive the provider from the model name prefix (e.g. "ollama/…" → "ollama").

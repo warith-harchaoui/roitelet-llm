@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
@@ -375,4 +376,19 @@ class ModelRegistry:
         self._save_elo_state(self.elo_state)
 
 
-registry = ModelRegistry()
+@lru_cache(maxsize=1)
+def get_registry() -> ModelRegistry:
+    """Return the process-wide :class:`ModelRegistry` instance.
+
+    Cached to avoid rebuilding bootstrap+Elo state on every import; the
+    registry itself rebuilds candidate lists per ``route()`` call so
+    live-discovered Ollama models still appear without a restart.
+    """
+    return ModelRegistry()
+
+
+def __getattr__(name: str):
+    """Backwards-compatible lazy access for ``from core.registry import registry``."""
+    if name == 'registry':
+        return get_registry()
+    raise AttributeError(f"module 'core.registry' has no attribute {name!r}")

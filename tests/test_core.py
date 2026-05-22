@@ -482,6 +482,27 @@ class TestStorageManager:
             mgr.set_cache('demo', 'k', {'r': 1})
             assert mgr.get_cache('demo', 'k') == {'r': 1}
 
+    def test_storage_manager_satisfies_storage_protocol(self):
+        """``StorageManager`` must structurally implement :class:`Storage`.
+
+        Catches accidental breaks if someone renames a method on the
+        manager (or adds a new requirement on the Protocol) without
+        keeping the two in sync.
+        """
+        from core.storage import StorageManager
+        from core.storage_protocol import Storage
+        assert isinstance(StorageManager(), Storage)
+
+    def test_roitelet_router_satisfies_router_protocol(self):
+        """``RoiteletRouter`` must structurally implement :class:`Router`.
+
+        Same rationale as the Storage check — Protocol drift is silent,
+        a runtime ``isinstance`` makes it loud.
+        """
+        from core.router import RoiteletRouter
+        from core.router_protocol import Router
+        assert isinstance(RoiteletRouter(), Router)
+
     def test_conversation_path_rejects_traversal(self, tmp_path):
         """Non-UUID conversation ids must be refused so callers cannot escape the data dir."""
         with pytest.MonkeyPatch().context() as m:

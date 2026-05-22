@@ -24,10 +24,10 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from .schemas import ModelCandidate, ModelCapabilityScore, RouterDecision, RouterPreferences
-from .storage import storage
+from . import storage as _storage_mod
 from .capabilities import detect_capabilities, top_capabilities
 from .registry import ModelRegistry
+from .schemas import ModelCandidate, ModelCapabilityScore, RouterDecision, RouterPreferences
 
 
 class RoiteletRouter:
@@ -53,7 +53,7 @@ class RoiteletRouter:
         # Build a fresh registry snapshot that merges user-configured models.
         # This ensures Ollama / OpenRouter models added in the control room are
         # immediately visible to the router without requiring a restart.
-        app_settings = storage.load_app_settings()
+        app_settings = _storage_mod.get_storage().load_app_settings()
         live_registry = ModelRegistry(app_settings=app_settings)
 
         categories = detect_capabilities(prompt)

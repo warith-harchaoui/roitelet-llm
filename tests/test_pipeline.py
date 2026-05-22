@@ -29,22 +29,16 @@ from core.schemas import (
 
 @pytest.fixture
 def isolated_state(tmp_path, monkeypatch):
-    """Redirect singleton storage + registry state to ``tmp_path``.
+    """Redirect storage + registry to a per-test ``tmp_path``.
 
-    The Roitelet pipeline depends on two module-level singletons
-    (``core.storage.storage`` and ``core.registry.registry``) that read
-    from disk. We rebind their on-disk paths to a per-test temporary directory
-    so tests don't pollute the real ``./data/`` tree and stay independent.
-
-    Defensive against any other test that may rebind
-    ``core.storage.get_settings`` and forget to restore it: we re-anchor it
-    to the real ``core.config.get_settings`` here.
+    Post-D1 the pipeline reads the storage and registry singletons through
+    ``core.storage.get_storage()`` and ``core.registry.get_registry()`` —
+    so a single monkey-patch at the factory propagates to every importer
+    instead of having to patch each module one-by-one.
     """
     import core.config as config_mod
-    import core.pipeline as pipeline_mod
-    import core.router as router_mod
+    import core.registry as registry_mod
     import core.storage as storage_mod
-    from core.registry import registry as registry_singleton
 
     monkeypatch.setattr(storage_mod, 'get_settings', config_mod.get_settings)
 
@@ -63,14 +57,11 @@ def isolated_state(tmp_path, monkeypatch):
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
-    # Inject the fresh instance into every module that imported the singleton
-    # by name. ``from ..storage import storage`` binds at import time, so each
-    # importer holds its own reference and must be updated explicitly.
-    monkeypatch.setattr(storage_mod, 'storage', fresh_storage)
-    monkeypatch.setattr(pipeline_mod, 'storage', fresh_storage)
-    monkeypatch.setattr(router_mod, 'storage', fresh_storage)
+    monkeypatch.setattr(storage_mod, 'get_storage', lambda: fresh_storage)
 
-    # --- Registry Elo: redirect to tmp + snapshot for clean restore. ---
+    # --- Registry Elo: reuse the real registry singleton but redirect its
+    # on-disk path. Resetting elo_state to {} guarantees test independence. ---
+    registry_singleton = registry_mod.get_registry()
     original_elo_path = registry_singleton.elo_path
     original_elo_state = copy.deepcopy(registry_singleton.elo_state)
     registry_singleton.elo_path = tmp_path / 'runtime' / 'elo_state.json'

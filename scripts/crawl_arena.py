@@ -12,13 +12,14 @@ Usage:
 """
 
 import argparse
+import datetime
 import html.parser
 import json
 import logging
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -136,8 +137,13 @@ def normalize_elo(elo: float) -> float:
     return 0.5 + (fraction * (ROITELET_MAX - 0.5))
 
 
-def update_priors(extracted: List[Dict[str, Any]]) -> None:
-    """Merge the normalized Elo scores into model_priors.json."""
+def update_priors(extracted: List[Dict[str, Any]], source: Optional[str] = None) -> None:
+    """Merge normalized Elo scores into model_priors.json with provenance.
+
+    Each touched entry receives a ``_meta`` block recording the raw Elo,
+    the source URL/file, and a UTC timestamp — so the next reader knows
+    when the prior last moved and why.
+    """
     priors_path = Path(__file__).parent.parent / "data" / "bootstrap" / "model_priors.json"
     if not priors_path.exists():
         logger.error(f"Priors file not found at {priors_path}")
@@ -149,6 +155,7 @@ def update_priors(extracted: List[Dict[str, Any]]) -> None:
     update_count = 0
     # Create simple mapping of existing names to IDs for easier matching
     provider_map = {k.split("/")[-1].lower(): k for k in priors.keys()}
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     for entry in extracted:
         model_name = str(entry.get("model", "")).lower()
@@ -157,26 +164,28 @@ def update_priors(extracted: List[Dict[str, Any]]) -> None:
             continue
 
         normalized = normalize_elo(raw_elo)
-        
+
         # Try to match the exact model ID or the model suffix
         target_id = None
         for known_name, full_id in provider_map.items():
             if known_name in model_name or model_name in known_name:
                 target_id = full_id
                 break
-        
+
         if target_id is not None:
-            # We don't overwrite everything, just specific capabilities that correlate strongly with Elo
-            # In Roitelet, global Elo affects all capabilities. Here we update reasoning and analysis
-            # as strong proxies for generic capability bumps from LMSYS.
             old_reasoning = priors[target_id]["capabilities"].get("reasoning", 0.0)
-            
             # Smooth the update (50% old, 50% new leaderboard score)
             new_reasoning = round((old_reasoning + normalized) / 2.0, 2)
-            
+
             priors[target_id]["capabilities"]["reasoning"] = new_reasoning
             priors[target_id]["capabilities"]["analysis"] = new_reasoning
-            
+            priors[target_id]["_meta"] = {
+                "source": source or "manual",
+                "elo_raw": raw_elo,
+                "elo_normalized": normalized,
+                "refreshed_at": now_iso,
+            }
+
             logger.info(f"Updated {target_id}: reasoning {old_reasoning} -> {new_reasoning} (Raw Elo: {raw_elo})")
             update_count += 1
         else:
@@ -202,7 +211,7 @@ def main() -> None:
     extracted_data = call_local_llm(raw_text, base_url=args.ollama_url, model=args.model)
     logger.info(f"LLM successfully extracted {len(extracted_data)} model scores.")
 
-    update_priors(extracted_data)
+    update_priors(extracted_data, source=args.source)
     logger.info("Arena update cycle complete.")
 
 

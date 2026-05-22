@@ -42,7 +42,7 @@ from core.schemas import (
     OpenAIChatCompletionRequest,
     RouterPreferences,
 )
-from core.storage import storage
+from core.storage import StorageManager, get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     """Application lifespan hook: warm Ollama cache at startup."""
-    runtime = storage.load_app_settings()
+    runtime = get_storage().load_app_settings()
     ollama_url = runtime.ollama_base_url or settings.local_llm_base_url
     warm_ollama_cache(ollama_url, force=True)
     logger.info('Roitelet LLM API ready — Ollama at %s', ollama_url)
@@ -111,7 +111,7 @@ async def health() -> Dict[str, Any]:
 
 
 @app.get('/api/settings', dependencies=[Depends(require_api_token)])
-async def get_app_settings() -> Dict[str, Any]:
+async def get_app_settings(storage: StorageManager = Depends(get_storage)) -> Dict[str, Any]:
     """Return persisted control-room settings with API keys masked.
 
     Stored credentials never leave the server — any client (even on the same
@@ -122,7 +122,10 @@ async def get_app_settings() -> Dict[str, Any]:
 
 
 @app.post('/api/settings', dependencies=[Depends(require_api_token)])
-async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
+async def save_app_settings(
+    payload: AppSettingsPayload,
+    storage: StorageManager = Depends(get_storage),
+) -> Dict[str, Any]:
     """Persist control-room settings edited from the web UI.
 
     Fields whose value still equals the secret mask sentinel are preserved
@@ -136,36 +139,19 @@ async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
 
 
 @app.get('/api/conversations')
-async def list_conversations() -> List[Dict[str, Any]]:
-    """List all stored conversations via the local storage manager.
-
-    Returns
-    -------
-    List[Dict[str, Any]]
-        A list of serialized conversation payloads.
-    """
+async def list_conversations(
+    storage: StorageManager = Depends(get_storage),
+) -> List[Dict[str, Any]]:
+    """List all stored conversations via the local storage manager."""
     return [conversation.model_dump() for conversation in storage.list_conversations()]
 
 
 @app.get('/api/conversations/{conversation_id}')
-async def get_conversation(conversation_id: str) -> Dict[str, Any]:
-    """Fetch one conversation by its unique identifier.
-
-    Parameters
-    ----------
-    conversation_id : str
-        The UUID of the conversation to load.
-
-    Returns
-    -------
-    Dict[str, Any]
-        The requested conversation payload.
-
-    Raises
-    ------
-    HTTPException
-        If the conversation could not be located on disk.
-    """
+async def get_conversation(
+    conversation_id: str,
+    storage: StorageManager = Depends(get_storage),
+) -> Dict[str, Any]:
+    """Fetch one conversation by its unique identifier."""
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail='Conversation not found')
@@ -173,14 +159,10 @@ async def get_conversation(conversation_id: str) -> Dict[str, Any]:
 
 
 @app.get('/api/telemetry')
-async def list_telemetry() -> List[Dict[str, Any]]:
-    """Return all telemetry records containing performance data.
-
-    Returns
-    -------
-    List[Dict[str, Any]]
-        A chronological list of metric snapshots.
-    """
+async def list_telemetry(
+    storage: StorageManager = Depends(get_storage),
+) -> List[Dict[str, Any]]:
+    """Return all telemetry records containing performance data."""
     return [record.model_dump() for record in storage.list_telemetry()]
 
 

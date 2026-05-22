@@ -20,6 +20,7 @@ import os
 import tempfile
 import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -268,4 +269,27 @@ class StorageManager:
         self._write_json(self.settings_path(), payload.model_dump())
 
 
-storage = StorageManager()
+@lru_cache(maxsize=1)
+def get_storage() -> StorageManager:
+    """Return the process-wide :class:`StorageManager` instance.
+
+    Wrapped in :func:`functools.lru_cache` so the manager is built on
+    first call (no import-time filesystem side effects) and shared
+    everywhere afterwards. Tests reset the cache with
+    ``get_storage.cache_clear()`` to force a fresh instance against
+    ``tmp_path``-rooted settings.
+    """
+    return StorageManager()
+
+
+def __getattr__(name: str):
+    """Backwards-compatible lazy access for ``from core.storage import storage``.
+
+    Existing call sites that did ``from core.storage import storage`` and
+    then used ``storage.<method>`` keep working — accessing ``storage`` on
+    this module simply returns the cached singleton. New code should call
+    :func:`get_storage` instead so test overrides (and future DI) compose.
+    """
+    if name == 'storage':
+        return get_storage()
+    raise AttributeError(f"module 'core.storage' has no attribute {name!r}")
