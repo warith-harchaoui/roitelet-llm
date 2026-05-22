@@ -227,8 +227,8 @@ class AppSettingsPayload(BaseModel):
     openai_compatible_base_url: str = ''
     openai_compatible_model: str = ''
     ollama_base_url: str = 'http://localhost:11434'
-    local_synthesis_model: str = 'qwen2.5:14b-instruct'
-    local_vlm_model: str = 'llava:13b'
+    local_synthesis_model: str = 'qwen3:8b-instruct'
+    local_vlm_model: str = 'qwen2.5-vl:7b'
     enable_vlms: bool = False
     raw_power_weight: float = 0.7
     frugality_weight: float = 0.3

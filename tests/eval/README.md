@@ -45,7 +45,7 @@ pip install -e .[eval]
 
 # 2. make sure Ollama is up and the configured local model is pulled
 ollama serve &
-ollama pull qwen2.5:14b-instruct   # or whatever LOCAL_LLM_MODEL points at
+ollama pull qwen3:8b-instruct      # or whatever LOCAL_LLM_MODEL points at
 
 # 3. run only the eval tests
 pytest -m eval -q

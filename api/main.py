@@ -26,7 +26,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -58,6 +58,23 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     logger.info('Roitelet LLM API ready — Ollama at %s', ollama_url)
     yield
     logger.info('Roitelet LLM API shutting down.')
+
+
+async def require_api_token(authorization: str | None = Header(default=None)) -> None:
+    """Bearer-token gate for sensitive endpoints.
+
+    Defaults to a no-op (local-first single-user UX is preserved). When
+    ``ROITELET_API_TOKEN`` is set the request must carry a matching
+    ``Authorization: Bearer <token>`` header. Wired as a FastAPI dependency
+    so tests can override it via ``app.dependency_overrides`` when needed.
+    """
+    expected = settings.api_token
+    if not expected:
+        return  # Auth disabled — preserve unauthenticated localhost UX.
+    if not authorization or not authorization.startswith('Bearer '):
+        raise HTTPException(status_code=401, detail='Missing bearer token')
+    if authorization[len('Bearer '):].strip() != expected:
+        raise HTTPException(status_code=401, detail='Invalid bearer token')
 
 
 app = FastAPI(title='Roitelet LLM API', version='0.1.0', lifespan=lifespan)
@@ -93,7 +110,7 @@ async def health() -> Dict[str, Any]:
     return {'status': 'ok', 'service': 'roitelet-llm', 'base_url': settings.public_base_url}
 
 
-@app.get('/api/settings')
+@app.get('/api/settings', dependencies=[Depends(require_api_token)])
 async def get_app_settings() -> Dict[str, Any]:
     """Return persisted control-room settings with API keys masked.
 
@@ -104,7 +121,7 @@ async def get_app_settings() -> Dict[str, Any]:
     return storage.load_app_settings().masked().model_dump()
 
 
-@app.post('/api/settings')
+@app.post('/api/settings', dependencies=[Depends(require_api_token)])
 async def save_app_settings(payload: AppSettingsPayload) -> Dict[str, Any]:
     """Persist control-room settings edited from the web UI.
 
@@ -200,7 +217,7 @@ async def list_models() -> Dict[str, Any]:
     }
 
 
-@app.post('/v1/chat/completions')
+@app.post('/v1/chat/completions', dependencies=[Depends(require_api_token)])
 async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint.
 

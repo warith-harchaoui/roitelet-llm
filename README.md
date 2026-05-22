@@ -20,9 +20,9 @@ True power isn’t in server racks, billion-dollar budgets, or raw parameter cou
 
 Roitelet replaces the standard single-API-call with a three-step flight pattern:
 
-1. 🦅 **Wing Flap 1 — Clever Discovery:** Our local router predicts which 3 LLMs from the global pool (like GPT-4o, Claude 3.7, Gemini 2.5) are most likely to excel at your specific question based on capability priors and historical Elo tracking.
-2. 🦅 **Wing Flap 2 — Aerial Triumvirate:** The three selected models generate answers in parallel. We avoid relying on just one provider.
-3. 🦅 **Wing Flap 3 — Coronation:** A trusted, local open-source model (like Qwen2.5 running on Ollama) reads the three responses and synthesizes them into a single, comprehensive, highly-accurate final answer.
+1. 🦅 **Wing Flap 1 — Clever Discovery:** Our local router scores every registered model on capability priors + rolling Elo and picks the top K (default 3) from the global pool (GPT-4.1, Claude 3.7, Gemini 2.5, plus local OSS — Qwen, Llama, Gemma, Phi).
+2. 🦅 **Wing Flap 2 — Aerial Triumvirate:** The K selected models answer in parallel. The point isn't to pick a winner — it's to gather diverse viewpoints from different model families.
+3. 🦅 **Wing Flap 3 — Coronation:** A trusted, local open-source model (Qwen 3 by default) reads the K responses and **fuses** them into one comprehensive answer. Fusion, not selection — the synthesised answer can combine insights none of the candidates produced alone.
 
 From your perspective, it feels like using one unified super-brain API. The rest is just show and feathers.
 
@@ -31,11 +31,12 @@ From your perspective, it feels like using one unified super-brain API. The rest
 ## Features
 
 - 🧠 **Dynamic Routing:** No manual model selection needed.
-- ⚡ **Local Synthesis:** The final judge is a local LLM running via Ollama, maintaining privacy and control over the final synthesis.
-- 🌍 **Frontier Integrations:** Built-in support for OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity, and more.
+- 🌐 **Cross-family Fusion:** The synthesis judge fuses K parallel answers from *different* OSS families (Qwen + Llama + Gemma + Phi by default), not three flavours of one provider — better answers than any single model.
+- ⚡ **Local Synthesis:** The fusing judge is a local LLM via Ollama, keeping the final pass private and free.
+- 🌍 **Frontier Integrations:** Optional paid candidates through OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity.
 - 📊 **Local Telemetry & Cost Tracking:** Dashboard monitoring for token costs, latency, simulated energy (kWh), and carbon footprints (gCO₂e).
-- 🔄 **Self-Learning:** Implements a rolling, capability-conditioned Elo update loop to automatically prioritize models that perform better over time.
-- 🔌 **Standardized Endpoints:** Serves an OpenAI-compatible `/v1/chat/completions` API alongside a native FastAPI backend and an MCP JSON-RPC Server.
+- 🔄 **Self-Learning:** Capability-conditioned rolling Elo update loop automatically prioritises models that perform better over time.
+- 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC.
 
 ---
 
@@ -64,10 +65,11 @@ conda activate roitelet-llm
 cp .env.example .env
 # Edit .env to add your API keys (OPENROUTER_API_KEY, ANTHROPIC_API_KEY, etc.)
 
-# 3. Pull a local synthesis model for the coronation phase
-ollama pull qwen2.5:14b-instruct
+# 3. Pull the OSS default bundle (Qwen + Llama + Gemma + Phi + VLM)
+chmod +x scripts/pull_defaults.sh
+./scripts/pull_defaults.sh
 
-# 4. Start the Application
+# 4. Start the application
 chmod +x start.sh
 ./start.sh
 ```

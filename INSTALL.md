@@ -13,11 +13,15 @@ Complete installation guide for every supported setup path.
 | [conda](https://docs.conda.io) **or** venv | any | Environment isolation |
 | [Docker](https://docs.docker.com/get-docker/) | 24+ | Container deployment (optional) |
 
-> **Recommended first model to pull with Ollama:**
+> **Recommended OSS bundle — pull before first run:**
 > ```bash
-> ollama pull qwen2.5:14b-instruct
+> ./scripts/pull_defaults.sh
 > ```
-> This is the default local synthesis / judge model. Pull it before starting Roitelet.
+> Roitelet fuses K parallel answers; the script seeds Ollama with one
+> capable model from each major OSS family (Qwen, Llama, Gemma, Phi)
+> plus a vision-language model. Total disk footprint ≈ 15 GB. Without
+> at least the default synthesis model (`qwen3:8b-instruct`) the
+> coronation step has nothing to fuse with.
 
 ---
 
@@ -109,7 +113,8 @@ OPENROUTER_API_KEY=sk-or-...
 # Local synthesis / judge model
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen2.5:14b-instruct
+LOCAL_LLM_MODEL=qwen3:8b-instruct
+LOCAL_VLM_MODEL=qwen2.5-vl:7b
 
 ```
 

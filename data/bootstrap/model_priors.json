@@ -44,6 +44,62 @@
     "energy_kwh": 0.00050,
     "capabilities": {"coding": 0.86, "math": 0.78, "reasoning": 0.87, "writing": 0.88, "analysis": 0.84, "multilingual": 0.82, "long_context": 0.80}
   },
+
+  "ollama/qwen3:8b-instruct": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 2.5,
+    "energy_kwh": 0.00060,
+    "capabilities": {"coding": 0.78, "math": 0.76, "reasoning": 0.80, "writing": 0.84, "analysis": 0.79, "multilingual": 0.85, "long_context": 0.78}
+  },
+  "ollama/qwen3:4b-instruct": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 1.7,
+    "energy_kwh": 0.00035,
+    "capabilities": {"coding": 0.72, "math": 0.70, "reasoning": 0.74, "writing": 0.78, "analysis": 0.72, "multilingual": 0.81, "long_context": 0.72}
+  },
+  "ollama/llama3.2:3b-instruct": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 1.5,
+    "energy_kwh": 0.00025,
+    "capabilities": {"coding": 0.62, "math": 0.55, "reasoning": 0.66, "writing": 0.74, "analysis": 0.65, "multilingual": 0.68, "long_context": 0.70}
+  },
+  "ollama/gemma3:4b": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 1.8,
+    "energy_kwh": 0.00035,
+    "capabilities": {"coding": 0.65, "math": 0.62, "reasoning": 0.70, "writing": 0.78, "analysis": 0.70, "vision": 0.74, "multilingual": 0.74, "long_context": 0.72}
+  },
+  "ollama/phi4-mini:3.8b": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": false,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 1.6,
+    "energy_kwh": 0.00030,
+    "capabilities": {"coding": 0.72, "math": 0.78, "reasoning": 0.80, "writing": 0.71, "analysis": 0.74, "multilingual": 0.62, "long_context": 0.66}
+  },
+  "ollama/qwen2.5-vl:7b": {
+    "provider": "ollama",
+    "local": true,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.0, "output_per_1k": 0.0},
+    "latency_s": 2.3,
+    "energy_kwh": 0.00055,
+    "capabilities": {"vision": 0.86, "reasoning": 0.72, "writing": 0.70, "analysis": 0.74, "coding": 0.62, "multilingual": 0.74, "long_context": 0.70}
+  },
+
   "ollama/qwen2.5:14b-instruct": {
     "provider": "ollama",
     "local": true,

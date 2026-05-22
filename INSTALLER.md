@@ -13,11 +13,15 @@ Guide d'installation complet pour tous les modes de déploiement supportés.
 | [conda](https://docs.conda.io) **ou** venv | toute | Isolation de l'environnement |
 | [Docker](https://docs.docker.com/get-docker/) | 24+ | Déploiement conteneurisé (optionnel) |
 
-> **Premier modèle à télécharger avec Ollama :**
+> **Bundle OSS recommandé — à télécharger avant le premier lancement :**
 > ```bash
-> ollama pull qwen2.5:14b-instruct
+> ./scripts/pull_defaults.sh
 > ```
-> C'est le modèle local de synthèse par défaut. Récupérez-le avant de démarrer Roitelet.
+> Roitelet fusionne K réponses en parallèle ; le script installe un
+> modèle de chaque grande famille OSS (Qwen, Llama, Gemma, Phi) plus
+> un modèle vision-langage. Empreinte disque totale ≈ 15 Go. Sans au
+> moins le modèle de synthèse par défaut (`qwen3:8b-instruct`), l'étape
+> de couronnement n'a rien à fusionner.
 
 ---
 
@@ -110,7 +114,8 @@ OPENROUTER_API_KEY=sk-or-...
 # Modèle local de synthèse / juge
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen2.5:14b-instruct
+LOCAL_LLM_MODEL=qwen3:8b-instruct
+LOCAL_VLM_MODEL=qwen2.5-vl:7b
 
 ```
 

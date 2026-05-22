@@ -1,8 +1,41 @@
 import pytest
 from fastapi.testclient import TestClient
-from api.main import app
+from api.main import app, require_api_token
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def auth_required():
+    """Force the Bearer-token gate to require ``Authorization: Bearer test-token``
+    for the lifetime of one test, without touching environment variables.
+
+    ``require_api_token`` is a no-op by default (local-first single-user
+    UX). Tests that exercise the gated path override the dependency via
+    FastAPI's ``dependency_overrides`` so we don't mutate settings globals
+    or leak state between tests.
+    """
+    async def _require(authorization: str | None = None):
+        from fastapi import Header, HTTPException
+        # Replicate the production check with a fixed expected token.
+        if authorization is None:
+            from fastapi import Request
+            raise HTTPException(status_code=401, detail='Missing bearer token')
+        if not authorization.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail='Missing bearer token')
+        if authorization[len('Bearer '):].strip() != 'test-token':
+            raise HTTPException(status_code=401, detail='Invalid bearer token')
+
+    # The override needs the *exact* signature for FastAPI to inject Header.
+    from fastapi import Header
+    async def _override(authorization: str | None = Header(default=None)):
+        await _require(authorization)
+
+    app.dependency_overrides[require_api_token] = _override
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(require_api_token, None)
 
 def test_healthz():
     response = client.get("/healthz")
@@ -75,6 +108,33 @@ def test_api_settings_post_preserves_masked_secrets():
         assert storage.load_app_settings().openrouter_api_key == real_secret
     finally:
         storage.save_app_settings(stored)
+
+
+def test_settings_unauthorized_when_token_required(auth_required):
+    """With a token configured, GET /api/settings must reject missing creds."""
+    assert client.get('/api/settings').status_code == 401
+    assert client.get(
+        '/api/settings', headers={'Authorization': 'Bearer wrong-token'}
+    ).status_code == 401
+
+
+def test_settings_accepts_correct_bearer(auth_required):
+    """The configured token must unlock the gated endpoints."""
+    response = client.get(
+        '/api/settings', headers={'Authorization': 'Bearer test-token'}
+    )
+    assert response.status_code == 200
+    assert 'local_synthesis_model' in response.json()
+
+
+def test_settings_unauthenticated_by_default():
+    """Without ROITELET_API_TOKEN set, the endpoint is reachable without auth.
+
+    This is the documented local-first default — single-user, single
+    machine. Tests must continue to pass without any token configured.
+    """
+    response = client.get('/api/settings')
+    assert response.status_code == 200
 
 
 def test_api_settings_post_accepts_new_secret():

@@ -65,8 +65,9 @@ conda activate roitelet-llm
 cp .env.example .env
 # Éditez le fichier .env en y insérant vos clés API (OPENROUTER, ANTHROPIC, etc.)
 
-# 3. Télécharger le modèle de synthèse / couronnement
-ollama pull qwen2.5:14b-instruct
+# 3. Télécharger le bundle OSS par défaut (Qwen + Llama + Gemma + Phi + VLM)
+chmod +x scripts/pull_defaults.sh
+./scripts/pull_defaults.sh
 
 # 4. Lancer l'application
 chmod +x start.sh

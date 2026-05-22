@@ -29,7 +29,8 @@ Puis éditez `.env`.
 OPENROUTER_API_KEY=...
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen2.5:14b-instruct
+LOCAL_LLM_MODEL=qwen3:8b-instruct
+LOCAL_VLM_MODEL=qwen2.5-vl:7b
 ```
 
 ## 3. Lancer le projet

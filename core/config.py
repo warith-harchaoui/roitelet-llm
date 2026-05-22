@@ -98,12 +98,16 @@ class Settings(BaseSettings):
         default='http://localhost:8000',
         alias='ROITELET_CORS_ALLOWED_ORIGINS',
     )
+    # Optional Bearer token. When set (non-empty), the settings endpoints
+    # and the OpenAI-compatible endpoints require ``Authorization: Bearer <token>``.
+    # Left empty by default to preserve the local-first single-user UX.
+    api_token: str = Field(default='', alias='ROITELET_API_TOKEN')
 
     local_llm_provider: str = Field(default='ollama', alias='LOCAL_LLM_PROVIDER')
     local_llm_base_url: str = Field(default='http://localhost:11434', alias='LOCAL_LLM_BASE_URL')
     local_llm_api_key: str = Field(default='', alias='LOCAL_LLM_API_KEY')
-    local_llm_model: str = Field(default='qwen2.5:14b-instruct', alias='LOCAL_LLM_MODEL')
-    local_vlm_model: str = Field(default='llava:13b', alias='LOCAL_VLM_MODEL')
+    local_llm_model: str = Field(default='qwen3:8b-instruct', alias='LOCAL_LLM_MODEL')
+    local_vlm_model: str = Field(default='qwen2.5-vl:7b', alias='LOCAL_VLM_MODEL')
 
     openrouter_api_key: str = Field(default='', alias='OPENROUTER_API_KEY')
     openrouter_base_url: str = Field(default='https://openrouter.ai/api/v1', alias='OPENROUTER_BASE_URL')
