@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     # and the OpenAI-compatible endpoints require ``Authorization: Bearer <token>``.
     # Left empty by default to preserve the local-first single-user UX.
     api_token: str = Field(default='', alias='ROITELET_API_TOKEN')
+    # Lifetime (in seconds) of a cached provider response on disk. 0 disables
+    # the cache entirely. Negative values mean "cache forever" (the pre-TTL
+    # behaviour). Used by :class:`StorageManager.get_cache`.
+    provider_cache_ttl_seconds: int = Field(
+        default=0,
+        alias='ROITELET_PROVIDER_CACHE_TTL',
+    )
 
     local_llm_provider: str = Field(default='ollama', alias='LOCAL_LLM_PROVIDER')
     local_llm_base_url: str = Field(default='http://localhost:11434', alias='LOCAL_LLM_BASE_URL')
