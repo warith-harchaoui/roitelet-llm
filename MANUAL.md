@@ -27,8 +27,8 @@ cp .env.example .env
 OPENROUTER_API_KEY=...
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen3:8b-instruct
-LOCAL_VLM_MODEL=qwen2.5-vl:7b
+LOCAL_LLM_MODEL=qwen3:8b
+LOCAL_VLM_MODEL=qwen2.5vl:7b
 ```
 
 ## 3. Start the project

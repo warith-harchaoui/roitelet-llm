@@ -89,7 +89,7 @@ def fetch_content(source: str) -> str:
         return Path(source).read_text(encoding="utf-8")
 
 
-def call_local_llm(text: str, base_url: str = "http://localhost:11434", model: str = "qwen3:8b-instruct") -> List[Dict[str, Any]]:
+def call_local_llm(text: str, base_url: str = "http://localhost:11434", model: str = "qwen3:8b") -> List[Dict[str, Any]]:
     """Send the text to the local Ollama instance for JSON extraction."""
     logger.info(f"Sending raw text to local LLM ({model}) for extraction...")
     
@@ -201,7 +201,7 @@ def update_priors(extracted: List[Dict[str, Any]], source: Optional[str] = None)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Autonomous Elo Extractor")
     parser.add_argument("source", help="URL or local text file containing leaderboard data.")
-    parser.add_argument("--model", default="qwen3:8b-instruct", help="Local Ollama model to use for extraction.")
+    parser.add_argument("--model", default="qwen3:8b", help="Local Ollama model to use for extraction.")
     parser.add_argument("--ollama-url", default="http://localhost:11434", help="Ollama Base URL.")
     args = parser.parse_args()
 

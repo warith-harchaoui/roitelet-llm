@@ -214,19 +214,19 @@ def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
             categories={'coding': 1.0},
             candidates=[
                 ModelCandidate(
-                    model_id='ollama/qwen3:8b-instruct',
+                    model_id='ollama/qwen3:8b',
                     provider='ollama',
                     selected=True,
                     score=0.9,
                     capability_scores=[],
                 ),
             ],
-            selected_model_ids=['ollama/qwen3:8b-instruct'],
+            selected_model_ids=['ollama/qwen3:8b'],
             reasoning=['stub'],
         ),
         responses=[
             ModelResponse(
-                model_id='ollama/qwen3:8b-instruct',
+                model_id='ollama/qwen3:8b',
                 provider='ollama',
                 content=content,
                 latency_s=0.0,
@@ -234,11 +234,11 @@ def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
             ),
         ],
         synthesis=SynthesisResult(
-            model_id='ollama/qwen3:8b-instruct',
+            model_id='ollama/qwen3:8b',
             provider='ollama',
             content=content,
             judge_summary='WINNERS: 1',
-            winning_model_ids=['ollama/qwen3:8b-instruct'],
+            winning_model_ids=['ollama/qwen3:8b'],
         ),
         telemetry_id='tel-stub',
     )

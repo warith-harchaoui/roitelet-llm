@@ -72,7 +72,7 @@
     "capabilities": {"coding": 0.86, "math": 0.78, "reasoning": 0.87, "writing": 0.88, "analysis": 0.84, "multilingual": 0.82, "long_context": 0.80}
   },
 
-  "ollama/qwen3:8b-instruct": {
+  "ollama/qwen3:8b": {
     "provider": "ollama",
     "local": true,
     "vlm": false,
@@ -81,7 +81,7 @@
     "energy_kwh": 0.00060,
     "capabilities": {"coding": 0.78, "math": 0.76, "reasoning": 0.80, "writing": 0.84, "analysis": 0.79, "multilingual": 0.85, "long_context": 0.78}
   },
-  "ollama/qwen3:4b-instruct": {
+  "ollama/qwen3:4b": {
     "provider": "ollama",
     "local": true,
     "vlm": false,
@@ -90,7 +90,7 @@
     "energy_kwh": 0.00035,
     "capabilities": {"coding": 0.72, "math": 0.70, "reasoning": 0.74, "writing": 0.78, "analysis": 0.72, "multilingual": 0.81, "long_context": 0.72}
   },
-  "ollama/llama3.2:3b-instruct": {
+  "ollama/llama3.2:3b": {
     "provider": "ollama",
     "local": true,
     "vlm": false,
@@ -117,7 +117,7 @@
     "energy_kwh": 0.00030,
     "capabilities": {"coding": 0.72, "math": 0.78, "reasoning": 0.80, "writing": 0.71, "analysis": 0.74, "multilingual": 0.62, "long_context": 0.66}
   },
-  "ollama/qwen2.5-vl:7b": {
+  "ollama/qwen2.5vl:7b": {
     "provider": "ollama",
     "local": true,
     "vlm": true,

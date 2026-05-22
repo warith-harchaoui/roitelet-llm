@@ -113,8 +113,8 @@ class Settings(BaseSettings):
     local_llm_provider: str = Field(default='ollama', alias='LOCAL_LLM_PROVIDER')
     local_llm_base_url: str = Field(default='http://localhost:11434', alias='LOCAL_LLM_BASE_URL')
     local_llm_api_key: str = Field(default='', alias='LOCAL_LLM_API_KEY')
-    local_llm_model: str = Field(default='qwen3:8b-instruct', alias='LOCAL_LLM_MODEL')
-    local_vlm_model: str = Field(default='qwen2.5-vl:7b', alias='LOCAL_VLM_MODEL')
+    local_llm_model: str = Field(default='qwen3:8b', alias='LOCAL_LLM_MODEL')
+    local_vlm_model: str = Field(default='qwen2.5vl:7b', alias='LOCAL_VLM_MODEL')
 
     openrouter_api_key: str = Field(default='', alias='OPENROUTER_API_KEY')
     openrouter_base_url: str = Field(default='https://openrouter.ai/api/v1', alias='OPENROUTER_BASE_URL')

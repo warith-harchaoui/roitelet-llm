@@ -191,12 +191,47 @@ class TestRouterPreferences:
 # Registry: bootstrap loading and model injection
 # ---------------------------------------------------------------------------
 
+
+@pytest.fixture(autouse=True)
+def _isolate_ollama_cache():
+    """Force the live-discovery cache to behave as if Ollama is empty.
+
+    The registry's un-pulled-model prune now drops bootstrap ``ollama/*``
+    entries when discovery returns models that don't include them. On a
+    developer laptop with real Ollama running, that would clobber any
+    registry assertion that expects the full bootstrap pool. We snapshot
+    + reset around every test for hermetic behaviour.
+    """
+    from core.registry import ollama_cache
+    saved_models = ollama_cache._models
+    saved_fetched_at = ollama_cache._fetched_at
+    ollama_cache._models = []
+    ollama_cache._fetched_at = time.monotonic()
+    try:
+        yield
+    finally:
+        ollama_cache._models = saved_models
+        ollama_cache._fetched_at = saved_fetched_at
+
 def _make_registry(extra_ollama: List[str] = None, extra_openrouter: List[str] = None):
-    """Build a registry backed by the real bootstrap file."""
+    """Build a registry backed by the real bootstrap file.
+
+    Explicitly resets the live-discovery cache so the registry under test
+    sees an empty Ollama discovery — that way the un-pulled-model prune
+    in :meth:`ModelRegistry._merge_live_ollama` is skipped and the
+    bootstrap pool is preserved end-to-end. Without this, running tests
+    on a developer machine with real Ollama installed (returning a
+    different set of tags) would drop bootstrap entries the assertions
+    rely on.
+    """
+    from core.registry import ModelRegistry, ollama_cache
     from core.schemas import AppSettingsPayload
-    from core.registry import ModelRegistry
+
+    ollama_cache._models = []
+    ollama_cache._fetched_at = time.monotonic()  # mark as "fresh and empty"
 
     payload = AppSettingsPayload(
+        ollama_base_url='',  # disable configure() so refresh isn't triggered
         selected_ollama_models=extra_ollama or [],
         paid_openrouter_models=extra_openrouter or [],
     )

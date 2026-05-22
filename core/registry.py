@@ -262,13 +262,23 @@ class ModelRegistry:
                 )
 
     def _merge_live_ollama(self) -> None:
-        """Merge models discovered live from the Ollama server.
+        """Reconcile the model pool with what Ollama actually serves.
 
-        Models already present (from bootstrap or user config) are left
-        untouched — their existing metadata is more accurate.
-        New models get conservative default priors.
+        Two responsibilities:
+
+        1. **Add** models reported by ``/api/tags`` that bootstrap and
+           user config don't already cover (with conservative default
+           priors).
+        2. **Drop** ``provider='ollama'`` bootstrap entries that the user
+           hasn't actually pulled — otherwise the router happily picks a
+           high-prior model whose tag 404s at inference time. This filter
+           only runs when discovery actually returned a list; if Ollama
+           is unreachable the cache is empty and we leave bootstrap alone
+           so users can still pre-load priors before pulling.
         """
-        for model_name in ollama_cache.models:
+        discovered = list(ollama_cache.models)
+        # Add live-discovered models that nothing else has registered yet.
+        for model_name in discovered:
             model_id = f'ollama/{model_name}' if not model_name.startswith('ollama/') else model_name
             if model_id not in self.models:
                 logger.debug('Live-discovered Ollama model registered: %s', model_id)
@@ -282,6 +292,21 @@ class ModelRegistry:
                     energy_kwh=_OLLAMA_DEFAULTS['energy_kwh'],
                     capabilities=dict(_DEFAULT_CAPABILITIES),
                 )
+        # Drop bootstrap ``ollama/*`` entries the user hasn't pulled.
+        # Skip the prune when discovery is empty (Ollama unreachable) so
+        # offline pre-flight planning still sees the full curated pool.
+        if discovered:
+            discovered_ids = {
+                f'ollama/{name}' if not name.startswith('ollama/') else name
+                for name in discovered
+            }
+            stale = [
+                mid for mid, spec in self.models.items()
+                if spec.provider == 'ollama' and mid not in discovered_ids
+            ]
+            for model_id in stale:
+                logger.debug('Dropping un-pulled Ollama model: %s', model_id)
+                self.models.pop(model_id, None)
 
     # ------------------------------------------------------------------
     # Elo state helpers

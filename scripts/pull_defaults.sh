@@ -15,17 +15,17 @@ OLLAMA_HOST="${LOCAL_LLM_BASE_URL:-http://localhost:11434}"
 # One model per major OSS family + one dedicated VLM.
 MODELS=(
   # Alibaba — Roitelet's default synthesis judge (multilingual, instruction-tuned)
-  "qwen3:8b-instruct"
+  "qwen3:8b"
   # Alibaba — lighter alternative for 8–16 GB machines
-  "qwen3:4b-instruct"
+  "qwen3:4b"
   # Meta — small + fast generalist; the routing pool wants a Llama-family vote
-  "llama3.2:3b-instruct"
+  "llama3.2:3b"
   # Google — multimodal-native; covers text + light vision in one model
   "gemma3:4b"
   # Microsoft — reasoning-tuned small model; punches above its weight on math
   "phi4-mini:3.8b"
   # Alibaba VL — primary vision-language model for image prompts
-  "qwen2.5-vl:7b"
+  "qwen2.5vl:7b"
 )
 
 echo "Roitelet — pulling the OSS default bundle from Ollama at ${OLLAMA_HOST}"

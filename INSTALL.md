@@ -20,7 +20,7 @@ Complete installation guide for every supported setup path.
 > Roitelet fuses K parallel answers; the script seeds Ollama with one
 > capable model from each major OSS family (Qwen, Llama, Gemma, Phi)
 > plus a vision-language model. Total disk footprint ≈ 15 GB. Without
-> at least the default synthesis model (`qwen3:8b-instruct`) the
+> at least the default synthesis model (`qwen3:8b`) the
 > coronation step has nothing to fuse with.
 
 ---
@@ -113,8 +113,8 @@ OPENROUTER_API_KEY=sk-or-...
 # Local synthesis / judge model
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen3:8b-instruct
-LOCAL_VLM_MODEL=qwen2.5-vl:7b
+LOCAL_LLM_MODEL=qwen3:8b
+LOCAL_VLM_MODEL=qwen2.5vl:7b
 
 ```
 

@@ -20,7 +20,7 @@ Guide d'installation complet pour tous les modes de déploiement supportés.
 > Roitelet fusionne K réponses en parallèle ; le script installe un
 > modèle de chaque grande famille OSS (Qwen, Llama, Gemma, Phi) plus
 > un modèle vision-langage. Empreinte disque totale ≈ 15 Go. Sans au
-> moins le modèle de synthèse par défaut (`qwen3:8b-instruct`), l'étape
+> moins le modèle de synthèse par défaut (`qwen3:8b`), l'étape
 > de couronnement n'a rien à fusionner.
 
 ---
@@ -114,8 +114,8 @@ OPENROUTER_API_KEY=sk-or-...
 # Modèle local de synthèse / juge
 LOCAL_LLM_PROVIDER=ollama
 LOCAL_LLM_BASE_URL=http://localhost:11434
-LOCAL_LLM_MODEL=qwen3:8b-instruct
-LOCAL_VLM_MODEL=qwen2.5-vl:7b
+LOCAL_LLM_MODEL=qwen3:8b
+LOCAL_VLM_MODEL=qwen2.5vl:7b
 
 ```
 
