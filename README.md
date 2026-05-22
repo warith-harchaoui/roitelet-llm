@@ -50,6 +50,24 @@ Roitelet ships with a web-based control room (vanilla JS, served by the API at `
 
 ---
 
+## Adding a paid LLM (e.g. ChatGPT)
+
+Roitelet ships ready to route to OpenAI's models — set one env var and
+restart:
+
+```env
+OPENAI_API_KEY=sk-proj-...
+```
+
+`openai/gpt-4.1`, `openai/gpt-4o`, and `openai/gpt-4o-mini` are already
+in `data/bootstrap/model_priors.json`, so the router considers them on
+the next prompt. See [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md)
+for the full walkthrough, including how to add models that aren't in
+the bootstrap yet and how to route to non-OpenAI providers via
+OpenRouter.
+
+---
+
 ## Installation & Setup
 
 > **Complete Installation Guide:** See [INSTALL.md](INSTALL.md) for full instructions covering conda, venv, and Docker deployment.

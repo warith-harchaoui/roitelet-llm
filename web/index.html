@@ -7,8 +7,11 @@
   <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
   <title>Roitelet</title>
   <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%230a84ff' d='M12 2L3 22h18z'/></svg>">
-  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <!-- Self-hosted vendored assets so offline mode (a local-first value prop)
+       works and there's no third-party JS supply chain. Refresh with
+       scripts/vendor_web_assets.sh. -->
+  <script src="/vendor/tailwindcss.js"></script>
+  <script src="/vendor/marked.min.js"></script>
   <script>
     // Tailwind: every border-radius utility resolves to 10px, except rounded-full
     // (kept for genuine circles like the status dot and the send button).

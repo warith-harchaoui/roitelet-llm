@@ -1,4 +1,31 @@
 {
+  "openai/gpt-4.1": {
+    "provider": "openai",
+    "local": false,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.005, "output_per_1k": 0.015},
+    "latency_s": 3.6,
+    "energy_kwh": 0.0006,
+    "capabilities": {"coding": 0.94, "math": 0.88, "reasoning": 0.93, "writing": 0.90, "analysis": 0.91, "vision": 0.86, "multilingual": 0.88, "long_context": 0.93}
+  },
+  "openai/gpt-4o": {
+    "provider": "openai",
+    "local": false,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.0025, "output_per_1k": 0.01},
+    "latency_s": 2.8,
+    "energy_kwh": 0.00055,
+    "capabilities": {"coding": 0.91, "math": 0.85, "reasoning": 0.90, "writing": 0.89, "analysis": 0.89, "vision": 0.87, "multilingual": 0.87, "long_context": 0.90}
+  },
+  "openai/gpt-4o-mini": {
+    "provider": "openai",
+    "local": false,
+    "vlm": true,
+    "pricing": {"input_per_1k": 0.00015, "output_per_1k": 0.0006},
+    "latency_s": 1.9,
+    "energy_kwh": 0.00040,
+    "capabilities": {"coding": 0.82, "math": 0.75, "reasoning": 0.80, "writing": 0.81, "analysis": 0.78, "vision": 0.80, "multilingual": 0.80, "long_context": 0.82}
+  },
   "openrouter/openai/gpt-4.1": {
     "provider": "openrouter",
     "local": false,
