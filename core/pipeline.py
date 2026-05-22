@@ -6,7 +6,7 @@ conversation persistence, telemetry, and lightweight online Elo updates.
 Examples
 --------
 >>> # Real network-backed inference is required for a full run.
->>> from core.core.pipeline import build_title
+>>> from core.pipeline import build_title
 >>> build_title('How do I optimize this Python function?')
 'How do I optimize this Python function?'
 

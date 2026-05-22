@@ -6,7 +6,7 @@ which are then combined with benchmark priors and rolling Elo updates.
 
 Examples
 --------
->>> from core.core.capabilities import detect_capabilities
+>>> from core.capabilities import detect_capabilities
 >>> scores = detect_capabilities("Write Python code for a fast API")
 >>> scores['coding'] > 0
 True

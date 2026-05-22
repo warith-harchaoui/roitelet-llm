@@ -8,7 +8,7 @@ This router scores each candidate model with a blend of:
 
 Examples
 --------
->>> from core.core.router import RoiteletRouter
+>>> from core.router import RoiteletRouter
 >>> from core.schemas import RouterPreferences
 >>> router = RoiteletRouter()
 >>> decision = router.route("Write a Python function", RouterPreferences())

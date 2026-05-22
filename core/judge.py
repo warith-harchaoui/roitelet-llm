@@ -5,7 +5,7 @@ Builds the judge prompt, calls a local synthesis model, parses the
 
 Examples
 --------
->>> from core.core.judge import parse_winners
+>>> from core.judge import parse_winners
 >>> parse_winners('Candidate 1 is best.\\nWINNERS: 1, 3')
 [1, 3]
 
