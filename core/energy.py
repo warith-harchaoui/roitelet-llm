@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from ..config import get_settings
+from .config import get_settings
 
 
 def estimate_energy_and_carbon(

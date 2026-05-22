@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ..schemas import ChatRequest, MCPRequest, RouterPreferences
+from .schemas import ChatRequest, MCPRequest, RouterPreferences
 from .pipeline import run_roitelet_chat
 
 

@@ -19,9 +19,9 @@ from __future__ import annotations
 import re
 from typing import List
 
-from ..providers.factory import get_provider_client
-from ..schemas import ChatMessage, ModelResponse, SynthesisResult
-from ..storage import storage
+from .providers.factory import get_provider_client
+from .schemas import ChatMessage, ModelResponse, SynthesisResult
+from .storage import storage
 
 
 _JUDGE_SYSTEM_PROMPT = (

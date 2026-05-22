@@ -24,8 +24,8 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from ..schemas import ModelCandidate, ModelCapabilityScore, RouterDecision, RouterPreferences
-from ..storage import storage
+from .schemas import ModelCandidate, ModelCapabilityScore, RouterDecision, RouterPreferences
+from .storage import storage
 from .capabilities import detect_capabilities, top_capabilities
 from .registry import ModelRegistry
 
