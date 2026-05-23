@@ -34,7 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.config import get_settings
 from core.mcp import handle_mcp_request
-from core.pipeline import run_roitelet_chat
+from core.pipeline import AllCandidatesFailedError, run_roitelet_chat
 from core.registry import warm_ollama_cache
 from core.schemas import (
     AppSettingsPayload,
@@ -183,6 +183,29 @@ async def _stream_synthesis_content(content: str, chunk_size: int = 8) -> AsyncG
         yield content[i:i + chunk_size]
 
 
+async def _run_chat_or_502(payload: ChatRequest):
+    """Wrap ``run_roitelet_chat`` to convert all-fail into a clear HTTP 502.
+
+    Without this, ``AllCandidatesFailedError`` would surface as a 500 with a
+    stack trace — useless to the web UI. Mapping it to 502 (Bad Gateway)
+    matches the semantic: every upstream model failed.
+    """
+    try:
+        return await run_roitelet_chat(payload)
+    except AllCandidatesFailedError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                'error': 'all_candidates_failed',
+                'message': str(exc),
+                'failures': [
+                    {'model_id': r.model_id, 'error': r.error or 'empty response'}
+                    for r in exc.responses
+                ],
+            },
+        ) from exc
+
+
 @app.post('/api/chat')
 async def roitelet_chat(payload: ChatRequest):
     """Run one native Roitelet chat turn.
@@ -203,7 +226,7 @@ async def roitelet_chat(payload: ChatRequest):
     Dict[str, Any] | StreamingResponse
         The resulting synthesis, full conversation body, and model decisions.
     """
-    response = await run_roitelet_chat(payload)
+    response = await _run_chat_or_502(payload)
     if not payload.stream:
         return response.model_dump()
 
@@ -222,48 +245,113 @@ async def roitelet_chat(payload: ChatRequest):
     return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 
+_AUDIO_EXTS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.opus', '.aac'}
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif'}
+_PDF_EXTS = {'.pdf'}
+
+
+def _modality_of(upload: UploadFile) -> str | None:
+    """Classify an uploaded file as 'audio', 'image', 'pdf', or None.
+
+    Trust MIME type first (browser-provided), fall back to extension so
+    blank/wrong MIMEs still get routed correctly.
+    """
+    mime = (upload.content_type or '').lower()
+    if mime.startswith('audio/'):
+        return 'audio'
+    if mime.startswith('image/'):
+        return 'image'
+    if mime == 'application/pdf':
+        return 'pdf'
+    ext = Path(upload.filename or '').suffix.lower()
+    if ext in _AUDIO_EXTS:
+        return 'audio'
+    if ext in _IMAGE_EXTS:
+        return 'image'
+    if ext in _PDF_EXTS:
+        return 'pdf'
+    return None
+
+
 @app.post('/api/chat/multimodal')
 async def roitelet_chat_multimodal(
     prompt: str = Form(''),
     conversation_id: str | None = Form(None),
     top_k: int = Form(3),
-    audio_files: List[UploadFile] = File(default_factory=list),
+    allow_vlms: bool = Form(False),
+    files: List[UploadFile] = File(default_factory=list),
 ):
-    """Run one chat turn with attached audio files.
+    """Run one chat turn with attached audio, image, or PDF files.
 
-    Each audio file is transcribed and diarized locally (whisper.cpp +
-    NeMo Sortformer); the resulting speaker-labelled transcript is
-    prepended to the user prompt, then the standard Roitelet pipeline
-    runs unmodified.
+    Each attachment is converted to text locally before the standard
+    pipeline runs — the router, candidate fan-out, and judge remain
+    text-only:
+
+    * ``audio/*`` → whisper.cpp transcription + NeMo Sortformer diarization
+    * ``image/*`` → local Ollama VLM caption (gated on ``allow_vlms``)
+    * ``application/pdf`` → kreuzberg text extraction (with OCR fallback)
+
+    Unknown file types are skipped with a note in the augmented prompt so
+    the user can see what was ignored.
     """
     import tempfile
-    from core.multimodal.audio import transcribe_audio
 
-    transcripts: List[str] = []
-    for upload in audio_files:
+    augmentations: List[str] = []
+    skipped: List[str] = []
+
+    for upload in files:
         if not upload.filename:
             continue
-        suffix = Path(upload.filename).suffix or '.wav'
+        modality = _modality_of(upload)
+        if modality is None:
+            skipped.append(upload.filename)
+            continue
+        if modality == 'image' and not allow_vlms:
+            skipped.append(f'{upload.filename} (vision disabled)')
+            continue
+
+        suffix = Path(upload.filename).suffix or {
+            'audio': '.wav', 'image': '.png', 'pdf': '.pdf',
+        }[modality]
         fd, tmp_path = tempfile.mkstemp(suffix=suffix)
         try:
             with os.fdopen(fd, 'wb') as fh:
                 fh.write(await upload.read())
-            transcript = await transcribe_audio(Path(tmp_path))
+            tmp = Path(tmp_path)
+            if modality == 'audio':
+                from core.multimodal.audio import transcribe_audio
+                text = await transcribe_audio(tmp)
+                label = f'[Audio: {upload.filename}]'
+            elif modality == 'image':
+                from core.multimodal.image import describe_image
+                text = await describe_image(tmp)
+                label = f'[Image: {upload.filename}]'
+            else:  # pdf
+                from core.multimodal.pdf import extract_pdf
+                text = await extract_pdf(tmp)
+                label = f'[PDF: {upload.filename}]'
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
-        if transcript:
-            transcripts.append(f'[Audio: {upload.filename}]\n{transcript}')
 
-    augmented = '\n\n'.join([*transcripts, prompt]).strip() if transcripts else prompt
+        if text:
+            augmentations.append(f'{label}\n{text}')
+        else:
+            skipped.append(f'{upload.filename} (extraction empty)')
+
+    if skipped:
+        augmentations.append('[Note] Skipped: ' + ', '.join(skipped))
+
+    augmented = '\n\n'.join([*augmentations, prompt]).strip() if augmentations else prompt
     if not augmented:
-        raise HTTPException(status_code=400, detail='Empty prompt and no usable audio.')
+        raise HTTPException(status_code=400, detail='Empty prompt and no usable attachments.')
 
-    response = await run_roitelet_chat(
+    response = await _run_chat_or_502(
         ChatRequest(
             prompt=augmented,
             conversation_id=conversation_id,
             top_k=top_k,
+            preferences=RouterPreferences(allow_vlms=allow_vlms),
         )
     )
     return response.model_dump()

@@ -32,6 +32,22 @@ from .router_protocol import Router
 from .schemas import ChatMessage, ChatRequest, ChatResponse, ConversationMessage, ModelResponse, TelemetryRecord
 
 
+class AllCandidatesFailedError(RuntimeError):
+    """Raised when every routed model failed and there is nothing for the judge to fuse.
+
+    Carries the raw per-model errors so the API layer can surface a clear
+    explanation to the user instead of fabricating a synthesized answer
+    from empty content.
+    """
+
+    def __init__(self, responses: List[ModelResponse]) -> None:
+        self.responses = list(responses)
+        details = ', '.join(
+            f'{r.model_id}: {r.error or "empty response"}' for r in self.responses
+        ) or 'no candidates returned'
+        super().__init__(f'All routed models failed — {details}')
+
+
 @lru_cache(maxsize=1)
 def get_router() -> RoiteletRouter:
     """Return the process-wide :class:`RoiteletRouter` instance.
@@ -157,11 +173,13 @@ async def run_roitelet_chat(
         *[_query_one(model_id, messages) for model_id in decision.selected_model_ids]
     )
 
-    # Filter out responses that failed entirely before sending to the judge.
-    # Always keep at least one candidate so synthesis has content to work with.
+    # Drop responses that failed entirely before sending to the judge.
     valid_responses = [r for r in selected_responses if r.content and not r.error]
     if not valid_responses:
-        valid_responses = list(selected_responses)  # all failed — let judge handle gracefully
+        # Every routed model failed. Do NOT call the judge — there is
+        # nothing to fuse and fabricating a "synthesis" from empty content
+        # would be dishonest. Surface a real error to the API layer.
+        raise AllCandidatesFailedError(selected_responses)
 
     synthesis = await judge_and_synthesize(request.prompt, valid_responses)
 
