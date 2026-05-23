@@ -128,11 +128,11 @@
         <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3.5">
           <div id="attachmentChips" class="hidden flex-wrap gap-1.5 mb-2"></div>
           <form id="composer" class="flex items-end gap-2.5">
-            <button type="button" id="attachBtn" title="Attach audio"
-              class="shrink-0 w-10 h-10 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sysblue dark:hover:text-sysblue hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all">
+            <button type="button" id="attachBtn" title="Attach audio, image, or PDF"
+              class="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sysblue dark:hover:text-sysblue hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
-            <input id="fileInput" type="file" multiple accept="audio/*" class="hidden">
+            <input id="fileInput" type="file" multiple accept="audio/*,image/*,application/pdf" class="hidden">
             <div class="flex-1 border border-gray-300/80 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus-within:border-sysblue dark:focus-within:border-sysblue focus-within:ring-2 focus-within:ring-sysblue/20 transition-all">
               <textarea id="prompt" rows="1" placeholder="Message Roitelet…"
                 class="w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-[1.4] focus:outline-none placeholder-gray-400 max-h-[200px]"></textarea>
