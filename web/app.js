@@ -14,7 +14,20 @@ const state = {
   conversations: [],
   busy: false,
   attachments: [],       // File objects queued for the next send
+  allowVlms: false,      // mirrors the persisted preference; gates image attachments
 };
+
+const AUDIO_RX = /\.(wav|mp3|m4a|flac|ogg|opus|aac)$/i;
+const IMAGE_RX = /\.(jpe?g|png|webp|gif|bmp|heic|heif)$/i;
+const PDF_RX   = /\.pdf$/i;
+
+function classifyFile(f) {
+  const t = (f.type || '').toLowerCase();
+  if (t.startsWith('audio/') || AUDIO_RX.test(f.name)) return 'audio';
+  if (t.startsWith('image/') || IMAGE_RX.test(f.name)) return 'image';
+  if (t === 'application/pdf' || PDF_RX.test(f.name)) return 'pdf';
+  return null;
+}
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
