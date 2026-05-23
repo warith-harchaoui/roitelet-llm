@@ -37,15 +37,20 @@ dev = [
 eval = [
     "deepeval>=2.0.0",
 ]
-# Multimodal inputs. Audio = whisper.cpp (transcription) + NeMo Sortformer
-# (diarization). NeMo pulls PyTorch + Lightning + Hydra (~2 GB), kept
-# optional so the OSS quick-start stays light. Install with:
+# Multimodal inputs.
+#   Audio = whisper.cpp (transcription) + NeMo Sortformer (diarization).
+#     NeMo pulls PyTorch + Lightning + Hydra (~2 GB).
+#   PDF   = kreuzberg (pdfium text layer, Tesseract OCR fallback).
+#   Image = Ollama VLM at runtime (qwen2.5vl:7b by default) — no extra
+#           Python deps, the local Ollama server does the work.
+# Kept optional so the OSS quick-start stays light. Install with:
 #   pip install -e .[multimodal]
 multimodal = [
     "pywhispercpp>=1.4",
     "nemo-toolkit[asr]>=2.1",
     "soundfile>=0.12",
     "audio-helper>=0.1",
+    "kreuzberg>=3.0",
 ]
 
 [tool.setuptools.packages.find]
