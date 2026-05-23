@@ -230,7 +230,7 @@ async function send() {
   if ((!prompt && files.length === 0) || state.busy) return;
 
   const fileLabel = files.length ? files.map(f => `📎 ${f.name}`).join('\n') : '';
-  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || '(audio attachment)';
+  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || '(attachment only)';
   state.messages.push({role: 'user', content: userBubble});
   $('prompt').value = '';
   renderMessages();
