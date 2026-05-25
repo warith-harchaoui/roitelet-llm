@@ -82,6 +82,30 @@ chmod +x start.sh
 
 ---
 
+## Ajouter d'autres LLMs
+
+Roitelet considère tout fournisseur exposant un endpoint
+`/v1/chat/completions` compatible OpenAI comme un point d'extension de
+première classe. Le même chemin fonctionne pour les API payantes, les
+modèles frontière relayés par OpenRouter, et les fichiers GGUF locaux
+servis par `llama-server` (`llama.cpp`).
+
+- **N'importe quel LLM payant (ChatGPT, Mistral, Together, Groq, …)** —
+  configurez le endpoint + la clé, listez les noms de modèles. Voilà.
+  Walkthrough complet dans
+  [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md).
+- **N'importe quel fichier GGUF local** — soit via un `Modelfile`
+  Ollama (recommandé, aucune édition des réglages), soit en le servant
+  avec `llama-server` et en le traitant comme un endpoint
+  OpenAI-compatible. Détaillé dans
+  [docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md).
+- **OpenAI direct** — cas particulier du premier : définissez
+  `OPENAI_API_KEY` puis redémarrez ; `openai/gpt-4.1`, `openai/gpt-4o`
+  et `openai/gpt-4o-mini` figurent déjà dans
+  `data/bootstrap/model_priors.json`.
+
+---
+
 ## Arborescence du projet
 
 ```text

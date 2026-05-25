@@ -51,6 +51,17 @@ CAPABILITY_KEYWORDS: Dict[str, List[str]] = {
         'breakdown', 'compare', 'metrics', 'benchmark', 'evaluate',
     ],
     'vision': ['image', 'photo', 'diagram', 'screenshot', 'chart', 'figure', 'picture', 'visual'],
+    # Reserved for the planned image-generation extension. Today no
+    # model in the bootstrap exposes a non-zero prior on this
+    # capability, so the router's existing scoring still ranks text
+    # candidates first — the keywords just make image-y prompts
+    # legible in telemetry so we can measure demand. See
+    # ``.private/IMAGEGEN.md``.
+    'image_gen': [
+        'generate image', 'generate an image', 'draw', 'paint',
+        'illustration', 'picture of', 'image of', 'render',
+        'create artwork', 'design a logo', 'sketch', 'photorealistic',
+    ],
     'multilingual': [
         'translate', 'french', 'english', 'spanish', 'german', 'japanese',
         'chinese', 'arabic', 'portuguese', 'italian', 'korean', 'russian',

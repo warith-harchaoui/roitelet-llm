@@ -30,7 +30,7 @@ From your perspective, it feels like using one unified super-brain API. The rest
 
 ## Features
 
-- 🧠 **Dynamic Routing:** No manual model selection needed.
+- 🧠 **Dynamic Routing:** No manual model selection needed. Hybrid regime-aware math (cost-budget, trivial, ambiguous, long-context) layers on top of the heuristic linear blend.
 - 🌐 **Cross-family Fusion:** The synthesis judge fuses K parallel answers from *different* OSS families (Qwen + Llama + Gemma + Phi by default), not three flavours of one provider — better answers than any single model.
 - ⚡ **Local Synthesis:** The fusing judge is a local LLM via Ollama, keeping the final pass private and free.
 - 🌍 **Frontier Integrations:** Optional paid candidates through OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity.
@@ -52,21 +52,23 @@ Roitelet ships with a web-based control room (vanilla JS, served by the API at `
 
 ---
 
-## Adding a paid LLM (e.g. ChatGPT)
+## Adding more LLMs
 
-Roitelet ships ready to route to OpenAI's models — set one env var and
-restart:
+Roitelet treats every provider with an OpenAI-compatible
+`/v1/chat/completions` endpoint as a first-class extension point. The
+same path works for paid APIs, frontier-via-OpenRouter, and local GGUF
+files served by `llama.cpp`'s `llama-server`.
 
-```env
-OPENAI_API_KEY=sk-proj-...
-```
-
-`openai/gpt-4.1`, `openai/gpt-4o`, and `openai/gpt-4o-mini` are already
-in `data/bootstrap/model_priors.json`, so the router considers them on
-the next prompt. See [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md)
-for the full walkthrough, including how to add models that aren't in
-the bootstrap yet and how to route to non-OpenAI providers via
-OpenRouter.
+- **Any paid LLM (ChatGPT, Mistral, Together, Groq, …)** — set the
+  endpoint + key, list the model names. Done. Full walkthrough in
+  [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md).
+- **Any local GGUF file** — either drop it into Ollama via a
+  `Modelfile` (recommended, zero settings edits) or serve it with
+  `llama-server` and treat it as an OpenAI-compatible endpoint. Walked
+  through in [docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md).
+- **Direct OpenAI** — special case of the first: set
+  `OPENAI_API_KEY` and restart; `openai/gpt-4.1`, `openai/gpt-4o`, and
+  `openai/gpt-4o-mini` are already in `data/bootstrap/model_priors.json`.
 
 ---
 

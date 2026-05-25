@@ -168,6 +168,26 @@ plus a `global` term that contributes at half-weight. The final score for a
 prompt is therefore tilted toward models that are strong on the *specific*
 capabilities the prompt demands.
 
+### Regime-aware hybrid math
+
+The linear blend above is the *default* math. Before scoring, the
+router calls `core.regimes.detect_regime` to classify the turn into
+one of six regimes and applies regime-specific adjustments:
+
+| Regime | Trigger | What changes |
+|---|---|---|
+| `budget_constrained` | `preferences.max_cost_usd` is set | Candidates whose cost exceeds the budget are filtered *before* scoring. |
+| `trivial` | Short prompt (≤ 80 chars, ≤ 16 words) | Suggests `top_k=1` (advisory — the pipeline honours the caller's K). |
+| `long_context` | Prompt > 4000 chars | Surfaces the label; capability detector already over-weights `long_context`. |
+| `capability_dominant` | One capability holds > 55 % of weight | Surfaces the label; standard per-capability scoring drives selection. |
+| `ambiguous` | No capability above 30 % of weight | Boosts the `global` Elo term to bias toward generalists. |
+| `default` | Anything else | Standard linear blend, no adjustments. |
+
+The regime label and rationale are written into `RouterDecision.reasoning`
+so the choice is auditable in telemetry. This is what "hybrid routing"
+means in Roitelet: one router, one set of priors, but *which math to
+apply* is a per-turn decision driven by the prompt + preferences shape.
+
 ---
 
 ## 4. The model registry: three sources, in priority order
@@ -182,7 +202,7 @@ flowchart LR
         B["data/bootstrap/model_priors.json<br/>curated benchmark-inspired priors:<br/>capabilities · pricing · latency · energy"]
     end
     subgraph S2["2 · User configuration"]
-        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>(edited from the web UI)"]
+        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>paid_openai_compatible_models<br/>(edited from the web UI)"]
     end
     subgraph S3["3 · Live discovery"]
         L["GET http://&lt;ollama&gt;/api/tags<br/>60 s TTL cache<br/>(warmed at API startup)"]
@@ -202,6 +222,15 @@ so it should never be clobbered by a defaulted entry. User config wins over
 live discovery because the user explicitly named those models. Live discovery
 exists so a fresh `ollama pull foo` shows up in the router within one TTL
 window without touching settings.
+
+**Universal extension point**: any paid LLM with an OpenAI-compatible
+`/v1/chat/completions` endpoint — Mistral, Together, Groq, Anyscale,
+Fireworks, llama.cpp's `llama-server` — registers via the
+``paid_openai_compatible_models`` list in user configuration. The factory
+routes ``openai-compatible/<name>`` requests against the configured
+``OPENAI_COMPATIBLE_BASE_URL`` and ``OPENAI_COMPATIBLE_API_KEY``. Walked
+through in [`docs/ADDING_PAID_LLM.md`](docs/ADDING_PAID_LLM.md) and
+[`docs/ADDING_LOCAL_LLM.md`](docs/ADDING_LOCAL_LLM.md).
 
 ---
 

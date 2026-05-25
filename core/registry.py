@@ -51,6 +51,12 @@ logger = logging.getLogger(__name__)
 KNOWN_CAPABILITIES: Set[str] = {
     'coding', 'math', 'reasoning', 'writing', 'analysis',
     'vision', 'multilingual', 'long_context',
+    # ``image_gen`` is reserved for the planned image-generation
+    # extension (see ``.private/IMAGEGEN.md``). Today no model in the
+    # bootstrap exposes a non-zero score on it; the keyword detector
+    # surfaces image-y prompts so future bootstrap entries can route
+    # them without touching this allowlist again.
+    'image_gen',
 }
 
 # Default capability profile for a generic chat model not in the bootstrap file.

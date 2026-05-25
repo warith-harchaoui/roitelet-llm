@@ -36,7 +36,6 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 from .schemas import RouterPreferences
 
@@ -67,8 +66,8 @@ class Regime:
 
     name: str
     rationale: str
-    suggested_top_k: Optional[int] = None
-    cost_budget_usd: Optional[float] = None
+    suggested_top_k: int | None = None
+    cost_budget_usd: float | None = None
 
 
 # Heuristic constants.  Kept conservative — these gate behavioural
@@ -88,7 +87,7 @@ _AMBIGUOUS_TOP_WEIGHT = 0.30       # no capability above 30 % suggests
 def detect_regime(
     prompt: str,
     preferences: RouterPreferences,
-    capabilities: Dict[str, float],
+    capabilities: dict[str, float],
 ) -> Regime:
     """Classify the current routing call into one of six regimes.
 
