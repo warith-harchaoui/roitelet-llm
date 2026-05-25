@@ -26,7 +26,7 @@ import httpx
 
 from ..energy import estimate_energy_and_carbon
 from ..schemas import ChatMessage, ModelResponse
-from ..storage import storage
+from ..storage import get_storage
 
 
 class OpenAICompatibleClient:
@@ -78,6 +78,7 @@ class OpenAICompatibleClient:
         }
         payload_str = json.dumps(payload, sort_keys=True)
         try:
+            storage = get_storage()
             cached_data = storage.get_cache(self.provider_name, payload_str)
             if cached_data:
                 data = cached_data
