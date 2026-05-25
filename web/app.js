@@ -193,6 +193,14 @@ async function refreshConversations() {
   }
 }
 
+async function refreshPreferences() {
+  // Mirror the server's persisted `enable_vlms` so the local gate matches.
+  try {
+    const cur = await apiGet('/api/settings');
+    state.allowVlms = !!cur.enable_vlms;
+  } catch { /* harmless: defaults stay */ }
+}
+
 async function loadConversation(id) {
   try {
     setBusy(true, 'Loading…');
@@ -244,13 +252,14 @@ async function send() {
       fd.append('prompt', prompt);
       if (state.conversationId) fd.append('conversation_id', state.conversationId);
       fd.append('top_k', '3');
-      for (const f of files) fd.append('audio_files', f);
+      fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
+      for (const f of files) fd.append('files', f);
       res = await apiPostMultipart('/api/chat/multimodal', fd);
     } else {
       const payload = {
         prompt,
         conversation_id: state.conversationId,
-        preferences: {raw_power: 0.7, frugality: 0.3, independence: false, allow_vlms: false},
+        preferences: {raw_power: 0.7, frugality: 0.3, independence: false, allow_vlms: state.allowVlms},
         top_k: 3,
       };
       res = await apiPost('/api/chat', payload);
@@ -307,11 +316,16 @@ function renderAttachments() {
 
 function onFilesPicked(fileList) {
   for (const f of fileList) {
-    if (f.type.startsWith('audio/') || /\.(wav|mp3|m4a|flac|ogg|opus|aac)$/i.test(f.name)) {
-      state.attachments.push(f);
-    } else {
-      showToast(`Skipped ${f.name} — only audio is supported for now.`);
+    const kind = classifyFile(f);
+    if (!kind) {
+      showToast(`Skipped ${f.name} — only audio, image, or PDF.`);
+      continue;
     }
+    if (kind === 'image' && !state.allowVlms) {
+      showToast(`Skipped ${f.name} — enable "Allow vision-language" in Settings to attach images.`);
+      continue;
+    }
+    state.attachments.push(f);
   }
   renderAttachments();
 }
@@ -384,6 +398,7 @@ async function saveSettings(ev) {
   }
   try {
     await apiPost('/api/settings', next);
+    state.allowVlms = !!next.enable_vlms;
     showToast('Saved');
     closeSettings();
   } catch (err) {
@@ -413,5 +428,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   refreshConversations();
+  refreshPreferences();
   $('prompt').focus();
 });

@@ -360,6 +360,41 @@ class TestRunRoiteletChat:
         # Synthesis still came back.
         assert response.synthesis.content == 'Synthesized from survivors.'
 
+    async def test_all_candidates_failed_raises_no_judge_call(
+        self, isolated_state, monkeypatch
+    ):
+        """When every model fails, the pipeline raises rather than fabricating
+        a fake synthesis — and crucially, the judge is NOT invoked."""
+        from core.router import RoiteletRouter
+
+        prompt = 'Anything.'
+        dry_run = RoiteletRouter().route(prompt, RouterPreferences(), top_k=3)
+        # Fail all selected ids.
+        monkeypatch.setattr(
+            'core.pipeline.get_provider_client',
+            _make_fake_provider(failures=set(dry_run.selected_model_ids)),
+        )
+
+        judge_calls = {'count': 0}
+
+        async def _exploding_judge(*_a, **_kw):
+            judge_calls['count'] += 1
+            raise AssertionError('Judge must not run when every candidate failed.')
+
+        monkeypatch.setattr('core.pipeline.judge_and_synthesize', _exploding_judge)
+
+        from core.pipeline import AllCandidatesFailedError, run_roitelet_chat
+
+        with pytest.raises(AllCandidatesFailedError) as info:
+            await run_roitelet_chat(
+                ChatRequest(prompt=prompt, preferences=RouterPreferences())
+            )
+
+        assert judge_calls['count'] == 0
+        # The error carries the failed responses so the API layer can detail them.
+        assert len(info.value.responses) == 3
+        assert all(r.error for r in info.value.responses)
+
 
 class TestJudgeFallback:
     """When the local judge returns empty content, the synthesis result
@@ -405,8 +440,10 @@ class TestJudgeFallback:
         assert result.content == 'THE-TOP-CANDIDATE-ANSWER'
         # The judge_summary must admit the judge was unreachable.
         assert 'unavailable' in result.judge_summary.lower()
-        # Winners reflect reality: the top candidate.
-        assert result.winning_model_ids == [top.model_id]
+        # No winners recorded: a silent judge MUST NOT feed Elo with a
+        # fabricated reward. The fallback content is best-effort, the
+        # reward signal is honest.
+        assert result.winning_model_ids == []
 
 
 class TestEstimateCost:

@@ -137,31 +137,51 @@ class TestDetectCapabilities:
 # ---------------------------------------------------------------------------
 
 class TestParseWinners:
+    """Anonymized winners parser — fails closed on garbage, never silently picks one."""
+
+    VALID = {"ab3c9f1d", "9e2f4a17", "1c0e7b22"}
+
     def test_single_winner(self):
-        assert parse_winners("Great answer.\nWINNERS: 2") == [2]
+        assert parse_winners(
+            "Great answer.\n===WINNERS===\nab3c9f1d\n===END===",
+            self.VALID,
+        ) == ["ab3c9f1d"]
 
     def test_multiple_winners(self):
-        assert parse_winners("Both good.\nWINNERS: 1, 3") == [1, 3]
+        assert parse_winners(
+            "Both good.\n===WINNERS===\nab3c9f1d, 1c0e7b22\n===END===",
+            self.VALID,
+        ) == ["ab3c9f1d", "1c0e7b22"]
 
-    def test_fallback_when_missing(self):
-        assert parse_winners("No winners line here.") == [1]
+    def test_empty_when_missing(self):
+        # No marker at all — fail closed (NOT default to first candidate).
+        assert parse_winners("Plain prose, no marker here.", self.VALID) == []
 
-    def test_ignores_non_digits(self):
-        # Non-digit garbage between indices must not drop later winners.
-        assert parse_winners("WINNERS: 1, x, 3") == [1, 3]
-        # A clean numeric list should work fine.
-        assert parse_winners("WINNERS: 2, 3") == [2, 3]
+    def test_unknown_tokens_ignored(self):
+        # Stray hex tokens that don't belong to this call must not contaminate.
+        text = (
+            "===WINNERS===\nab3c9f1d, deadbeef, 9e2f4a17\n===END==="
+        )
+        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
 
-    def test_prose_separators_between_winners(self):
-        # The judge sometimes writes things like "WINNERS: 1 and 3".
-        assert parse_winners("WINNERS: 1 and 3") == [1, 3]
+    def test_prose_separators_between_tokens(self):
+        # Judge sometimes writes "a and b" — tokenizer still recovers both.
+        text = "===WINNERS===\nab3c9f1d and 9e2f4a17\n===END==="
+        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
 
-    def test_trailing_whitespace(self):
-        assert parse_winners("WINNERS: 1 ") == [1]
+    def test_close_marker_missing(self):
+        # Truncated output: open marker present, close marker missing — still parse.
+        text = "Prose.\n===WINNERS===\nab3c9f1d, 9e2f4a17"
+        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
 
-    def test_multiline_content_before_winners(self):
-        text = "Candidate 1 is good.\nCandidate 2 is better.\nWINNERS: 2"
-        assert parse_winners(text) == [2]
+    def test_duplicates_collapsed_in_order(self):
+        text = "===WINNERS===\nab3c9f1d, ab3c9f1d, 9e2f4a17\n===END==="
+        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
+
+    def test_case_insensitive_hex(self):
+        # Judge may uppercase hex; we normalize.
+        text = "===WINNERS===\nAB3C9F1D\n===END==="
+        assert parse_winners(text, self.VALID) == ["ab3c9f1d"]
 
 
 # ---------------------------------------------------------------------------

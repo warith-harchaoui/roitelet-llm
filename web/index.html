@@ -28,9 +28,12 @@
             sysblueHover: '#0071e3',
           },
           borderRadius: {
+            // Continuous 10px corner is the brand radius for cards, inputs,
+            // bubbles. `full` stays at 9999px so circular icon/send buttons
+            // (HIG pattern, esp. iMessage send) are actually circular.
             none: '0', sm: '10px', DEFAULT: '10px', md: '10px',
             lg: '10px', xl: '10px', '2xl': '10px', '3xl': '10px',
-            full: '10px',
+            full: '9999px',
           },
         },
       },
@@ -65,6 +68,18 @@
     .prose-msg ul, .prose-msg ol { padding-left: 1.4em; margin: 0 0 0.75rem 0; }
     .prose-msg li { margin-bottom: 0.25rem; }
     .prose-msg h1, .prose-msg h2, .prose-msg h3 { font-weight: 600; margin: 1rem 0 0.5rem; }
+    /* HIG keyboard-shortcut glyphs: rendered tight, no `+` separator. */
+    kbd.kbd { font-family: inherit; font-weight: 600; letter-spacing: 0.02em; }
+    /* HIG accessibility: honor system "reduce motion" — kill transitions and
+       animations rather than half-applying them. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body class="h-full bg-white dark:bg-[#1c1c1e] text-gray-900 dark:text-gray-100 font-sans">
@@ -78,7 +93,7 @@
           <img src="/assets/roitelet.png" alt="Roitelet" width="22" height="22" class="rounded-[10px]">
           <span class="text-[13px] font-semibold tracking-tight">Roitelet</span>
         </div>
-        <button id="newChatBtn" class="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 transition-colors" title="New chat — ⌘N">
+        <button id="newChatBtn" class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" title="New chat — ⌘N" aria-label="New chat">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
       </div>
@@ -101,7 +116,7 @@
       <!-- Sticky header with subtle translucency. -->
       <header class="sticky top-0 z-10 h-12 px-5 flex items-center justify-between bg-white/70 dark:bg-black/30 backdrop-blur-xl border-b border-gray-200/80 dark:border-white/[0.08]">
         <div class="flex items-center gap-2 min-w-0">
-          <button id="mobileSidebarBtn" class="md:hidden p-1.5 hover:bg-black/5 dark:hover:bg-white/10">
+          <button id="mobileSidebarBtn" class="md:hidden w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Open menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
           <h1 id="conversationTitle" class="text-[14px] font-semibold tracking-tight truncate">New chat</h1>
@@ -137,14 +152,14 @@
               <textarea id="prompt" rows="1" placeholder="Message Roitelet…"
                 class="w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-[1.4] focus:outline-none placeholder-gray-400 max-h-[200px]"></textarea>
             </div>
-            <button type="submit" id="sendBtn"
-              class="shrink-0 w-10 h-10 bg-sysblue hover:bg-sysblueHover text-white flex items-center justify-center shadow-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
+            <button type="submit" id="sendBtn" aria-label="Send"
+              class="shrink-0 w-11 h-11 rounded-full bg-sysblue hover:bg-sysblueHover text-white flex items-center justify-center shadow-sm active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
               <svg id="sendIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-              <span id="sendSpinner" class="hidden w-4 h-4 border-2 border-white/30 border-t-white animate-spin"></span>
+              <span id="sendSpinner" class="hidden w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
             </button>
           </form>
           <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2 text-center select-none">
-            <kbd class="font-sans">⌘</kbd>+<kbd class="font-sans">↵</kbd> send · <kbd class="font-sans">⌘</kbd>+<kbd class="font-sans">N</kbd> new chat
+            <kbd class="kbd">⌘↵</kbd> send · <kbd class="kbd">⌘N</kbd> new chat
           </p>
         </div>
       </div>
@@ -158,7 +173,7 @@
       <div class="bg-white dark:bg-[#1c1c1e] shadow-2xl w-full md:max-w-lg max-h-[90vh] md:max-h-[80vh] flex flex-col overflow-hidden">
         <div class="px-5 py-3.5 border-b border-gray-200 dark:border-white/[0.08] flex items-center justify-between">
           <h2 class="text-[15px] font-semibold tracking-tight">Settings</h2>
-          <button id="closeSettingsBtn" class="p-1.5 hover:bg-black/5 dark:hover:bg-white/10">
+          <button id="closeSettingsBtn" class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Close settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -166,8 +181,8 @@
           <!-- injected by JS -->
         </form>
         <div class="px-5 py-3 border-t border-gray-200 dark:border-white/[0.08] flex justify-end gap-2">
-          <button type="button" id="cancelSettingsBtn" class="px-4 py-1.5 text-[13px] font-medium hover:bg-black/5 dark:hover:bg-white/10">Cancel</button>
-          <button type="submit" form="settingsForm" class="px-4 py-1.5 text-[13px] font-semibold bg-sysblue text-white hover:bg-sysblueHover">Save</button>
+          <button type="button" id="cancelSettingsBtn" class="min-h-[36px] px-4 py-1.5 text-[13px] font-medium hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">Cancel</button>
+          <button type="submit" form="settingsForm" class="min-h-[36px] px-4 py-1.5 text-[13px] font-semibold bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">Save</button>
         </div>
       </div>
     </div>
