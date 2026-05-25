@@ -73,6 +73,19 @@ _OPENROUTER_DEFAULTS: Dict[str, Any] = {
     'latency_s': 4.5,
     'energy_kwh': 0.00060,
 }
+# Generic OpenAI-compatible endpoint defaults. Conservative pricing
+# stand-in — the operator should override the prior with a real cost
+# estimate via the bootstrap file once they know the provider's
+# published rate. Defaults skew toward "moderately priced cloud LLM"
+# so the cost-budget regime can still gate it sanely.
+_OPENAI_COMPATIBLE_DEFAULTS: Dict[str, Any] = {
+    'provider': 'openai-compatible',
+    'local': False,
+    'vlm': False,
+    'pricing': {'input_per_1k': 0.002, 'output_per_1k': 0.006},
+    'latency_s': 4.0,
+    'energy_kwh': 0.00060,
+}
 
 # TTL for the live Ollama model cache (seconds). After this delay the next
 # route call will trigger a background refresh.
@@ -259,6 +272,28 @@ class ModelRegistry:
                     pricing=dict(_OPENROUTER_DEFAULTS['pricing']),
                     latency_s=_OPENROUTER_DEFAULTS['latency_s'],
                     energy_kwh=_OPENROUTER_DEFAULTS['energy_kwh'],
+                    capabilities=dict(_DEFAULT_CAPABILITIES),
+                )
+        # Generic OpenAI-compatible endpoints: any paid LLM with an
+        # ``/v1/chat/completions`` interface can be added by name here,
+        # paired with ``openai_compatible_base_url`` + the matching API
+        # key. The factory routes ``openai-compatible/<name>`` requests
+        # through :class:`OpenAICompatibleClient` against that endpoint.
+        for model_name in (getattr(app_settings, 'paid_openai_compatible_models', None) or []):
+            model_id = (
+                f'openai-compatible/{model_name}'
+                if not model_name.startswith('openai-compatible/')
+                else model_name
+            )
+            if model_id not in self.models:
+                self.models[model_id] = ModelSpec(
+                    model_id=model_id,
+                    provider='openai-compatible',
+                    local=False,
+                    vlm=False,
+                    pricing=dict(_OPENAI_COMPATIBLE_DEFAULTS['pricing']),
+                    latency_s=_OPENAI_COMPATIBLE_DEFAULTS['latency_s'],
+                    energy_kwh=_OPENAI_COMPATIBLE_DEFAULTS['energy_kwh'],
                     capabilities=dict(_DEFAULT_CAPABILITIES),
                 )
 

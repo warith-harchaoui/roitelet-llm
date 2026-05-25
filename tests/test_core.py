@@ -195,16 +195,192 @@ class TestRouterPreferences:
         assert prefs.frugality == 0.3
         assert prefs.independence is False
         assert prefs.allow_vlms is False
+        assert prefs.max_cost_usd is None
 
     def test_custom(self):
         prefs = RouterPreferences(raw_power=1.0, frugality=0.0, independence=True)
         assert prefs.independence is True
+
+    def test_max_cost_round_trip(self):
+        prefs = RouterPreferences(max_cost_usd=0.005)
+        loaded = RouterPreferences.model_validate(prefs.model_dump())
+        assert loaded.max_cost_usd == 0.005
 
     def test_serialise_round_trip(self):
         prefs = RouterPreferences(raw_power=0.5, frugality=0.5, allow_vlms=True)
         dumped = prefs.model_dump()
         loaded = RouterPreferences.model_validate(dumped)
         assert loaded == prefs
+
+
+# ---------------------------------------------------------------------------
+# Regime detection: hybrid routing math
+# ---------------------------------------------------------------------------
+
+
+class TestDetectRegime:
+    """Regime detector must classify routing calls into stable buckets.
+
+    Each test isolates one branch of the if-ladder in
+    :func:`core.regimes.detect_regime` so a future re-order shows up as
+    a single targeted failure rather than a cascade.
+    """
+
+    def test_budget_takes_precedence(self):
+        from core.regimes import detect_regime
+        regime = detect_regime(
+            'short prompt',
+            RouterPreferences(max_cost_usd=0.001),
+            {'reasoning': 1.0},
+        )
+        assert regime.name == 'budget_constrained'
+        assert regime.cost_budget_usd == 0.001
+
+    def test_trivial_prompt(self):
+        from core.regimes import detect_regime
+        regime = detect_regime(
+            'what is 2 + 2?',
+            RouterPreferences(),
+            {'reasoning': 1.0},
+        )
+        assert regime.name == 'trivial'
+        assert regime.suggested_top_k == 1
+
+    def test_long_context(self):
+        from core.regimes import detect_regime
+        long_prompt = 'x' * 5000
+        regime = detect_regime(long_prompt, RouterPreferences(), {'long_context': 0.4})
+        assert regime.name == 'long_context'
+
+    def test_dominant_capability(self):
+        from core.regimes import detect_regime
+        # > 80 chars so 'trivial' doesn't fire; one capability owns 80 %.
+        prompt = (
+            'Please refactor this Python module so the database access '
+            'is mockable in unit tests without touching call sites.'
+        )
+        regime = detect_regime(prompt, RouterPreferences(), {'coding': 0.8, 'reasoning': 0.2})
+        assert regime.name == 'capability_dominant'
+
+    def test_ambiguous(self):
+        from core.regimes import detect_regime
+        # Long enough not to trip the trivial heuristic, but no
+        # capability above 30 % — keyword detector found nothing.
+        prompt = (
+            'How are you doing today? Anything new on your end since '
+            'last week? Curious to hear what you have been up to lately, '
+            'no particular topic in mind here.'
+        )
+        regime = detect_regime(
+            prompt,
+            RouterPreferences(),
+            {'reasoning': 0.25, 'writing': 0.20, 'analysis': 0.15},
+        )
+        assert regime.name == 'ambiguous'
+
+    def test_default_when_none_match(self):
+        from core.regimes import detect_regime
+        regime = detect_regime(
+            'Write a unit test that asserts the cache eviction strategy '
+            'fires after a TTL window of 30 seconds.',
+            RouterPreferences(),
+            {'coding': 0.45, 'reasoning': 0.45, 'analysis': 0.10},
+        )
+        assert regime.name == 'default'
+
+
+# ---------------------------------------------------------------------------
+# Router: cost-budget regime filters candidates pre-scoring
+# ---------------------------------------------------------------------------
+
+
+class TestCostBudgetRouting:
+    """A tight budget must exclude expensive candidates from selection."""
+
+    def test_budget_excludes_paid_models(self, tmp_path):
+        """A $0 budget collapses the selection to free (local) candidates."""
+        from core.router import RoiteletRouter
+        from core.storage import get_storage
+
+        # Pristine working dir so registry sees clean state.
+        with pytest.MonkeyPatch().context() as m:
+            m.setenv('ROITELET_DATA_DIR', str(tmp_path))
+            # Drop any cached singletons so they pick up the new env.
+            from core.config import get_settings
+            get_settings.cache_clear()
+            get_storage.cache_clear()
+            # Seed the data directory with the project's real bootstrap
+            # priors so the router has the standard pool to filter.
+            import shutil
+            src = Path(__file__).resolve().parent.parent / 'data' / 'bootstrap'
+            (tmp_path / 'bootstrap').mkdir(parents=True, exist_ok=True)
+            shutil.copy(src / 'model_priors.json', tmp_path / 'bootstrap' / 'model_priors.json')
+
+            from core.registry import ollama_cache
+            ollama_cache._models = []
+            ollama_cache._fetched_at = time.monotonic()
+
+            router = RoiteletRouter()
+            decision = router.route(
+                'Write a Python function that reverses a list.',
+                RouterPreferences(max_cost_usd=0.0),
+                top_k=3,
+            )
+
+            # Cost-budget regime must show up in reasoning.
+            assert any('budget_constrained' in r for r in decision.reasoning), decision.reasoning
+            # Every selected candidate must be free (sum of pricing == 0).
+            for candidate in decision.candidates:
+                if candidate.selected:
+                    assert candidate.estimated_cost_usd <= 0.0, (
+                        f'{candidate.model_id} exceeded $0 budget: {candidate.estimated_cost_usd}'
+                    )
+
+            get_settings.cache_clear()
+            get_storage.cache_clear()
+
+    def test_no_budget_leaves_all_candidates(self, tmp_path):
+        """Without a budget, paid candidates remain in the pool."""
+        from core.router import RoiteletRouter
+        from core.storage import get_storage
+
+        with pytest.MonkeyPatch().context() as m:
+            m.setenv('ROITELET_DATA_DIR', str(tmp_path))
+            from core.config import get_settings
+            get_settings.cache_clear()
+            get_storage.cache_clear()
+            import shutil
+            src = Path(__file__).resolve().parent.parent / 'data' / 'bootstrap'
+            (tmp_path / 'bootstrap').mkdir(parents=True, exist_ok=True)
+            shutil.copy(src / 'model_priors.json', tmp_path / 'bootstrap' / 'model_priors.json')
+
+            # Persist API-key sentinels so remote candidates aren't auto-pruned.
+            from core.schemas import AppSettingsPayload
+            settings_payload = AppSettingsPayload(
+                openrouter_api_key='sk-test',
+                openai_api_key='sk-test',
+            )
+            storage = get_storage()
+            storage.save_app_settings(settings_payload)
+
+            from core.registry import ollama_cache
+            ollama_cache._models = []
+            ollama_cache._fetched_at = time.monotonic()
+
+            router = RoiteletRouter()
+            decision = router.route(
+                'Write a Python function that reverses a list.',
+                RouterPreferences(),
+                top_k=3,
+            )
+
+            cost_values = [c.estimated_cost_usd for c in decision.candidates]
+            assert any(cost > 0 for cost in cost_values), (
+                'Paid candidates should be present when budget is None'
+            )
+
+            get_settings.cache_clear()
+            get_storage.cache_clear()
 
 
 # ---------------------------------------------------------------------------

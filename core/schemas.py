@@ -244,6 +244,14 @@ class AppSettingsPayload(BaseModel):
     independence_local_only: bool = False
     selected_ollama_models: List[str] = Field(default_factory=list)
     paid_openrouter_models: List[str] = Field(default_factory=list)
+    # Any paid LLM with an OpenAI-compatible chat-completions endpoint can
+    # be added without a bootstrap edit. Pair these with
+    # ``openai_compatible_base_url`` + ``openai_compatible_api_key``; each
+    # entry becomes a registry model under the ``openai-compatible``
+    # provider. Useful for Mistral, Together, Groq, llama.cpp's
+    # ``llama-server``, and any future provider that ships an
+    # ``/v1/chat/completions`` interface.
+    paid_openai_compatible_models: List[str] = Field(default_factory=list)
 
     def masked(self) -> 'AppSettingsPayload':
         """Return a copy with non-empty secret fields replaced by ``SECRET_MASK``."""
