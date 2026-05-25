@@ -232,6 +232,42 @@ routes ``openai-compatible/<name>`` requests against the configured
 through in [`docs/ADDING_PAID_LLM.md`](docs/ADDING_PAID_LLM.md) and
 [`docs/ADDING_LOCAL_LLM.md`](docs/ADDING_LOCAL_LLM.md).
 
+### Refreshing the bootstrap priors
+
+`data/bootstrap/model_priors.json` is curated, not generated, but
+`scripts/crawl_arena.py` exists to refresh the **reasoning** /
+**analysis** numbers from a Chatbot Arena snapshot whenever model
+relative strength shifts (typically after a major model release).
+
+```bash
+# 1. Refresh from the LMSYS leaderboard page (or any URL / local file
+#    with parseable Elo numbers).
+python scripts/crawl_arena.py https://huggingface.co/spaces/lmsys/chatbot-arena-leaderboard
+
+# 2. (optional) Validate the resulting JSON with the test suite.
+pytest tests/test_scripts.py -q
+```
+
+Every touched entry receives a ``_meta`` block recording lineage:
+
+```json
+"openai/gpt-4.1": {
+  ...,
+  "_meta": {
+    "source": "https://huggingface.co/spaces/lmsys/chatbot-arena-leaderboard",
+    "elo_raw": 1287,
+    "elo_normalized": 1.20,
+    "refreshed_at": "2026-05-25T19:30:00+00:00"
+  }
+}
+```
+
+Entries the crawler couldn't match in the leaderboard are left
+untouched (no ``_meta`` mutation), so manual edits to local-only or
+specialist priors survive a refresh. Updates are smoothed 50/50 with
+the existing prior to avoid one bad leaderboard scrape wiping out
+months of accumulated Elo signal.
+
 ---
 
 ## 5. The Elo feedback loop
