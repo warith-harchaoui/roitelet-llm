@@ -20,9 +20,10 @@ flowchart LR
 
     subgraph API["api/main.py — FastAPI :8000"]
         EP1["/api/chat — native"]
-        EP2["/v1/chat/completions"]
-        EP3["/mcp — JSON-RPC"]
-        EP4["/api/conversations<br/>/api/telemetry<br/>/api/settings"]
+        EP2["/api/chat/multimodal — files"]
+        EP3["/v1/chat/completions"]
+        EP4["/mcp — JSON-RPC"]
+        EP5["/api/conversations<br/>/api/telemetry<br/>/api/settings"]
     end
 
     subgraph Core["core/"]
@@ -32,6 +33,7 @@ flowchart LR
         REG["registry.ModelRegistry<br/>(+ rolling Elo)"]
         JUDGE["judge.judge_and_synthesize"]
         FACT["providers.factory.get_provider_client"]
+        MM["multimodal/<br/>audio · image · pdf"]
     end
 
     subgraph Providers["core/providers"]
@@ -50,6 +52,8 @@ flowchart LR
     WEB -- "HTTP" --> API
     EXT -- "HTTP" --> API
     API --> PIPE
+    EP2 -- "extract → text" --> MM
+    MM --> PIPE
 
     PIPE --> ROUTER
     ROUTER --> CAP
@@ -72,7 +76,7 @@ parallel, the *judge* (a local model) synthesises one answer, and the
 
 ## 2. Single-turn request lifecycle
 
-The whole pipeline lives in `core/core/pipeline.py:run_roitelet_chat`. Every
+The whole pipeline lives in `core/pipeline.py:run_roitelet_chat`. Every
 frontend ends up calling this one function. Below is exactly what happens for
 one prompt.
 
@@ -118,10 +122,16 @@ A few details worth pinning down:
 - **Parallel fan-out** uses `asyncio.gather` — the slowest of the K calls sets
   the wall-clock latency, not the sum.
 - **Partial failure is tolerated**: if one provider errors, the judge only
-  sees the survivors. If *all* fail, the judge still runs (with empty content)
-  to keep the response shape consistent.
+  sees the survivors. If *all* candidates fail, the pipeline raises
+  `AllCandidatesFailedError` — the API layer maps this to **HTTP 502** with the
+  per-model failures rather than fabricating a fake synthesis from empty
+  content.
 - **Telemetry records every response**, including failed ones — failures must
   be visible in the audit trail, not hidden.
+- **Multimodal preprocessing** happens *before* the pipeline runs:
+  `/api/chat/multimodal` transcribes audio, captions images, and extracts PDF
+  text using local models, then concatenates the result into the prompt that
+  flows into the text-only pipeline above.
 
 ---
 
@@ -262,11 +272,12 @@ half-formed mix.
 
 | Module | Lines | What to look for |
 |---|---|---|
-| `core/core/pipeline.py` | ~170 | The whole orchestration in one file — start here |
-| `core/core/router.py` | ~115 | The scoring formula and the filter logic |
-| `core/core/registry.py` | ~380 | Bootstrap loading, live discovery, Elo update |
-| `core/core/capabilities.py` | ~125 | Keyword lists + normalisation |
-| `core/core/judge.py` | ~95 | Prompt building, WINNERS parsing, synthesis fallback |
+| `core/pipeline.py` | ~225 | The whole orchestration in one file — start here |
+| `core/router.py` | ~120 | The scoring formula and the filter logic |
+| `core/registry.py` | ~460 | Bootstrap loading, live discovery, Elo update |
+| `core/capabilities.py` | ~125 | Keyword lists + normalisation |
+| `core/judge.py` | ~255 | Anonymized handles, WINNERS sentinel, fail-closed parse |
+| `core/multimodal/` | ~420 | Audio (whisper.cpp + NeMo), image (Ollama VLM), PDF (kreuzberg) |
 | `core/providers/openai_compatible.py` | ~120 | The contract every remote provider must satisfy |
-| `api/main.py` | ~300 | All three API surfaces in one file |
-| `tests/test_pipeline.py` | ~230 | Worked example of running the pipeline end-to-end with stubs |
+| `api/main.py` | ~490 | All four API surfaces (native, multimodal, OpenAI-compat, MCP) in one file |
+| `tests/test_pipeline.py` | ~470 | Worked example of running the pipeline end-to-end with stubs |

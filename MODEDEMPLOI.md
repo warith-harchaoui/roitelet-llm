@@ -69,6 +69,20 @@ Vous voyez :
 - l’énergie estimée,
 - le CO₂ estimé.
 
+### Pièces jointes (multimodal)
+Le champ de saisie accepte des pièces jointes. Chaque fichier est converti en
+texte **localement** avant que la pipeline standard ne s'exécute — le routeur,
+le fan-out des candidats et le juge restent purement textuels :
+
+| Format | Pipeline | Notes |
+|---|---|---|
+| Image (`.png`, `.jpg`, `.webp`, ...) | Légende via VLM Ollama local (`qwen2.5vl:7b` par défaut) | Contrôlée par l'interrupteur **Allow VLMs** de la page Config |
+| PDF (`.pdf`) | `kreuzberg` (texte natif pdfium, OCR Tesseract en secours) | Nécessite `pip install -e .[multimodal]` |
+| Audio (`.wav`, `.mp3`, `.m4a`, ...) | Transcription `pywhispercpp` + diarisation NeMo Sortformer | Nécessite `pip install -e .[multimodal]` |
+
+Les formats inconnus sont ignorés et la mention `[Note] Skipped: ...` est
+ajoutée au prompt afin de rendre l'ignorance visible.
+
 ## 6. Utilisation en ligne de commande (CLI)
 
 Mode REPL interactif (inspiré par Gemini CLI) :
@@ -125,3 +139,20 @@ Pour l’instant, l’apprentissage continu est volontairement simple :
 **mise à jour partielle des scores Elo** en fonction des gagnants observés et des capacités détectées dans le prompt.
 
 C’est la bonne première étape avant un routeur plus avancé de type classifieur contextuel ou bandit.
+
+## 10. Verrouiller l'API (déploiements LAN / multi-utilisateurs)
+
+Le mode local mono-utilisateur par défaut laisse tous les endpoints ouverts.
+Pour un déploiement partagé, définissez `ROITELET_API_TOKEN` dans `.env` :
+
+```env
+ROITELET_API_TOKEN=changez-moi
+```
+
+Une fois défini, tous les endpoints de chat, settings, conversations et
+télémétrie exigent `Authorization: Bearer <token>`. `/healthz`, `/v1/models`
+et les fichiers statiques restent publics pour les sondes de santé.
+
+> **À noter** — l'interface web fournie n'envoie pas encore l'en-tête bearer.
+> Avec un token configuré, préférez le CLI, l'endpoint OpenAI-compatible ou
+> un reverse proxy qui injecte l'en-tête, en attendant que l'UI gère le token.

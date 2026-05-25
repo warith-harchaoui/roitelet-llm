@@ -139,7 +139,7 @@ async def save_app_settings(
     return {'status': 'saved'}
 
 
-@app.get('/api/conversations')
+@app.get('/api/conversations', dependencies=[Depends(require_api_token)])
 async def list_conversations(
     storage: StorageManager = Depends(get_storage),
 ) -> List[Dict[str, Any]]:
@@ -147,7 +147,7 @@ async def list_conversations(
     return [conversation.model_dump() for conversation in storage.list_conversations()]
 
 
-@app.get('/api/conversations/{conversation_id}')
+@app.get('/api/conversations/{conversation_id}', dependencies=[Depends(require_api_token)])
 async def get_conversation(
     conversation_id: str,
     storage: StorageManager = Depends(get_storage),
@@ -159,7 +159,7 @@ async def get_conversation(
     return conversation.model_dump()
 
 
-@app.get('/api/telemetry')
+@app.get('/api/telemetry', dependencies=[Depends(require_api_token)])
 async def list_telemetry(
     storage: StorageManager = Depends(get_storage),
 ) -> List[Dict[str, Any]]:
@@ -206,7 +206,7 @@ async def _run_chat_or_502(payload: ChatRequest):
         ) from exc
 
 
-@app.post('/api/chat')
+@app.post('/api/chat', dependencies=[Depends(require_api_token)])
 async def roitelet_chat(payload: ChatRequest):
     """Run one native Roitelet chat turn.
 
@@ -273,7 +273,7 @@ def _modality_of(upload: UploadFile) -> str | None:
     return None
 
 
-@app.post('/api/chat/multimodal')
+@app.post('/api/chat/multimodal', dependencies=[Depends(require_api_token)])
 async def roitelet_chat_multimodal(
     prompt: str = Form(''),
     conversation_id: str | None = Form(None),

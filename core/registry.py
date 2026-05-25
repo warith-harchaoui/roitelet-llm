@@ -393,6 +393,9 @@ class ModelRegistry:
         prior = spec.capabilities.get(capability, 0.45)
         adjustment = self.elo_state.get(model_id, {}).get(capability, 0.0)
         global_adjustment = self.elo_state.get(model_id, {}).get('global', 0.0)
+        # Clamp to [0.0, 1.5]: the 1.5 ceiling lets winners overshoot the
+        # nominal prior range [0, 1] but caps runaway accumulation so Elo
+        # never fully drowns out the bootstrap prior.
         return max(0.0, min(1.5, prior + adjustment + 0.5 * global_adjustment))
 
     def update_elo(

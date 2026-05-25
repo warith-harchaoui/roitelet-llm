@@ -34,9 +34,11 @@ From your perspective, it feels like using one unified super-brain API. The rest
 - 🌐 **Cross-family Fusion:** The synthesis judge fuses K parallel answers from *different* OSS families (Qwen + Llama + Gemma + Phi by default), not three flavours of one provider — better answers than any single model.
 - ⚡ **Local Synthesis:** The fusing judge is a local LLM via Ollama, keeping the final pass private and free.
 - 🌍 **Frontier Integrations:** Optional paid candidates through OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity.
+- 🖼️ **Multimodal Attachments:** Drop images, PDFs, or audio into the chat — extracted locally (Ollama VLM caption, kreuzberg PDF text, whisper.cpp + NeMo diarization) before the text pipeline runs.
 - 📊 **Local Telemetry & Cost Tracking:** Dashboard monitoring for token costs, latency, simulated energy (kWh), and carbon footprints (gCO₂e).
 - 🔄 **Self-Learning:** Capability-conditioned rolling Elo update loop automatically prioritises models that perform better over time.
 - 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC.
+- 🔐 **Optional Bearer-Token Gate:** Set `ROITELET_API_TOKEN` to lock down every mutating + listing endpoint for LAN deployments. Defaults to a no-op for local-only single-user UX.
 
 ---
 
@@ -102,24 +104,33 @@ chmod +x start.sh
 ```text
 roitelet-llm/
 ├── core/               # Shared backend logic, router, storage, capabilities
-├── api/                # FastAPI application (OpenAI-compatible & MCP endpoints)
+│   ├── pipeline.py     # End-to-end orchestration (router → fan-out → judge → Elo)
+│   ├── router.py       # Capability-weighted scoring + top-K selection
+│   ├── registry.py     # Bootstrap + user + live-Ollama model pool, rolling Elo
+│   ├── judge.py        # Anonymized synthesis with sentinel-delimited winners
+│   ├── capabilities.py # Lexical capability detection
+│   ├── providers/      # Ollama + OpenAI-compatible clients (OpenRouter, OpenAI, ...)
+│   └── multimodal/     # Local audio / image / PDF extractors
+├── api/                # FastAPI application (native, OpenAI-compatible, MCP)
 ├── web/                # Vanilla-JS control room served at `/` by the API
 ├── cli/                # Command-line interface and terminal REPL
+├── docs/               # Topic-specific guides (e.g. ADDING_PAID_LLM.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # Benchmark-inspired default Elo priors
-├── scripts/            # Crawler tooling and autonomous updates
-├── tests/
-│   ├── test_core.py    # Pytest for core engine
-│   ├── test_api.py     # Pytest for API layer
-│   ├── test_pipeline.py# Pytest for the end-to-end pipeline
-│   └── test_cli.py     # Pytest for CLI tools
+├── scripts/            # Crawler tooling, asset vendor, pull_defaults.sh
+├── tests/              # Pytest suite (core, api, pipeline, cli, eval)
+├── assets/             # Branding (logo)
 ├── start.sh            # Launcher script
-├── Dockerfile          # Containerization multi-stage build
-├── docker-compose.yml  # Deploy stack definitions
+├── Dockerfile          # Multi-stage container build
+├── docker-compose.yml  # Deploy stack definition
 ├── environment.yaml    # Conda environment manifest
 ├── requirements.txt    # Pip dependencies
-├── INSTALL.md          # Comprehensive English install guide
-├── INSTALLER.md        # Comprehensive French install guide
+├── MECHANISM.md        # Architecture deep-dive (Mermaid diagrams)
+├── INSTALL.md          # English install guide
+├── MANUAL.md           # English usage guide
+├── INSTALLER.md        # French install guide
+├── MODEDEMPLOI.md      # French usage guide
+├── LISEZMOI.md         # French README mirror
 └── .env.example
 ```
 

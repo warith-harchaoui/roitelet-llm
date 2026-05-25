@@ -16,6 +16,7 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import uuid
@@ -26,6 +27,8 @@ from typing import Any, Dict, List, Optional
 
 from .config import get_settings
 from .schemas import AppSettingsPayload, Conversation, ConversationMessage, TelemetryRecord
+
+logger = logging.getLogger(__name__)
 
 
 class StorageManager:
@@ -206,7 +209,8 @@ class StorageManager:
                     match_cached_at = (
                         datetime.fromisoformat(raw_ts) if raw_ts else None
                     )
-        except Exception:
+        except Exception as exc:
+            logger.warning('Provider cache read failed for %s: %s', provider_name, exc)
             return None
         if match is None:
             return None
@@ -235,8 +239,8 @@ class StorageManager:
         try:
             with path.open('a', encoding='utf-8') as f:
                 f.write(json.dumps(record, ensure_ascii=False) + '\n')
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning('Provider cache write failed for %s: %s', provider_name, exc)
 
     def settings_path(self) -> Path:
         """Return the path used for persisted UI settings."""

@@ -254,6 +254,11 @@ def _make_registry(extra_ollama: List[str] = None, extra_openrouter: List[str] =
         ollama_base_url='',  # disable configure() so refresh isn't triggered
         selected_ollama_models=extra_ollama or [],
         paid_openrouter_models=extra_openrouter or [],
+        # Sentinel keys so _prune_unauthorized_remotes leaves bootstrap
+        # remotes in place. The tests don't make network calls, they only
+        # assert registration shape.
+        openrouter_api_key='sk-test',
+        openai_api_key='sk-test',
     )
     return ModelRegistry(app_settings=payload)
 

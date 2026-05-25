@@ -32,11 +32,14 @@ De votre point de vue, vous recevez une réponse unique comme si vous interrogie
 ## Fonctionnalités
 
 - 🧠 **Routage Dynamique :** Plus besoin de choisir votre modèle.
+- 🌐 **Fusion Multi-Familles :** Le juge fusionne K réponses parallèles issues de *familles OSS différentes* (Qwen + Llama + Gemma + Phi par défaut), pas trois variantes du même fournisseur — la réponse finale est meilleure qu'aucun candidat seul.
 - ⚡ **Synthèse Locale :** Le juge final tourne en local via Ollama, garantissant la confidentialité et le contrôle de l'arbitrage.
 - 🌍 **Intégrations Natives :** Support d'OpenRouter, des points de terminaison compatibles OpenAI, Anthropic, Gemini, Perplexity, etc.
+- 🖼️ **Pièces jointes multimodales :** Glissez images, PDF ou audio dans le chat — extraits localement (légende VLM Ollama, texte PDF par kreuzberg, transcription whisper.cpp + diarisation NeMo) avant la pipeline textuelle.
 - 📊 **Monitoring Coût / Énergie :** Dashboard intégré pour suivre la consommation de tokens, évaluer l'énergie (kWh) et l'empreinte carbone (gCO₂e).
 - 🔄 **Apprentissage Continu :** Un système de mises à jour basées sur un score d'évaluation Elo roule en permanence pour prioriser les modèles les plus pertinents au fil du temps.
 - 🔌 **API Standard :** Expose une route `/v1/chat/completions` (OpenAI-compatible), un point de terminaison natif FastAPI, ainsi qu'un serveur JSON-RPC (MCP).
+- 🔐 **Gate Bearer-Token optionnel :** Définissez `ROITELET_API_TOKEN` pour verrouiller chat, settings, conversations et télémétrie. Désactivé par défaut pour l'usage local mono-utilisateur.
 
 ---
 
@@ -84,24 +87,32 @@ chmod +x start.sh
 ```text
 roitelet-llm/
 ├── core/               # Logique backend, routeur, stockage, capacités
-├── api/                # Application FastAPI (Endpoints compatibles OpenAI & MCP)
+│   ├── pipeline.py     # Orchestration end-to-end (routeur → fan-out → juge → Elo)
+│   ├── router.py       # Scoring pondéré par capacité + sélection top-K
+│   ├── registry.py     # Pool bootstrap + utilisateur + Ollama live, Elo continu
+│   ├── judge.py        # Synthèse anonymisée avec sentinelle de gagnants
+│   ├── capabilities.py # Détection de capacités lexicale
+│   ├── providers/      # Clients Ollama + OpenAI-compatible (OpenRouter, OpenAI, ...)
+│   └── multimodal/     # Extracteurs locaux audio / image / PDF
+├── api/                # FastAPI (natif + OpenAI-compatible + MCP + multimodal)
 ├── web/                # Interface web (JS vanilla, servie sur `/` par l'API)
 ├── cli/                # Interface en ligne de commande (REPL terminal)
+├── docs/               # Guides ciblés (ex. ADDING_PAID_LLM.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # Base d'informations avec scores Elo
-├── scripts/            # Crawler de données d'évaluation
-├── tests/
-│   ├── test_core.py    # Suite de tests Pytest (Moteur central)
-│   ├── test_api.py     # Suite de tests Pytest (API)
-│   ├── test_pipeline.py# Suite de tests Pytest (Pipeline end-to-end)
-│   └── test_cli.py     # Suite de tests Pytest (CLI)
+├── scripts/            # Crawler, vendor JS, pull_defaults.sh
+├── tests/              # Suite pytest (core, api, pipeline, cli, eval)
+├── assets/             # Branding (logo)
 ├── start.sh            # Script de lancement
 ├── Dockerfile          # Fichier de build Docker multi-stade
 ├── docker-compose.yml  # Déploiement en conteneur
 ├── environment.yaml    # Dépendances Conda
 ├── requirements.txt    # Dépendances natives Python (pip)
-├── INSTALLER.md        # Guide manuel avancé (FR)
-├── INSTALL.md          # Guide manuel avancé (EN)
+├── MECHANISM.md        # Architecture détaillée (diagrammes Mermaid)
+├── INSTALLER.md        # Guide d'installation (FR)
+├── INSTALL.md          # Guide d'installation (EN)
+├── MODEDEMPLOI.md      # Manuel d'utilisation (FR)
+├── MANUAL.md           # Manuel d'utilisation (EN)
 └── .env.example
 ```
 

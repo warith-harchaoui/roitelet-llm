@@ -56,6 +56,24 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+### Optional extras
+
+`pyproject.toml` exposes three opt-in feature sets so the OSS quick-start
+stays light:
+
+| Extra | Pulls in | Use when |
+|---|---|---|
+| `dev` | pytest, pytest-asyncio, ruff | Running the test suite or linting |
+| `eval` | deepeval | Running the `@pytest.mark.eval` answer-quality suite |
+| `multimodal` | pywhispercpp, NeMo (~2 GB), soundfile, kreuzberg | Uploading audio / PDF attachments through the web UI |
+
+Install one or several:
+
+```bash
+pip install -e .[dev]
+pip install -e .[multimodal]      # image captioning is server-side via the local Ollama VLM — no extra Python deps
+```
+
 ---
 
 ## Option C — Docker
@@ -174,13 +192,19 @@ Expected health response:
 
 ```bash
 # Install dev dependencies first
-pip install pytest pytest-asyncio
+pip install -e .[dev]
 
-# Run all tests
+# Run the default suite (network-free, ~1 second)
 pytest tests/ -q
+
+# Optional: run the answer-quality eval suite (requires a real local Ollama judge)
+pip install -e .[eval]
+pytest -m eval -q
 ```
 
-All 21 tests are network-free and complete in under a second.
+The default run skips tests marked `@pytest.mark.eval` (slow,
+network-dependent). See `pyproject.toml`'s `[tool.pytest.ini_options]` for the
+marker registry.
 
 ---
 
@@ -221,20 +245,22 @@ docker compose up -d
 ```text
 roitelet-llm/
 ├── core/               # router, registry, judge, pipeline, capabilities
-├── api/                # FastAPI application (OpenAI-compatible & MCP)
+│   ├── providers/      # ollama, openai-compatible (OpenRouter, OpenAI, ...)
+│   └── multimodal/     # audio (whisper.cpp + NeMo), image (Ollama VLM), pdf (kreuzberg)
+├── api/                # FastAPI application (native + OpenAI-compatible + MCP + multimodal)
 ├── web/                # Static control room served at `/` by the API
 ├── cli/                # Command-line interface and terminal REPL
+├── docs/               # Topic-specific guides (e.g. ADDING_PAID_LLM.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # benchmark-inspired prior scores
-├── tests/
-│   ├── test_core.py    # Pytest for core engine
-│   ├── test_api.py     # Pytest for API layer
-│   ├── test_pipeline.py# Pytest for the end-to-end pipeline
-│   └── test_cli.py     # Pytest for CLI tools
+├── tests/              # Pytest suite — core, api, pipeline, cli, scripts, eval
+├── assets/             # Branding (logo)
 ├── start.sh            # launcher script
 ├── Dockerfile          # multi-stage build
 ├── docker-compose.yml  # compose stack
 ├── environment.yaml    # conda environment
 ├── requirements.txt    # pip dependencies
+├── pyproject.toml      # build metadata + optional extras (dev / eval / multimodal)
+├── MECHANISM.md        # Architecture deep-dive (Mermaid diagrams)
 └── .env.example        # environment variable template
 ```

@@ -56,6 +56,24 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+### Extras optionnels
+
+`pyproject.toml` expose trois jeux de dépendances optionnels afin de
+garder le démarrage rapide léger :
+
+| Extra | Inclut | À utiliser quand |
+|---|---|---|
+| `dev` | pytest, pytest-asyncio, ruff | Exécution de la suite de tests ou linting |
+| `eval` | deepeval | Suite d'évaluation `@pytest.mark.eval` (qualité des réponses) |
+| `multimodal` | pywhispercpp, NeMo (~2 Go), soundfile, kreuzberg | Pour les pièces jointes audio / PDF via l'interface web |
+
+Installation :
+
+```bash
+pip install -e .[dev]
+pip install -e .[multimodal]      # la légende d'image est gérée côté serveur par le VLM Ollama local — pas de dépendance Python supplémentaire
+```
+
 ---
 
 ## Option C — Docker
@@ -175,13 +193,19 @@ Réponse attendue du contrôle de santé :
 
 ```bash
 # Installer les dépendances de développement
-pip install pytest pytest-asyncio
+pip install -e .[dev]
 
-# Lancer tous les tests
+# Suite par défaut (sans réseau, ~1 s)
 pytest tests/ -q
+
+# Optionnel : suite d'évaluation qualité (requiert un juge Ollama local)
+pip install -e .[eval]
+pytest -m eval -q
 ```
 
-Les 21 tests ne nécessitent aucune connexion réseau et s'exécutent en moins d'une seconde.
+La suite par défaut ignore les tests marqués `@pytest.mark.eval` (lents,
+dépendants du réseau). Voir `[tool.pytest.ini_options]` dans
+`pyproject.toml` pour la liste des marqueurs.
 
 ---
 
@@ -222,20 +246,22 @@ docker compose up -d
 ```text
 roitelet-llm/
 ├── core/               # routeur, registre, juge, pipeline, capacités
-├── api/                # Application FastAPI (OpenAI-compatible & MCP)
+│   ├── providers/      # ollama, openai-compatible (OpenRouter, OpenAI, ...)
+│   └── multimodal/     # audio (whisper.cpp + NeMo), image (VLM Ollama), pdf (kreuzberg)
+├── api/                # FastAPI (natif + OpenAI-compatible + MCP + multimodal)
 ├── web/                # Client web statique servi sur `/` par l'API
 ├── cli/                # Interface en ligne de commande (REPL)
+├── docs/               # Guides ciblés (ex. ADDING_PAID_LLM.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # scores a priori inspirés des benchmarks
-├── tests/
-│   ├── test_core.py    # Suite pytest (Moteur central)
-│   ├── test_api.py     # Suite pytest (API)
-│   ├── test_pipeline.py# Suite pytest (Pipeline end-to-end)
-│   └── test_cli.py     # Suite pytest (CLI)
+├── tests/              # Suite pytest — core, api, pipeline, cli, scripts, eval
+├── assets/             # Branding (logo)
 ├── start.sh            # script de lancement
 ├── Dockerfile          # construction multi-étapes
 ├── docker-compose.yml  # pile compose
 ├── environment.yaml    # environnement conda
 ├── requirements.txt    # dépendances pip
+├── pyproject.toml      # build + extras optionnels (dev / eval / multimodal)
+├── MECHANISM.md        # Architecture détaillée (diagrammes Mermaid)
 └── .env.example        # modèle de variables d'environnement
 ```
