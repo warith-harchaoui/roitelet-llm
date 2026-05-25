@@ -23,8 +23,23 @@ These tests fix that. Each prompt in `dataset.json` is run through
    the candidate responses (no hallucinated facts via fusion).
 2. **Correctness** — the synthesised answer must match a curated
    reference (`expected_output`).
+3. **Answer relevancy** — the synthesised answer must actually address
+   what the user prompt asked, not drift onto a related-but-different
+   topic.
 
-Both metrics are computed by [DeepEval](https://github.com/confident-ai/deepeval).
+The first two metrics run in the default-preferences (full-fleet) mode.
+Faithfulness *additionally* runs in independence mode
+(`RouterPreferences(independence=True)`) so the OSS-only-vs-full-fleet
+fusion quality delta is visible in the report — the most important
+number for the local-first value prop.
+
+All metrics are computed by
+[DeepEval](https://github.com/confident-ai/deepeval), pinned to the
+`>=3.0,<4.0` family in `pyproject.toml`. The metric and test-case
+import paths we rely on have held across all 3.x patches, but DeepEval
+has shipped silent metric changes in major bumps before — only widen
+the pin after running the full `pytest -m eval` pass on the candidate
+release.
 
 ## What the grader is
 

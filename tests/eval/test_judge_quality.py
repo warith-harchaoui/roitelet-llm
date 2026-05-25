@@ -11,7 +11,10 @@ What this catches that the existing unit tests don't:
   via fusion),
 * a regression in the system prompt that makes synthesised answers less
   correct than the candidates,
-* a model swap that degrades a whole capability category at once.
+* a model swap that degrades a whole capability category at once,
+* an OSS-only (independence) configuration that drops fusion quality
+  enough to matter — Roitelet's local-first value prop only holds if the
+  delta against full-fleet is small.
 
 These tests are slow (one full Roitelet turn per prompt) and require both
 Ollama and the API keys for paid candidates. Run them on cadence:
@@ -29,7 +32,7 @@ from typing import List
 import pytest
 
 # DeepEval is required — conftest.py importorskips early if it isn't installed.
-from deepeval.metrics import FaithfulnessMetric, GEval
+from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric, GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from core.pipeline import run_roitelet_chat
@@ -80,6 +83,33 @@ def faithfulness_metric(ollama_judge):
     return FaithfulnessMetric(model=ollama_judge, threshold=0.7)
 
 
+@pytest.fixture
+def answer_relevancy_metric(ollama_judge):
+    """Answer relevancy checks the synthesis actually addresses the prompt.
+
+    Different failure mode from faithfulness: a synthesis can be perfectly
+    grounded in the candidates and still drift onto an adjacent topic
+    (e.g. answering "how do I reverse a string in Python?" with a long
+    treatise on Python sequences). This metric catches that drift.
+    """
+    return AnswerRelevancyMetric(model=ollama_judge, threshold=0.7)
+
+
+# Independence mode == OSS-only candidates (no paid APIs). Running the full
+# dataset in this regime is the only way to know whether Roitelet's
+# local-first claim survives contact with real prompts.
+_PREFERENCE_MODES = [
+    pytest.param(
+        RouterPreferences(),
+        id='default',
+    ),
+    pytest.param(
+        RouterPreferences(independence=True),
+        id='independence',
+    ),
+]
+
+
 @pytest.mark.parametrize('case', _DATASET, ids=_ids)
 async def test_synthesis_is_correct(case, correctness_metric):
     """The synthesised answer must be factually consistent with the reference."""
@@ -98,11 +128,16 @@ async def test_synthesis_is_correct(case, correctness_metric):
     )
 
 
+@pytest.mark.parametrize('preferences', _PREFERENCE_MODES)
 @pytest.mark.parametrize('case', _DATASET, ids=_ids)
-async def test_synthesis_is_faithful_to_candidates(case, faithfulness_metric):
-    """Every claim in the synthesis must be traceable to a candidate response."""
+async def test_synthesis_is_faithful_to_candidates(case, preferences, faithfulness_metric):
+    """Every claim in the synthesis must be traceable to a candidate response.
+
+    Parametrised over default-vs-independence preferences so the report
+    surfaces the local-first quality delta directly.
+    """
     response = await run_roitelet_chat(
-        ChatRequest(prompt=case['prompt'], preferences=RouterPreferences()),
+        ChatRequest(prompt=case['prompt'], preferences=preferences),
     )
     candidate_texts: List[str] = [
         r.content for r in response.responses if r.content and not r.error
@@ -119,4 +154,27 @@ async def test_synthesis_is_faithful_to_candidates(case, faithfulness_metric):
     assert faithfulness_metric.is_successful(), (
         f"Faithfulness failed for {case['id']} "
         f"(score={faithfulness_metric.score:.2f}): {faithfulness_metric.reason}"
+    )
+
+
+@pytest.mark.parametrize('case', _DATASET, ids=_ids)
+async def test_synthesis_is_relevant(case, answer_relevancy_metric):
+    """The synthesised answer must actually address what the prompt asked.
+
+    No reference answer needed: the metric grades the output against the
+    input alone. Catches topic drift the correctness rubric misses when
+    the drift happens to land on something *also* factually correct.
+    """
+    response = await run_roitelet_chat(
+        ChatRequest(prompt=case['prompt'], preferences=RouterPreferences()),
+    )
+    test_case = LLMTestCase(
+        input=case['prompt'],
+        actual_output=response.synthesis.content,
+    )
+    answer_relevancy_metric.measure(test_case)
+    assert answer_relevancy_metric.is_successful(), (
+        f"Relevancy failed for {case['id']} "
+        f"(score={answer_relevancy_metric.score:.2f}): "
+        f"{answer_relevancy_metric.reason}"
     )

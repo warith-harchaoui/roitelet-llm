@@ -6,10 +6,46 @@
     "expected_output": "A Python function that iterates from 1 to n inclusive, printing 'FizzBuzz' when divisible by 15, 'Fizz' when divisible by 3, 'Buzz' when divisible by 5, and the number otherwise."
   },
   {
+    "id": "coding-reverse-string",
+    "category": "coding",
+    "prompt": "In Python, what is the most idiomatic way to reverse a string?",
+    "expected_output": "Slice with step -1: s[::-1]. This works for any sequence type."
+  },
+  {
+    "id": "coding-dict-merge",
+    "category": "coding",
+    "prompt": "How do I merge two dictionaries `a` and `b` in modern Python so values from `b` win on key collisions?",
+    "expected_output": "Use the union operator a | b in Python 3.9+, or {**a, **b} on older versions. Both produce a new dict; for in-place use a |= b or a.update(b)."
+  },
+  {
+    "id": "coding-async-vs-thread",
+    "category": "coding",
+    "prompt": "In Python, when should I use asyncio vs threading vs multiprocessing? Give a one-line rule for each.",
+    "expected_output": "asyncio for many concurrent I/O-bound tasks (network, disk). Threading for blocking I/O when the library is not async-aware. Multiprocessing for CPU-bound work that needs to bypass the GIL."
+  },
+  {
     "id": "math-quadratic",
     "category": "math",
     "prompt": "Solve x^2 - 5x + 6 = 0 and explain the steps.",
     "expected_output": "The roots are x = 2 and x = 3, obtained by factoring (x-2)(x-3) = 0 or by the quadratic formula with a=1, b=-5, c=6."
+  },
+  {
+    "id": "math-derivative",
+    "category": "math",
+    "prompt": "What is the derivative of sin(x^2) with respect to x?",
+    "expected_output": "2x * cos(x^2), by the chain rule: d/dx sin(u) = cos(u) * du/dx with u = x^2."
+  },
+  {
+    "id": "math-prime-test",
+    "category": "math",
+    "prompt": "Is 91 a prime number? Show how you check it.",
+    "expected_output": "91 is not prime. It factors as 7 * 13. Trial division up to floor(sqrt(91)) ~= 9 finds the factor 7."
+  },
+  {
+    "id": "math-integral-simple",
+    "category": "math",
+    "prompt": "Compute the integral of 1/x with respect to x.",
+    "expected_output": "ln|x| + C, where C is the constant of integration."
   },
   {
     "id": "reasoning-monty-hall",
@@ -18,15 +54,99 @@
     "expected_output": "Yes, switching wins 2/3 of the time. The reason is that your initial choice has a 1/3 chance of being right; the remaining 2/3 probability concentrates on the unopened door after the host reveals a goat."
   },
   {
-    "id": "multilingual-french-translation",
+    "id": "reasoning-birthday-paradox",
+    "category": "reasoning",
+    "prompt": "How many people are needed in a room so that the probability that at least two share a birthday is greater than 50%?",
+    "expected_output": "23 people. The probability that no two share a birthday drops below 0.5 starting at n=23 (about 0.493)."
+  },
+  {
+    "id": "reasoning-syllogism",
+    "category": "reasoning",
+    "prompt": "All bloops are razzies. All razzies are lazzies. Are all bloops definitely lazzies? Explain.",
+    "expected_output": "Yes. By transitivity of the subset relation: bloops are a subset of razzies and razzies are a subset of lazzies, so bloops are a subset of lazzies."
+  },
+  {
+    "id": "reasoning-tradeoff-cache",
+    "category": "reasoning",
+    "prompt": "Why might adding a cache to a service make latency *worse* in the average case rather than better?",
+    "expected_output": "A cache helps only when the hit rate is high enough that the saved work outweighs the cache lookup, write, and invalidation overhead. With a low hit rate, every request pays the lookup cost plus the original work, raising mean latency."
+  },
+  {
+    "id": "writing-tone-rewrite",
+    "category": "writing",
+    "prompt": "Rewrite this sentence to be more concise: 'In the event that you encounter any difficulties, please do not hesitate to reach out to us.'",
+    "expected_output": "If you have any trouble, contact us. (Or: Contact us if you run into issues.) The rewrite drops 'in the event that', the double-negative 'do not hesitate', and 'please reach out to'."
+  },
+  {
+    "id": "writing-passive-to-active",
+    "category": "writing",
+    "prompt": "Convert this sentence from passive to active voice: 'The cake was eaten by the dog.'",
+    "expected_output": "The dog ate the cake."
+  },
+  {
+    "id": "analysis-summary-stats",
+    "category": "analysis",
+    "prompt": "If a dataset has mean 50 and median 30, what does that suggest about its distribution? Give one likely explanation.",
+    "expected_output": "The mean exceeds the median, which suggests a right-skewed (positively skewed) distribution. A few large values pull the mean up while the median stays near the bulk of the data."
+  },
+  {
+    "id": "analysis-correlation-causation",
+    "category": "analysis",
+    "prompt": "Ice cream sales and drowning rates both rise in summer. Does this mean buying ice cream causes drowning? Explain in one paragraph.",
+    "expected_output": "No. This is a confounded correlation: a third variable (warm weather) drives both. People buy more ice cream when it's hot, and they swim more when it's hot, so drownings rise too. Correlation is not causation; ruling out confounders requires controlled experiments or matched observational designs."
+  },
+  {
+    "id": "multilingual-french-idiom",
     "category": "multilingual",
     "prompt": "Translate to French: 'The early bird catches the worm.' Provide the idiomatic French equivalent, not a literal translation.",
-    "expected_output": "L'avenir appartient à ceux qui se lèvent tôt. (The literal translation would be different; the idiomatic French equivalent is preferred.)"
+    "expected_output": "L'avenir appartient a ceux qui se levent tot. (The literal translation would differ; the idiomatic French equivalent is preferred.)"
+  },
+  {
+    "id": "multilingual-spanish-greeting",
+    "category": "multilingual",
+    "prompt": "What is the most natural way to greet someone in Spanish in the morning?",
+    "expected_output": "Buenos dias. Used from waking time until roughly noon."
+  },
+  {
+    "id": "multilingual-japanese-thanks",
+    "category": "multilingual",
+    "prompt": "Write 'thank you very much' in Japanese in romaji, and explain when to use the polite vs casual form.",
+    "expected_output": "Domo arigatou gozaimasu is the polite form, used with strangers, customers, superiors. Arigatou (or domo arigatou) is casual, used with friends and family."
+  },
+  {
+    "id": "long-context-document-types",
+    "category": "long_context",
+    "prompt": "Name three document types that are typically too long to fit in a single 8k-token context window and require chunking or retrieval before an LLM can answer questions about them.",
+    "expected_output": "Examples include: full books (often 80k+ tokens), legal contracts and case law (10k to 500k tokens), large codebases or single very long source files (often >10k tokens), academic papers with appendices, technical RFCs, and long meeting transcripts."
   },
   {
     "id": "summarization-photosynthesis",
     "category": "summarization",
     "prompt": "In two sentences, summarize what photosynthesis is and why it matters for life on Earth.",
     "expected_output": "Photosynthesis is the process by which plants, algae, and some bacteria convert light energy, carbon dioxide, and water into glucose and oxygen. It underpins nearly all life on Earth because it produces the atmospheric oxygen animals breathe and the organic energy that food chains depend on."
+  },
+  {
+    "id": "summarization-paris-agreement",
+    "category": "summarization",
+    "prompt": "In one sentence, summarize what the Paris Agreement (2015) commits its signatories to.",
+    "expected_output": "The Paris Agreement is an international treaty under the UNFCCC in which signatories commit to limiting global warming to well below 2C above pre-industrial levels, with an aspirational target of 1.5C, via nationally determined contributions that are periodically reviewed and updated."
+  },
+  {
+    "id": "fusion-hostile-date-of-week",
+    "category": "reasoning",
+    "prompt": "If today is a Tuesday, what day of the week will it be in exactly 100 days?",
+    "expected_output": "Thursday. 100 mod 7 = 2, so add 2 days to Tuesday."
+  },
+  {
+    "id": "fusion-hostile-units",
+    "category": "math",
+    "prompt": "A car travels 60 miles per hour for 2.5 hours. How many kilometres has it travelled? Use 1 mile = 1.60934 km.",
+    "expected_output": "150 miles, which is approximately 241.4 km (150 * 1.60934 = 241.401)."
+  },
+  {
+    "id": "fusion-hostile-disagreement",
+    "category": "coding",
+    "prompt": "In Python, is `is` the right operator to compare two strings for value equality? Answer yes or no, then explain.",
+    "expected_output": "No. Use == for value equality. The `is` operator tests identity (same object in memory). It sometimes appears to work for short strings due to CPython's interning optimisation, but that's an implementation detail and not safe to rely on."
   }
 ]

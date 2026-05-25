@@ -88,12 +88,21 @@ class RouterPreferences(BaseModel):
         If true, remote models are filtered out and only local models are used.
     allow_vlms:
         If true, visual-language models can be considered.
+    max_cost_usd:
+        Per-turn cost ceiling (sum of input + output 1k-token prices, USD).
+        Candidates whose estimated cost exceeds the budget are filtered
+        out before top-K selection. ``None`` disables the budget. Local
+        models are always under the budget (their pricing is zero), so
+        setting a tight budget is functionally similar to flipping
+        ``independence`` on — except it lets one cheap paid model
+        through if its price still fits.
     """
 
     raw_power: float = 0.7
     frugality: float = 0.3
     independence: bool = False
     allow_vlms: bool = False
+    max_cost_usd: Optional[float] = None
 
 
 class RouterDecision(BaseModel):

@@ -34,8 +34,14 @@ dev = [
 ]
 # Answer-quality evaluation suite. Not loaded by the default test run.
 # Install with: pip install -e .[eval]   then: pytest -m eval -q
+#
+# DeepEval is pinned to the stable 3.x family. The import surface we use
+# (`deepeval.metrics`, `deepeval.test_case`, `deepeval.models.base_model`)
+# has held across all 3.x patches but DeepEval has rebroken metrics
+# silently in major bumps before — bump the upper bound only after
+# re-running `pytest -m eval` end-to-end with the candidate version.
 eval = [
-    "deepeval>=2.0.0",
+    "deepeval>=3.0,<4.0",
 ]
 # Multimodal inputs.
 #   Audio = whisper.cpp (transcription) + NeMo Sortformer (diarization).
