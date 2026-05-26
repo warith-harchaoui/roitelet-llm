@@ -5,34 +5,51 @@
 > answers, synthesizes a final response locally, and learns routing
 > preferences over time from its own judge signal.
 
-It is **not** a "universal LLM" or a guarantee of the best answer for
-every query. It is an experiment platform for the cost / latency /
-privacy / quality tradeoffs that come up when you stop committing to
-one model.
-
 ![Roitelet](assets/roitelet.jpg)
 
 ---
 
-## What Roitelet does
+## The wren
 
-Given a user prompt, Roitelet:
+In the old fable, the birds of the forest agreed that whoever flew
+highest would be crowned king. The eagle climbed effortlessly past
+every other bird. But a tiny wren had hidden in the eagle's feathers,
+rode all the way up, and at the very top fluttered a few wingbeats
+higher to take the crown.
 
-1. Scores every registered model (local + optional remote) against
-   the prompt using a hybrid router — curated capability priors,
-   rolling Elo, and a small set of regime-aware filters (cost budget,
-   trivial-prompt, long-context, …).
-2. Fans out to the top-K candidates in parallel (default K=3).
-3. Passes the K answers, **anonymized and shuffled**, to a local
-   synthesis judge that fuses them into a single answer.
-4. Persists per-turn telemetry and nudges per-capability Elo scores
-   so the next prompt can be routed slightly better.
+The point isn't that the wren is the strongest bird — it isn't. The
+point is what small, well-placed local moves can do on top of much
+larger external forces. Roitelet (*roitelet* is French for "wren") is
+shaped around the same idea: a small local pipeline that rides on top
+of large language models — composing them, comparing their answers,
+running its own local synthesis pass on top.
 
-Each step is inspectable. The router decision, the candidate replies,
-the judge's reasoning, and the rolling Elo state all land as plain
-JSON on disk; nothing is hidden behind an opaque service.
+### How that translates to the pipeline
 
-### What it is good for
+For a given prompt, Roitelet:
+
+1. **Picks the flight formation.** A hybrid router scores every
+   registered model (local + optional remote) on curated capability
+   priors, rolling Elo, and a small set of regime-aware filters
+   (cost budget, trivial-prompt, long-context, …), then takes the
+   top-K (default K=3).
+2. **Lets them fly in parallel.** The K candidates answer
+   concurrently via `asyncio.gather`; one slow provider doesn't block
+   the others.
+3. **Adds the wren's wingbeat.** A local synthesis judge reads the K
+   answers — anonymised and shuffled, so it can't recognise model
+   identities — and fuses them into a single response.
+4. **Remembers what worked.** Per-turn telemetry lands as JSON on
+   disk, and the rolling per-capability Elo nudges the next routing
+   decision.
+
+Every step is inspectable. The router decision, the candidate replies,
+the judge's reasoning, and the Elo state are all plain JSON files;
+nothing is hidden behind an opaque service.
+
+---
+
+## What this is good for
 
 - **Comparing model families** on the same prompt without juggling
   three SDKs.
@@ -45,31 +62,20 @@ JSON on disk; nothing is hidden behind an opaque service.
 - **Studying tradeoffs** between cost, latency, privacy, and answer
   quality, with the data trail to make those studies reproducible.
 
-### What it does **not** claim
+A few caveats worth knowing up front:
 
-- That the fused answer is always better than the strongest single
-  candidate. Whether fusion helps depends on the prompt class, the
-  judge model, and the candidate diversity; this is exactly what the
-  ablation roadmap in [docs/EVALUATION.md](docs/EVALUATION.md) is
-  designed to measure.
-- That the local synthesis judge is an objective oracle. Roitelet
-  learns *judge-conditioned* preferences — different judges produce
-  different rolling-Elo trajectories. The judge bias is a feature to
-  inspect, not a bug to hide.
-- That it is automatically "private". Roitelet is local-**first**, not
-  local-**only**. Prompts may still go out to remote providers when
-  they are selected as candidates. See
-  [docs/PRIVACY.md](docs/PRIVACY.md) for the precise distinction.
-
----
-
-## The wren
-
-The project is named after the wren (*roitelet* in French): a tiny
-bird that, in the fable, rides on an eagle's back and then flutters
-slightly higher at the last moment. The metaphor is about composing
-small local moves on top of large external models — not about the
-wren being the best bird in the forest.
+- The fused answer is not guaranteed to beat the strongest single
+  candidate on every prompt class — that's exactly what the ablation
+  roadmap in [docs/EVALUATION.md](docs/EVALUATION.md) is designed to
+  measure.
+- The synthesis judge is not an objective oracle. Roitelet learns
+  *judge-conditioned* preferences; different judges produce different
+  rolling-Elo trajectories. The judge bias is a property to inspect,
+  not to hide.
+- Roitelet is local-**first**, not local-**only**. Prompts go to
+  remote providers when remote candidates are selected. See
+  [docs/PRIVACY.md](docs/PRIVACY.md) for the precise distinction and
+  the local-only switch.
 
 ---
 

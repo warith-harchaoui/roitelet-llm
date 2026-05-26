@@ -6,36 +6,53 @@
 > préférences de routage au fil du temps à partir de son propre signal
 > de juge.
 
-Ce n'est **pas** un « LLM universel », ni une garantie d'obtenir la
-meilleure réponse pour toute requête. C'est une plateforme
-d'expérimentation pour les compromis coût / latence / vie privée /
-qualité qui apparaissent dès qu'on cesse de s'engager sur un seul
-modèle.
-
 ![Roitelet](assets/roitelet.jpg)
 
 ---
 
-## Ce que Roitelet fait
+## Le roitelet
+
+Dans la vieille fable, les oiseaux de la forêt décident que celui qui
+volera le plus haut sera couronné roi. L'aigle s'élève sans effort
+au-dessus de tous les autres. Mais un minuscule roitelet, caché dans
+ses plumes, s'est laissé porter tout en haut — et au sommet, d'un
+petit battement d'ailes supplémentaire, lui rafle la couronne.
+
+Ce n'est pas que le roitelet soit l'oiseau le plus fort — il ne
+l'est pas. Ce qui compte, c'est ce que de petits mouvements locaux,
+bien placés, peuvent ajouter par-dessus de bien plus grandes forces
+externes. Roitelet LLM est bâti sur la même idée : une petite
+pipeline locale qui se pose sur les grands modèles de langage — les
+compose, compare leurs réponses, et passe une couche de synthèse
+locale par-dessus.
+
+### Comment cela se traduit dans la pipeline
 
 Pour un prompt donné, Roitelet :
 
-1. Note chaque modèle enregistré (local + distant optionnel) à l'aide
-   d'un routeur hybride — a priori de capacité curés, Elo glissant, et
-   un petit jeu d'ajustements régime-conscients (budget coût,
-   prompt trivial, long contexte, …).
-2. Fan-out parallèle sur les top-K candidats (K=3 par défaut).
-3. Transmet les K réponses, **anonymisées et mélangées**, à un juge
-   de synthèse local qui les fusionne en une réponse unique.
-4. Persiste la télémétrie par tour et ajuste légèrement les scores
-   Elo par capacité pour améliorer le routage du prompt suivant.
+1. **Choisit la formation de vol.** Un routeur hybride note chaque
+   modèle enregistré (local + distant optionnel) selon des a priori
+   de capacité curés, l'Elo glissant et un petit jeu d'ajustements
+   régime-conscients (budget coût, prompt trivial, long contexte,
+   …), puis garde les top-K (K=3 par défaut).
+2. **Les laisse voler en parallèle.** Les K candidats répondent en
+   concurrence via `asyncio.gather` ; un fournisseur lent ne bloque
+   pas les autres.
+3. **Ajoute le battement d'aile du roitelet.** Un juge de synthèse
+   local lit les K réponses — anonymisées et mélangées, pour ne pas
+   pouvoir reconnaître l'identité des modèles — et les fusionne en
+   une réponse unique.
+4. **Se souvient de ce qui a marché.** La télémétrie par tour
+   atterrit en JSON sur le disque, et l'Elo glissant par capacité
+   oriente légèrement la décision de routage suivante.
 
 Chaque étape est inspectable. La décision du routeur, les réponses
-candidates, le raisonnement du juge et l'état Elo glissant atterrissent
-sous forme de JSON sur le disque ; rien n'est caché derrière un
-service opaque.
+candidates, le raisonnement du juge et l'état Elo sont tous des
+fichiers JSON ; rien n'est caché derrière un service opaque.
 
-### Ce pourquoi c'est utile
+---
+
+## À quoi cela sert
 
 - **Comparer des familles de modèles** sur un même prompt sans
   jongler avec trois SDK.
@@ -49,32 +66,20 @@ service opaque.
   qualité de réponse, avec la traçabilité nécessaire pour rendre ces
   études reproductibles.
 
-### Ce que ce projet ne prétend **pas**
+Quelques mises en garde utiles à connaître d'emblée :
 
-- Que la réponse fusionnée est toujours meilleure que le meilleur
-  candidat individuel. La fusion aide ou non selon la classe du
-  prompt, le modèle juge et la diversité des candidats ; c'est
-  précisément ce que mesure la feuille de route d'ablation dans
+- La réponse fusionnée n'est pas garantie de battre le meilleur
+  candidat individuel sur toute classe de prompt — c'est précisément
+  ce que mesure la feuille de route d'ablation dans
   [docs/EVALUATION.md](docs/EVALUATION.md).
-- Que le juge de synthèse local soit un oracle objectif. Roitelet
-  apprend des préférences *conditionnées au juge* — différents juges
-  produisent différentes trajectoires d'Elo. Ce biais du juge est
-  une caractéristique à inspecter, pas un bug à cacher.
-- Qu'il soit automatiquement « privé ». Roitelet est local-**first**,
-  pas local-**only**. Les prompts peuvent toujours sortir vers des
-  fournisseurs distants quand ils sont sélectionnés comme candidats.
-  Voir [docs/PRIVACY.md](docs/PRIVACY.md) pour la distinction
-  précise.
-
----
-
-## Le roitelet
-
-Le projet porte le nom du roitelet, un tout petit oiseau qui, dans
-la fable, se cache dans le plumage de l'aigle et bat des ailes
-légèrement plus haut au dernier moment. La métaphore parle de
-composer de petits mouvements locaux par-dessus de grands modèles
-externes — pas de prétendre être le meilleur oiseau de la forêt.
+- Le juge de synthèse n'est pas un oracle objectif. Roitelet apprend
+  des préférences *conditionnées au juge* ; différents juges
+  produisent différentes trajectoires d'Elo. Ce biais est une
+  propriété à inspecter, pas à cacher.
+- Roitelet est local-**first**, pas local-**only**. Les prompts
+  partent vers des fournisseurs distants quand des candidats distants
+  sont sélectionnés. Voir [docs/PRIVACY.md](docs/PRIVACY.md) pour la
+  distinction précise et le mode local-only.
 
 ---
 
