@@ -1,49 +1,120 @@
 # Roitelet LLM
 
-> **The Universal LLM:** The best Large Language Model for your query, no matter what.
+> **A local-first LLM routing and fusion workbench.** Roitelet routes
+> prompts across local and remote language models, compares their
+> answers, synthesizes a final response locally, and learns routing
+> preferences over time from its own judge signal.
 
-Every week, a new frontier model is released by an AI giant. Evaluating, benchmarking, and maintaining integrations with each of them is exhausting. 
-
-**Roitelet** (the "Wren") is a local-first adaptive router designed to abstract away this chaos. Instead of choosing a specific model, you prompt Roitelet. It dynamically selects the three most capable models for that specific prompt, queries them in parallel, and uses a local open-source model to synthesize the final, definitive answer. 
+It is **not** a "universal LLM" or a guarantee of the best answer for
+every query. It is an experiment platform for the cost / latency /
+privacy / quality tradeoffs that come up when you stop committing to
+one model.
 
 ![Roitelet](assets/roitelet.jpg)
 
 ---
 
-## The "Wren" Metaphor
+## What Roitelet does
 
-Once upon a time in the great forest of Artificial Intelligences, a tiny wren dreamed of soaring higher than the majestic royal eagles. Its wings were short, so it struggled to clear the canopy! The clever little bird hid in an eagle's feathers, rode up to the roof of the sky, and at the last moment, flapped its own wings to soar past them all.
+Given a user prompt, Roitelet:
 
-True power isn’t in server racks, billion-dollar budgets, or raw parameter counts—it’s in cunning. Our Roitelet LLM channels this with every prompt.
+1. Scores every registered model (local + optional remote) against
+   the prompt using a hybrid router — curated capability priors,
+   rolling Elo, and a small set of regime-aware filters (cost budget,
+   trivial-prompt, long-context, …).
+2. Fans out to the top-K candidates in parallel (default K=3).
+3. Passes the K answers, **anonymized and shuffled**, to a local
+   synthesis judge that fuses them into a single answer.
+4. Persists per-turn telemetry and nudges per-capability Elo scores
+   so the next prompt can be routed slightly better.
 
-### How Does “Flapping Wings” Work?
+Each step is inspectable. The router decision, the candidate replies,
+the judge's reasoning, and the rolling Elo state all land as plain
+JSON on disk; nothing is hidden behind an opaque service.
 
-Roitelet replaces the standard single-API-call with a three-step flight pattern:
+### What it is good for
 
-1. 🦅 **Wing Flap 1 — Clever Discovery:** Our local router scores every registered model on capability priors + rolling Elo and picks the top K (default 3) from the global pool (GPT-4.1, Claude 3.7, Gemini 2.5, plus local OSS — Qwen, Llama, Gemma, Phi).
-2. 🦅 **Wing Flap 2 — Aerial Triumvirate:** The K selected models answer in parallel. The point isn't to pick a winner — it's to gather diverse viewpoints from different model families.
-3. 🦅 **Wing Flap 3 — Coronation:** A trusted, local open-source model (Qwen 3 by default) reads the K responses and **fuses** them into one comprehensive answer. Fusion, not selection — the synthesised answer can combine insights none of the candidates produced alone.
+- **Comparing model families** on the same prompt without juggling
+  three SDKs.
+- **Running a local synthesis pass** on top of remote candidate
+  answers — useful when you want the final word to come from a model
+  you control.
+- **Experimenting with routing and fusion strategies** (cost-budget
+  filters, learned matrix-factorisation router, embedding-based
+  capability detector) under a single API.
+- **Studying tradeoffs** between cost, latency, privacy, and answer
+  quality, with the data trail to make those studies reproducible.
 
-From your perspective, it feels like using one unified super-brain API. The rest is just show and feathers.
+### What it does **not** claim
+
+- That the fused answer is always better than the strongest single
+  candidate. Whether fusion helps depends on the prompt class, the
+  judge model, and the candidate diversity; this is exactly what the
+  ablation roadmap in [docs/EVALUATION.md](docs/EVALUATION.md) is
+  designed to measure.
+- That the local synthesis judge is an objective oracle. Roitelet
+  learns *judge-conditioned* preferences — different judges produce
+  different rolling-Elo trajectories. The judge bias is a feature to
+  inspect, not a bug to hide.
+- That it is automatically "private". Roitelet is local-**first**, not
+  local-**only**. Prompts may still go out to remote providers when
+  they are selected as candidates. See
+  [docs/PRIVACY.md](docs/PRIVACY.md) for the precise distinction.
+
+---
+
+## The wren
+
+The project is named after the wren (*roitelet* in French): a tiny
+bird that, in the fable, rides on an eagle's back and then flutters
+slightly higher at the last moment. The metaphor is about composing
+small local moves on top of large external models — not about the
+wren being the best bird in the forest.
 
 ---
 
 ## Features
 
-- 🧠 **Dynamic Routing:** No manual model selection needed. Hybrid regime-aware math (cost-budget, trivial, ambiguous, long-context) layers on top of the heuristic linear blend.
-- 🌐 **Cross-family Fusion:** The synthesis judge fuses K parallel answers from *different* OSS families (Qwen + Llama + Gemma + Phi by default), not three flavours of one provider — better answers than any single model.
-- ⚡ **Local Synthesis:** The fusing judge is a local LLM via Ollama, keeping the final pass private and free.
-- 🌍 **Frontier Integrations:** Optional paid candidates through OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity.
-- 🖼️ **Multimodal Attachments:** Drop images, PDFs, or audio into the chat — extracted locally (Ollama VLM caption, kreuzberg PDF text, whisper.cpp + NeMo diarization) before the text pipeline runs.
-- 🎨 **Image Generation:** Route image prompts to the strongest registered image-gen model. K=1 because image fusion isn't a thing. OpenAI Images, OpenRouter relays, or local SD via the OpenAI-compatible shape. See [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md).
-- 🗂️ **Personal mode (RAG + Karpathy wiki):** Drop your own files into `data/personal/inbox/`, ingest with one click — audio is transcribed, images captioned, PDFs extracted. Small corpora go inline (Karpathy LLM-wiki style); large ones switch to retrieval. Includes a 2-D PCA embedding scatter to *see* your knowledge base. See [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
-- 🔬 **Two routers, one pipeline.** Default heuristic + opt-in `ROITELET_ROUTER=mf` learned matrix-factorisation router that trains on accumulated telemetry. Hybrid regimes (`trivial`, `budget_constrained`, `ambiguous`, …) adjust the math per turn.
-- 🌐 **Two capability detectors.** Default keyword scan + opt-in `ROITELET_CAPABILITY_DETECTOR=embedding` classifier on top of a local Ollama embedding model (`nomic-embed-text`). Falls back transparently when offline.
-- 📊 **Local Telemetry & Cost Tracking:** Dashboard monitoring for token costs, latency, simulated energy (kWh), and carbon footprints (gCO₂e).
-- 🔄 **Self-Learning:** Capability-conditioned rolling Elo update loop automatically prioritises models that perform better over time.
-- 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC. Image generation at `/api/images` (and OpenAI-compatible `/v1/images/generations`).
-- 💬 **Slash commands:** `/image`, `/speech`, `/personal`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — per-turn overrides parsed at the prompt boundary. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
-- 🔐 **Optional Bearer-Token Gate:** Set `ROITELET_API_TOKEN` to lock down every mutating + listing endpoint for LAN deployments. Defaults to a no-op for local-only single-user UX.
+- **Hybrid routing.** Capability priors + rolling Elo + regime-aware
+  adjustments (cost budget, trivial-prompt, long-context, ambiguous,
+  capability-dominant). Optional learned matrix-factorisation router
+  behind `ROITELET_ROUTER=mf`.
+- **Parallel top-K fan-out.** Default K=3, configurable per turn.
+  Wall-clock time is bounded by the slowest selected candidate
+  (see [latency + cost tradeoffs](#latency-and-cost-tradeoffs) below).
+- **Local synthesis pass.** Candidate answers are anonymized,
+  shuffled, and handed to a local Ollama model that fuses them.
+  The judge is replaceable.
+- **Per-capability rolling Elo.** Each turn's judge winners gain Elo
+  on the capabilities the prompt invoked; losers lose. Bounded
+  updates; no feedback runaway.
+- **Universal extension point.** Any paid LLM with an OpenAI-compatible
+  `/v1/chat/completions` endpoint registers in three settings fields.
+  Same for any local GGUF served by `llama-server`.
+- **Multimodal attachments.** Drop images, PDFs, or audio — extracted
+  locally (Ollama VLM, kreuzberg, whisper.cpp + NeMo) before the
+  text pipeline runs.
+- **Image generation.** K=1 routing to the strongest registered
+  image-gen model (no fusion — image ensembling is not a defined
+  operation).
+- **Personal mode.** Drop your own files into a folder; small corpora
+  inject inline (Karpathy LLM-wiki style), large ones switch to
+  embedding retrieval. Includes a 2-D PCA scatter of the corpus.
+  See [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
+- **Two capability detectors.** Default keyword scan + opt-in
+  embedding-based classifier on top of a local Ollama embedding model.
+- **Slash commands.** `/image`, `/speech`, `/personal`, `/local`,
+  `/cheap <usd>`, `/k <n>`, `/help`. See
+  [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- **Standardized endpoints.** OpenAI-compatible `/v1/chat/completions`
+  + `/v1/images/generations`, native FastAPI, MCP JSON-RPC.
+- **Local telemetry.** Per-turn JSON records of the router decision,
+  every candidate response (including failures), the synthesis, and
+  the winners. See [docs/PRIVACY.md](docs/PRIVACY.md) for what's
+  recorded.
+- **Optional Bearer-token gate.** `ROITELET_API_TOKEN` locks every
+  mutating + listing endpoint. Off by default to preserve the
+  single-user-localhost UX.
 
 ---
 
