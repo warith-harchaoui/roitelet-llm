@@ -40,7 +40,8 @@ From your perspective, it feels like using one unified super-brain API. The rest
 - 🌐 **Two capability detectors.** Default keyword scan + opt-in `ROITELET_CAPABILITY_DETECTOR=embedding` classifier on top of a local Ollama embedding model (`nomic-embed-text`). Falls back transparently when offline.
 - 📊 **Local Telemetry & Cost Tracking:** Dashboard monitoring for token costs, latency, simulated energy (kWh), and carbon footprints (gCO₂e).
 - 🔄 **Self-Learning:** Capability-conditioned rolling Elo update loop automatically prioritises models that perform better over time.
-- 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC.
+- 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC. Image generation at `/api/images` (and OpenAI-compatible `/v1/images/generations`).
+- 💬 **Slash commands:** `/image`, `/speech`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — per-turn overrides parsed at the prompt boundary. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
 - 🔐 **Optional Bearer-Token Gate:** Set `ROITELET_API_TOKEN` to lock down every mutating + listing endpoint for LAN deployments. Defaults to a no-op for local-only single-user UX.
 
 ---

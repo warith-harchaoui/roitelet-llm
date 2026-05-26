@@ -41,7 +41,8 @@ De votre point de vue, vous recevez une réponse unique comme si vous interrogie
 - 🌐 **Deux détecteurs de capacité.** Scan par mots-clés par défaut + `ROITELET_CAPABILITY_DETECTOR=embedding` optionnel — classifieur entraîné sur embeddings Ollama (`nomic-embed-text`). Repli transparent hors ligne.
 - 📊 **Monitoring Coût / Énergie :** Dashboard intégré pour suivre la consommation de tokens, évaluer l'énergie (kWh) et l'empreinte carbone (gCO₂e).
 - 🔄 **Apprentissage Continu :** Un système de mises à jour basées sur un score d'évaluation Elo roule en permanence pour prioriser les modèles les plus pertinents au fil du temps.
-- 🔌 **API Standard :** Expose une route `/v1/chat/completions` (OpenAI-compatible), un point de terminaison natif FastAPI, ainsi qu'un serveur JSON-RPC (MCP).
+- 🔌 **API Standard :** Expose une route `/v1/chat/completions` (OpenAI-compatible), un point de terminaison natif FastAPI, ainsi qu'un serveur JSON-RPC (MCP). Génération d'images via `/api/images` (et `/v1/images/generations` OpenAI-compatible).
+- 💬 **Commandes slash :** `/image`, `/speech`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — surcharges par tour analysées au début du prompt. Voir [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
 - 🔐 **Gate Bearer-Token optionnel :** Définissez `ROITELET_API_TOKEN` pour verrouiller chat, settings, conversations et télémétrie. Désactivé par défaut pour l'usage local mono-utilisateur.
 
 ---

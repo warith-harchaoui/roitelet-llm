@@ -33,6 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from core.commands import parse_command, render_help
 from core.config import get_settings
 from core.image_pipeline import NoImageProviderError, run_roitelet_image_chat
 from core.mcp import handle_mcp_request
@@ -210,9 +211,70 @@ async def _run_chat_or_502(payload: ChatRequest):
         ) from exc
 
 
+def _apply_command_overrides(payload: ChatRequest) -> tuple[ChatRequest, str | None]:
+    """Strip leading slash commands and route or apply per-turn overrides.
+
+    Returns
+    -------
+    (rewritten_payload, short_circuit_body)
+        ``short_circuit_body`` is non-None only when the command short-
+        circuits the pipeline (``/help`` today, possibly more later).
+        Otherwise the caller proceeds with the rewritten payload.
+
+    Raises
+    ------
+    HTTPException
+        For commands that can't run on the chat endpoint
+        (``/image`` and ``/speech`` need their dedicated endpoints).
+    """
+    parsed = parse_command(payload.prompt)
+    if parsed.route_to == 'help':
+        return payload, render_help()
+    if parsed.route_to == 'image':
+        raise HTTPException(
+            status_code=400,
+            detail={
+                'error': 'wrong_endpoint',
+                'message': 'Use POST /api/images for /image prompts.',
+                'route_to': 'image',
+                'stripped_prompt': parsed.stripped_prompt,
+            },
+        )
+    if parsed.route_to == 'speech':
+        raise HTTPException(
+            status_code=400,
+            detail={
+                'error': 'wrong_endpoint',
+                'message': 'Use POST /api/chat/multimodal with an audio attachment for /speech.',
+                'route_to': 'speech',
+            },
+        )
+
+    overrides: dict = {}
+    if parsed.stripped_prompt != payload.prompt:
+        overrides['prompt'] = parsed.stripped_prompt
+    pref_updates: dict = {}
+    if parsed.independence_override is not None:
+        pref_updates['independence'] = parsed.independence_override
+    if parsed.max_cost_usd_override is not None:
+        pref_updates['max_cost_usd'] = parsed.max_cost_usd_override
+    if pref_updates:
+        overrides['preferences'] = payload.preferences.model_copy(update=pref_updates)
+    if parsed.top_k_override is not None:
+        overrides['top_k'] = parsed.top_k_override
+    if not overrides:
+        return payload, None
+    return payload.model_copy(update=overrides), None
+
+
 @app.post('/api/chat', dependencies=[Depends(require_api_token)])
 async def roitelet_chat(payload: ChatRequest):
     """Run one native Roitelet chat turn.
+
+    Leading slash commands (``/local``, ``/cheap``, ``/k``, ``/help``)
+    are consumed here as inline per-turn overrides; ``/image`` and
+    ``/speech`` are rejected with a 400 pointing at the right endpoint.
+    See :mod:`core.commands` for the full catalogue.
 
     When ``payload.stream`` is true the response is a Server-Sent Events
     stream: ``{type: "delta", content: ...}`` frames followed by a final
@@ -230,6 +292,23 @@ async def roitelet_chat(payload: ChatRequest):
     Dict[str, Any] | StreamingResponse
         The resulting synthesis, full conversation body, and model decisions.
     """
+    payload, short_circuit_body = _apply_command_overrides(payload)
+    if short_circuit_body is not None:
+        # Static response (today: /help). No fan-out, no judge, no Elo update.
+        return {
+            'conversation_id': '',
+            'synthesis': {
+                'model_id': 'roitelet-commands',
+                'provider': 'local',
+                'content': short_circuit_body,
+                'judge_summary': '',
+                'winning_model_ids': [],
+            },
+            'router': None,
+            'responses': [],
+            'telemetry_id': '',
+        }
+
     response = await _run_chat_or_502(payload)
     if not payload.stream:
         return response.model_dump()
