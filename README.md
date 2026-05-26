@@ -5,23 +5,7 @@
 > answers, synthesizes a final response locally, and learns routing
 > preferences over time from its own judge signal.
 
-> ⚠️ **Security — read before exposing this on a network.**
-> Roitelet defaults to **`ROITELET_APP_HOST=0.0.0.0`** (binds every
-> interface) and **`ROITELET_API_TOKEN=""`** (no auth). Together,
-> those defaults are convenient for `http://localhost:8000` on a
-> single-user laptop, **and dangerous everywhere else.** If the
-> machine is on a LAN, behind a public IP, in a VM with a port
-> forward, or inside a corporate network, anyone who can reach the
-> port can read your conversations, your telemetry (which contains
-> the raw prompts + provider responses), and your API keys
-> indirectly via routed requests. **Set `ROITELET_API_TOKEN` to a
-> non-empty value before exposing the service**, and consider
-> binding to `127.0.0.1` if you don't need remote access. See
-> [docs/PRIVACY.md](docs/PRIVACY.md).
-
 ![Roitelet](assets/roitelet.jpg)
-
-![Roitelet web UI — one user prompt, three local OSS candidates fanned out in parallel, the local synthesis judge fuses their answers and surfaces which ones it actually used.](assets/screenshot.png)
 
 ---
 
