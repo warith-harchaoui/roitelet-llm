@@ -6,6 +6,21 @@
 > préférences de routage au fil du temps à partir de son propre signal
 > de juge.
 
+> ⚠️ **Sécurité — à lire avant toute exposition réseau.**
+> Roitelet utilise par défaut **`ROITELET_APP_HOST=0.0.0.0`** (écoute
+> sur toutes les interfaces) et **`ROITELET_API_TOKEN=""`** (pas
+> d'authentification). Ces réglages sont pratiques pour
+> `http://localhost:8000` sur un laptop mono-utilisateur, **et
+> dangereux partout ailleurs.** Si la machine est sur un LAN,
+> derrière une IP publique, dans une VM avec port-forward, ou dans
+> un réseau d'entreprise, quiconque atteint le port peut lire vos
+> conversations, votre télémétrie (qui contient les prompts bruts +
+> les réponses des fournisseurs), et indirectement vos clés API
+> via les requêtes routées. **Définissez `ROITELET_API_TOKEN` à une
+> valeur non vide avant d'exposer le service**, et envisagez de lier
+> à `127.0.0.1` si l'accès distant n'est pas requis. Voir
+> [docs/PRIVACY.md](docs/PRIVACY.md).
+
 ![Roitelet](assets/roitelet.jpg)
 
 ---
