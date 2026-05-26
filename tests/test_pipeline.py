@@ -107,7 +107,7 @@ def _make_fake_provider(failures: set[str] | None = None):
                 usage={'prompt_tokens': 12.0, 'completion_tokens': 24.0},
             )
 
-    def factory(_provider: str):
+    def factory(_provider: str, model_id: str | None = None):
         return _FakeClient()
 
     return factory

@@ -496,6 +496,123 @@ class TestModelRegistry:
         ids = [m.model_id for m in registry.list_models()]
         assert ids.count("openai-compatible/mistral-large-latest") == 1
 
+    def test_custom_engines_register_with_label_namespace(self):
+        """Each custom engine's models register as openai-compatible/<label>/<model>."""
+        from core.registry import ModelRegistry, ollama_cache
+        from core.schemas import AppSettingsPayload, CustomEngine
+
+        ollama_cache._models = []
+        ollama_cache._fetched_at = time.monotonic()
+
+        payload = AppSettingsPayload(
+            ollama_base_url='',
+            openai_api_key='sk-test',
+            openrouter_api_key='sk-test',
+            custom_engines=[
+                CustomEngine(
+                    label='mistral',
+                    base_url='https://api.mistral.ai/v1',
+                    api_key='sk-mistral',
+                    models=['mistral-large-latest', 'mistral-medium'],
+                ),
+                CustomEngine(
+                    label='together',
+                    base_url='https://api.together.xyz/v1',
+                    api_key='sk-together',
+                    models=['mistralai/Mistral-7B-Instruct'],
+                ),
+            ],
+        )
+        registry = ModelRegistry(app_settings=payload)
+        ids = {m.model_id for m in registry.list_models()}
+        # Label-prefixed namespace prevents collisions between engines
+        # that happen to serve the same upstream model name.
+        assert 'openai-compatible/mistral/mistral-large-latest' in ids
+        assert 'openai-compatible/mistral/mistral-medium' in ids
+        assert 'openai-compatible/together/mistralai/Mistral-7B-Instruct' in ids
+        for mid in ids:
+            if mid.startswith('openai-compatible/mistral/') or mid.startswith('openai-compatible/together/'):
+                spec = registry.get(mid)
+                assert spec.provider == 'openai-compatible'
+                assert spec.local is False
+
+    def test_custom_engine_with_empty_key_is_pruned(self):
+        """An engine with no api_key should have its models auto-pruned."""
+        from core.registry import ModelRegistry, ollama_cache
+        from core.schemas import AppSettingsPayload, CustomEngine
+
+        ollama_cache._models = []
+        ollama_cache._fetched_at = time.monotonic()
+
+        payload = AppSettingsPayload(
+            ollama_base_url='',
+            openai_api_key='sk-test',
+            openrouter_api_key='sk-test',
+            custom_engines=[
+                CustomEngine(label='no-key', base_url='https://example.com/v1',
+                             api_key='', models=['phantom']),
+                CustomEngine(label='has-key', base_url='https://example.com/v1',
+                             api_key='sk-real', models=['real-model']),
+            ],
+        )
+        registry = ModelRegistry(app_settings=payload)
+        ids = {m.model_id for m in registry.list_models()}
+        # The unauthorised engine's model is pruned; the authorised
+        # one stays.
+        assert 'openai-compatible/no-key/phantom' not in ids
+        assert 'openai-compatible/has-key/real-model' in ids
+
+    def test_custom_engine_with_blank_label_is_skipped(self):
+        """A custom engine with an empty label registers nothing."""
+        from core.registry import ModelRegistry, ollama_cache
+        from core.schemas import AppSettingsPayload, CustomEngine
+
+        ollama_cache._models = []
+        ollama_cache._fetched_at = time.monotonic()
+
+        payload = AppSettingsPayload(
+            ollama_base_url='',
+            openai_api_key='sk-test',
+            openrouter_api_key='sk-test',
+            custom_engines=[
+                CustomEngine(label='', base_url='https://example.com/v1',
+                             api_key='sk', models=['ghost']),
+            ],
+        )
+        registry = ModelRegistry(app_settings=payload)
+        ids = {m.model_id for m in registry.list_models()}
+        assert not any(mid.startswith('openai-compatible/') and 'ghost' in mid for mid in ids)
+
+
+class TestCustomEngineRoundTrip:
+    """``AppSettingsPayload.masked() + merge_unmasked`` round-trips engine keys."""
+
+    def test_mask_and_unmask_preserves_engine_key(self):
+        from core.schemas import SECRET_MASK, AppSettingsPayload, CustomEngine
+
+        original = AppSettingsPayload(
+            custom_engines=[
+                CustomEngine(label='mistral', base_url='https://api.mistral.ai/v1',
+                             api_key='real-mistral-key', models=['mistral-large']),
+            ],
+        )
+        masked = original.masked()
+        assert masked.custom_engines[0].api_key == SECRET_MASK
+        # The user submits the masked payload back unchanged.
+        merged = original.merge_unmasked(masked)
+        assert merged.custom_engines[0].api_key == 'real-mistral-key'
+
+    def test_unmask_with_new_engine_does_not_invent_key(self):
+        """Adding a brand-new engine with a real key persists that key."""
+        from core.schemas import AppSettingsPayload, CustomEngine
+
+        stored = AppSettingsPayload(custom_engines=[])
+        incoming = AppSettingsPayload(custom_engines=[
+            CustomEngine(label='new', base_url='u', api_key='new-real-key', models=['m']),
+        ])
+        merged = stored.merge_unmasked(incoming)
+        assert merged.custom_engines[0].api_key == 'new-real-key'
+
     def test_ollama_prefix_not_duplicated(self):
         """Models passed with explicit 'ollama/' prefix must not be doubled."""
         registry = _make_registry(extra_ollama=["ollama/phi4:latest"])
