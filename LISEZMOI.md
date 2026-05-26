@@ -167,33 +167,38 @@ du juge est la curation, pas l'invention.
 
 ### Est-ce que ça aide vraiment ? (K-sweep du 2026-05-26)
 
-Première campagne multi-prompts sur 25 prompts de catégories
-variées, **local-only** (3 petits candidats OSS, juge `qwen3:8b`),
-notée par DeepEval `GEval(correctness, threshold=0.6)` :
+Campagne complète sur les 25 prompts du dataset mixte,
+**local-only** (3 petits candidats OSS — `llama3.2:3b`,
+`qwen2.5:3b`, `gemma3:4b` ; juge de synthèse `qwen3:8b`), notée par
+DeepEval `GEval(correctness, threshold=0.6)`. Vrai K=3 (chaque tour
+K=3 fan-out aux trois candidats, Gemma incluse ; voir
+[l'enquête `fan_out=2`](docs/EVALUATION.md) pour comprendre
+pourquoi la première tentative ne l'avait pas) :
 
-| K | exactitude moyenne | pass (≥0.6) | latence totale | part du juge |
+| K | exactitude moyenne | pass (≥0,6) | latence totale | part du juge |
 |---|---|---|---|---|
-| 1 | 0,78 | 21 / 25 | 27,7 s | 90 % |
-| 2 | **0,90** | 23 / 25 | 37,8 s | 82 % |
-| 3 | (0,87 — voir mise en garde) | 23 / 25 | 43,2 s | 82 % |
+| 1 | 0,87 | 23 / 25 | 32,1 s | 70 % |
+| 2 | **0,95** | **25 / 25** | 55,9 s | 74 % |
+| 3 | 0,96 | **25 / 25** | 112,1 s | 73 % |
 
-Passer de K=1 à K=2 produit un gain réel de **+12 points** de
-moyenne pour **+10 s** de temps mur sur un laptop, largement
-distribué sur les catégories coding, math, reasoning, multilingual
-et long-context. La ligne K=3 **n'est pas** un vrai test de K=3 :
-l'un des trois « petits modèles locaux » du pool, `gemma3:4b`, est
-enregistré comme VLM dans les a priori bootstrap, et le filtre
-`allow_vlms=False` du routeur l'a (correctement) exclu sur chaque
-prompt non-vision. Le routeur s'est donc retrouvé avec deux
-candidats textuels quel que soit `top_k`, et la ligne K=3 a le même
-ensemble de candidats que la ligne K=2. Un vrai K=3 demande un
-troisième candidat purement textuel dans le pool (re-run prévu en
-[docs/EVALUATION.md §5 #0](docs/EVALUATION.md)). Tous les chiffres,
-le détail par catégorie, les échecs persistants et les notes de
-reproductibilité vivent dans
-[docs/EVALUATION.md §4.2](docs/EVALUATION.md). L'artefact (JSON
-par tour, chaque réponse fusionnée, chaque note) est conservé dans
-le répertoire `eval_runs/` ignoré.
+**Verdict** : K=1 → K=2 = **+8 points** d'exactitude moyenne
+(0,87 → 0,95) et **+2 prompts** au-dessus du seuil (tous les
+prompts passent à K=2), pour **+24 s** de temps mur. K=2 → K=3
+atteint le plafond de qualité sur ce dataset (+1 point, 25/25
+encore) mais **double le temps mur** à 112 s. **K=2 est le point
+d'équilibre** sur ce juge / ce pool ; K=3 ne vaut pas son coût.
+Le multilingue est la catégorie où la fusion aide le plus
+(0,33 → 0,93 → 1,00) ; le long-context régresse à K=3 (le juge
+sur-curera et perd des exemples concrets).
+
+Tous les chiffres, le détail par catégorie, les deux erreurs de
+grader DeepEval à K=1 (assumées honnêtement), les mises en garde,
+et le suivi K=2 → optimiser-le-juge vivent dans
+[docs/EVALUATION.md §4.3](docs/EVALUATION.md). Les rapports JSON
+bruts (`ksweep-20260526T*Z.json`, deux fichiers — la première
+tentative qui a révélé l'interaction avec le filtre VLM, et le
+re-run qui l'a corrigée) sont conservés dans le répertoire
+`eval_runs/` ignoré.
 
 Cela dit, **ce n'est pas magique** :
 

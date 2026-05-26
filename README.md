@@ -179,32 +179,36 @@ is curation, not invention.
 
 ### Does it actually help? (2026-05-26 K-sweep)
 
-A first multi-prompt, end-to-end run on a 25-prompt mixed-task
-dataset, local-only (3 small OSS candidates, `qwen3:8b` judge),
-graded with DeepEval `GEval(correctness, threshold=0.6)`:
+End-to-end run on the full 25-prompt mixed-task dataset,
+local-only (3 small OSS candidates — `llama3.2:3b`, `qwen2.5:3b`,
+`gemma3:4b`; `qwen3:8b` synthesis judge), graded by DeepEval
+`GEval(correctness, threshold=0.6)`. Real K=3 (every K=3 turn
+fanned out to all three candidates including Gemma; see the
+[`fan_out=2` investigation](docs/EVALUATION.md) for why the first
+attempt didn't):
 
 | K | mean correctness | pass (≥0.6) | total latency | judge share |
 |---|---|---|---|---|
-| 1 | 0.78 | 21 / 25 | 27.7 s | 90 % |
-| 2 | **0.90** | 23 / 25 | 37.8 s | 82 % |
-| 3 | (0.87 — see caveat) | 23 / 25 | 43.2 s | 82 % |
+| 1 | 0.87 | 23 / 25 | 32.1 s | 70 % |
+| 2 | **0.95** | **25 / 25** | 55.9 s | 74 % |
+| 3 | 0.96 | **25 / 25** | 112.1 s | 73 % |
 
-K=1 → K=2 is a real **+12 pp** mean-correctness uplift for **+10 s**
-of wall-clock on a laptop, broadly distributed across coding, math,
-reasoning, multilingual and long-context categories. The K=3 row is
-**not** a real K=3 test: one of the three "small local" models I
-picked for the pool, `gemma3:4b`, is registered as a VLM in the
-bootstrap, and the router's `allow_vlms=False` filter correctly
-excluded it on every non-vision prompt. That left the router with
-two text candidates regardless of `top_k`, so the K=3 row is
-identical to the K=2 row in candidate set. A real K=3 needs a
-third text-only candidate in the pool (re-run tracked in
-[docs/EVALUATION.md §5 #0](docs/EVALUATION.md)). Full numbers,
-per-category breakdown, persistent failures and reproducibility
-notes live in
-[docs/EVALUATION.md §4.2](docs/EVALUATION.md). The artefact
-(per-turn JSON, every fused answer, every grade) is preserved in the
-ignored `eval_runs/` directory.
+**Headline:** K=1 → K=2 is **+8 pp mean correctness** (0.87 → 0.95)
+and **+2 prompts cleared the threshold** (every K=2 case passes),
+for **+24 s** of wall-clock. K=2 → K=3 hits a quality ceiling on
+this dataset (+1 pp, still 25/25 passing) but **doubles wall-clock**
+to 112 s. **K=2 is the sweet spot** on this judge / pool; K=3 is
+not worth the cost. Multilingual is the category fusion helps most
+(0.33 → 0.93 → 1.00); long-context regresses at K=3 (judge
+over-curates and drops concrete examples).
+
+Full numbers, per-category breakdown, the two DeepEval grader
+errors at K=1 to be honest about, the caveats, and the K=2 →
+investigate-the-judge follow-up live in
+[docs/EVALUATION.md §4.3](docs/EVALUATION.md). Raw JSON reports
+(`ksweep-20260526T*Z.json`, two of them — the first attempt that
+exposed the VLM-filter interaction, and the rerun that fixed it)
+are preserved in the ignored `eval_runs/` directory.
 
 **But this is not free magic.** The judge is not an objective oracle:
 

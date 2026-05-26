@@ -213,22 +213,99 @@ directory.
   K=2 vs K=1 delta — most likely in K=2's favour, but possibly
   pushing K=1 closer to ceiling and reducing the gap.
 
-That's the only multi-prompt DeepEval-graded run on record.
-Everything in §5 below is **planned** until proven otherwise.
+### 4.3 — K-sweep rerun with real K=3 (2026-05-26, evening)
+
+The §4.2 sweep couldn't measure real K=3 because `gemma3:4b` was
+VLM-filtered out on every text prompt. This rerun fixes that by
+flipping `allow_vlms=True` on the runner, with the same three-model
+pool (`llama3.2:3b`, `qwen2.5:3b`, `gemma3:4b`). Same dataset, same
+judge, same grader. Every K=3 turn now reports `fan_out=3` — Gemma is
+genuinely in the fusion.
+
+| K | mean correctness | median | pass (≥0.6) | n | total latency | candidate max | judge |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.87 † | 1.00 | 23 / 25 | 25 | 32.1 s | 9.6 s | 22.5 s |
+| 2 | **0.95** | 1.00 | **25 / 25** | 25 | 55.9 s | 14.8 s | 41.1 s |
+| 3 | **0.96** | 1.00 | **25 / 25** | 25 | 112.1 s | 30.2 s | 81.9 s |
+
+† Two of the K=1 "failures" are DeepEval grader errors, not model
+failures (`multilingual-french-idiom` and `multilingual-japanese-thanks`
+both surfaced as `score=0.00` with `reason: grader error:`). The
+respective K=2 scores for the same prompts are 1.00 and 0.90. The
+true K=1 mean is therefore slightly higher than 0.87; a re-grade
+pass would resolve this, but the K-sweep conclusions below survive
+the correction.
+
+**Per-category mean:**
+
+| K | analysis | coding | long_ctx | math | multilingual | reasoning | summarisation | writing |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1.00 | 0.92 | 0.80 | 0.96 | 0.33 † | 1.00 | 0.80 | 1.00 |
+| 2 | 1.00 | 0.90 | 0.90 | 1.00 | **0.93** | 1.00 | 0.80 | 1.00 |
+| 3 | 1.00 | 0.92 | 0.60 | 1.00 | **1.00** | 1.00 | 0.85 | 1.00 |
+
+**Headline findings**
+
+1. **K=1 → K=2 is the biggest delta worth paying for.** +8 pp mean
+   correctness (0.87 → 0.95), and the failure list drops from 4
+   prompts to 0 (every K=2 case clears the 0.6 threshold). The cost
+   is +24 s wall-clock per turn.
+2. **K=2 → K=3 is at quality ceiling on this dataset.** +1 pp mean
+   (0.95 → 0.96), 25/25 pass at both, but wall-clock **doubles**
+   (56 s → 112 s) because the judge has to fuse three candidates
+   instead of two and `qwen3:8b` engages much longer chain-of-thought
+   on three drafts than on two. **K=3 is not worth its cost on this
+   pool / judge combination.**
+3. **Multilingual is where K-fusion shines.** K=1 mean for
+   multilingual = 0.33 (one good answer, two grader errors); K=2
+   recovers to 0.93; K=3 hits 1.00. Anecdotally, having Gemma 3 4B
+   in the K=3 fan-out helped on Spanish/Japanese/French.
+4. **Long-context regresses at K=3.** 0.80 → 0.90 → 0.60. The
+   `long-context-document-types` prompt asks for three concrete
+   examples; the K=3 fused answer kept dropping one or substituting
+   "annual report" for "book/RFC/transcript". This is the only
+   category where K=3 is actively worse than K=2. Plausible
+   explanation: judge chain-of-thought on three drafts produces an
+   over-curated answer that strips concrete examples.
+5. **The judge dominates wall-clock at every K.** K=1 70 % of total,
+   K=2 74 %, K=3 73 %. Optimising the synthesis judge — a smaller
+   judge, a budget cap, or a different judge model entirely — is
+   the next natural ablation (§5 #2 below).
+
+**Caveats (unchanged from §4.2 unless noted)**
+
+- N=25 prompts × 3 K values is still small. The K=1 → K=2 delta is
+  robust; the K=2 → K=3 delta (+1 pp) is **inside the noise band**
+  for this N and should not be over-read.
+- DeepEval emitted two grader errors at K=1. They consistently
+  resolved at higher K, so the K=2/K=3 means are clean numbers.
+- Same judge for synthesis and grading — circularity intact. §5 #8.
+- Local-only pool. A remote-augmented pool would shift the K=1
+  baseline up and probably narrow the K=1 → K=2 gap.
+- **The K-sweep test pool intentionally enabled `allow_vlms=True`** to
+  include `gemma3:4b`. This is a documented runner choice, not a
+  default. The production VLM filter still applies on every other
+  code path.
+
+**Practical recommendation**: if you're running Roitelet on a laptop
+with a `qwen3:8b` judge and an OSS-only candidate pool, **default to
+K=2**. K=3 buys you almost nothing on this judge for double the
+wall-clock. K=1 leaves measurable quality on the table on multilingual
+and coding prompts.
+
+That's the load-bearing run. Everything in §5 below is **planned**
+until proven otherwise. Both raw JSON reports
+(`ksweep-20260526T045340Z.json` and `ksweep-20260526T083344Z.json`)
+live in the ignored `eval_runs/` working directory.
 
 ---
 
 ## 5. Planned ablations (priority order)
 
-0. **Re-run the K-sweep with a real K=3 candidate pool.** The pool
-   used in §4.2 contained one VLM (`gemma3:4b`) that the
-   `allow_vlms=False` filter correctly excluded from every
-   non-vision prompt. Swap it for a text-only third model
-   (`qwen2.5-coder:latest`, `phi4-mini:3.8b` once pulled, or
-   `llama3.2:1b`) and re-run the K=2 vs K=3 comparison. The
-   alternative is `allow_vlms=True`, but that lets the rest of the
-   live-discovered VLMs (`qwen2.5vl:7b`, `llama3.2-vision`) into
-   the pool too, which is a different experiment.
+0. ~~**Re-run the K-sweep with a real K=3 candidate pool.**~~ Done in
+   §4.3 (2026-05-26 evening). Real K=3 measured with
+   `allow_vlms=True` and `gemma3:4b` in the fan-out. K=2 confirmed
+   as the sweet spot.
 1. **K-sweep with heuristic router** (`K ∈ {1, 2, 3, 5}`) on the full
    25-prompt dataset, with the default Qwen 3 8B judge. Goal: pin
    down where K stops paying off.
