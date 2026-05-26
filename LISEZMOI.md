@@ -23,6 +23,8 @@
 
 ![Roitelet](assets/roitelet.jpg)
 
+![Interface web Roitelet — un prompt utilisateur, trois candidats OSS locaux exécutés en parallèle, le juge local fusionne leurs réponses et indique celles qu'il a effectivement utilisées.](assets/screenshot.png)
+
 ---
 
 ## Le roitelet

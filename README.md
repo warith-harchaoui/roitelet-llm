@@ -21,6 +21,8 @@
 
 ![Roitelet](assets/roitelet.jpg)
 
+![Roitelet web UI — one user prompt, three local OSS candidates fanned out in parallel, the local synthesis judge fuses their answers and surfaces which ones it actually used.](assets/screenshot.png)
+
 ---
 
 ## The wren
