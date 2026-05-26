@@ -377,7 +377,7 @@ flowchart LR
     Q[User prompt with /personal]
     WIKI --> SIZE{Total chars ≤ 32k?}
     SIZE -- yes --> CAT[Concatenate full wiki<br/>(Karpathy LLM-wiki)]
-    SIZE -- no --> RAG[Chunk · embed via nomic-embed-text<br/>top-K cosine retrieval]
+    SIZE -- no --> RAG[Chunk · persistent index<br/>(turbovec ANN or numpy fallback)<br/>top-K retrieval]
     CAT --> CTX[Personal-context block]
     RAG --> CTX
     CTX --> PIPE[Standard top-K fan-out + fusion]
@@ -392,18 +392,36 @@ entire notebook on every turn.
 
 The **RAG mode** (large corpora) chunks each wiki file at
 1 200 chars with 200-char overlap, embeds via local
-`nomic-embed-text`, and retrieves the top-5 cosine-nearest chunks.
-On any embedding failure the personal-context injection silently
-skips — the turn runs as a normal chat (the assistant will say "I
-don't have that in your notes").
+`nomic-embed-text` **once per wiki revision**, and retrieves the
+top-5 nearest chunks per query. The persistent on-disk index lives
+next to the wiki:
+
+```
+<wiki_dir>/
+├── .rag_index.json       # SHA-256 fingerprint + chunk manifest
+├── .rag_embeddings.npy   # canonical (N, dim) float32 matrix
+└── .rag_index.tq         # compressed turbovec IdMapIndex (optional)
+```
+
+A SHA-256 fingerprint over each wiki file's `(name, mtime, size)`
+plus the chunking knobs triggers a rebuild whenever the corpus
+changes — every other query just embeds the question and searches
+the cached index. With `pip install -e .[personal]` the search uses
+turbovec's compressed ANN (~16× embedding compression,
+sub-millisecond latency at 100 k+ chunks); without it, a vectorised
+numpy cosine scan over the `.npy` matrix runs — still fast on
+personal-scale corpora. On any embedding failure the
+personal-context injection silently skips; the turn runs as a
+normal chat (the assistant will say "I don't have that in your
+notes").
 
 **Embedding visualisation** (Karpathy-style scatter): the same
-embeddings drive a 2-D PCA projection rendered as an SVG in the web
-control room (settings sheet → *Visualize*) and as a standalone HTML
-file from `python -m cli personal viz --output personal-viz.html`.
-Each dot is one chunk; colour is the source file. The projection
-runs in memory on every request and skips when the embedding model
-is unreachable.
+cached embeddings drive a 2-D PCA projection rendered as an SVG in
+the web control room (settings sheet → *Visualize*) and as a
+standalone HTML file from `python -m cli personal viz --output
+personal-viz.html`. Each dot is one chunk; colour is the source
+file. The projection reuses the on-disk index, so the viz path is
+effectively free once retrieval has warmed the cache.
 
 ---
 

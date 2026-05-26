@@ -453,7 +453,8 @@ you're trying to do.
   image generation (DALL-E, local Stable Diffusion, …).
 - **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — drop files,
   ingest, query your personal knowledge base. Includes the
-  Karpathy-style 2-D embedding scatter.
+  Karpathy-style 2-D embedding scatter and the turbovec-backed
+  persistent RAG index (`pip install -e .[personal]`).
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
   `/personal`, `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,

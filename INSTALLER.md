@@ -62,7 +62,7 @@ pip install -r requirements.txt
 
 ### Extras optionnels
 
-`pyproject.toml` expose trois jeux de dépendances optionnels afin de
+`pyproject.toml` expose quatre jeux de dépendances optionnels afin de
 garder le démarrage rapide léger :
 
 | Extra | Inclut | À utiliser quand |
@@ -70,12 +70,14 @@ garder le démarrage rapide léger :
 | `dev` | pytest, pytest-asyncio, ruff | Exécution de la suite de tests ou linting |
 | `eval` | deepeval | Suite d'évaluation `@pytest.mark.eval` (qualité des réponses) |
 | `multimodal` | pywhispercpp, NeMo (~2 Go), soundfile, kreuzberg | Pour les pièces jointes audio / PDF via l'interface web |
+| `personal` | turbovec | Recherche ANN compressée pour l'index RAG du mode personnel — rapide même sur quelques milliers de chunks. L'installation de base utilise un repli numpy. |
 
 Installation :
 
 ```bash
 pip install -e .[dev]
 pip install -e .[multimodal]      # la légende d'image est gérée côté serveur par le VLM Ollama local — pas de dépendance Python supplémentaire
+pip install -e .[personal]        # ANN turbovec pour le RAG du mode personnel
 ```
 
 ---
@@ -166,8 +168,16 @@ Cela lance un unique processus uvicorn sur `http://localhost:8000` qui sert à l
 ### Lancement manuel
 
 ```bash
-python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+# Réservé au localhost (recommandé sur un poste mono-utilisateur).
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+> ⚠️ N'utilisez `--host 0.0.0.0` **que** si vous voulez exposer l'API
+> sur votre réseau local, et définissez d'abord `ROITELET_API_TOKEN`.
+> L'installation par défaut n'a aucune authentification — écouter sur
+> 0.0.0.0 sans jeton rend chaque modèle de la machine accessible
+> depuis n'importe quel appareil du réseau. Voir la section **Security
+> note** du [README.md](README.md).
 
 ---
 
@@ -265,7 +275,7 @@ roitelet-llm/
 ├── docker-compose.yml  # pile compose
 ├── environment.yaml    # environnement conda
 ├── requirements.txt    # dépendances pip
-├── pyproject.toml      # build + extras optionnels (dev / eval / multimodal)
+├── pyproject.toml      # build + extras optionnels (dev / eval / multimodal / personal)
 ├── MECHANISM.md        # Architecture détaillée (diagrammes Mermaid)
 └── .env.example        # modèle de variables d'environnement
 ```

@@ -386,7 +386,8 @@ correspond à ce que vous voulez faire.
   la génération d'images (DALL-E, Stable Diffusion local, …).
 - **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — déposer des
   fichiers, ingestion, interroger votre base personnelle. Inclut la
-  projection 2-D des embeddings (style Karpathy).
+  projection 2-D des embeddings (style Karpathy) et l'index RAG
+  persistant accéléré par turbovec (`pip install -e .[personal]`).
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
   `/personal`, `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
