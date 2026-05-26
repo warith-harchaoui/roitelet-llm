@@ -36,12 +36,13 @@ From your perspective, it feels like using one unified super-brain API. The rest
 - 🌍 **Frontier Integrations:** Optional paid candidates through OpenRouter, direct OpenAI-compatible endpoints, Anthropic, Gemini, Perplexity.
 - 🖼️ **Multimodal Attachments:** Drop images, PDFs, or audio into the chat — extracted locally (Ollama VLM caption, kreuzberg PDF text, whisper.cpp + NeMo diarization) before the text pipeline runs.
 - 🎨 **Image Generation:** Route image prompts to the strongest registered image-gen model. K=1 because image fusion isn't a thing. OpenAI Images, OpenRouter relays, or local SD via the OpenAI-compatible shape. See [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md).
+- 🗂️ **Personal mode (RAG + Karpathy wiki):** Drop your own files into `data/personal/inbox/`, ingest with one click — audio is transcribed, images captioned, PDFs extracted. Small corpora go inline (Karpathy LLM-wiki style); large ones switch to retrieval. Includes a 2-D PCA embedding scatter to *see* your knowledge base. See [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
 - 🔬 **Two routers, one pipeline.** Default heuristic + opt-in `ROITELET_ROUTER=mf` learned matrix-factorisation router that trains on accumulated telemetry. Hybrid regimes (`trivial`, `budget_constrained`, `ambiguous`, …) adjust the math per turn.
 - 🌐 **Two capability detectors.** Default keyword scan + opt-in `ROITELET_CAPABILITY_DETECTOR=embedding` classifier on top of a local Ollama embedding model (`nomic-embed-text`). Falls back transparently when offline.
 - 📊 **Local Telemetry & Cost Tracking:** Dashboard monitoring for token costs, latency, simulated energy (kWh), and carbon footprints (gCO₂e).
 - 🔄 **Self-Learning:** Capability-conditioned rolling Elo update loop automatically prioritises models that perform better over time.
 - 🔌 **Standardized Endpoints:** OpenAI-compatible `/v1/chat/completions` + native FastAPI + MCP JSON-RPC. Image generation at `/api/images` (and OpenAI-compatible `/v1/images/generations`).
-- 💬 **Slash commands:** `/image`, `/speech`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — per-turn overrides parsed at the prompt boundary. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- 💬 **Slash commands:** `/image`, `/speech`, `/personal`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — per-turn overrides parsed at the prompt boundary. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
 - 🔐 **Optional Bearer-Token Gate:** Set `ROITELET_API_TOKEN` to lock down every mutating + listing endpoint for LAN deployments. Defaults to a no-op for local-only single-user UX.
 
 ---
