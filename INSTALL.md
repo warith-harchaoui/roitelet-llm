@@ -13,15 +13,18 @@ Complete installation guide for every supported setup path.
 | [conda](https://docs.conda.io) **or** venv | any | Environment isolation |
 | [Docker](https://docs.docker.com/get-docker/) | 24+ | Container deployment (optional) |
 
-> **Recommended OSS bundle — pull before first run:**
-> ```bash
-> ./scripts/pull_defaults.sh
-> ```
-> Roitelet fuses K parallel answers; the script seeds Ollama with one
-> capable model from each major OSS family (Qwen, Llama, Gemma, Phi)
-> plus a vision-language model. Total disk footprint ≈ 15 GB. Without
-> at least the default synthesis model (`qwen3:8b`) the
-> coronation step has nothing to fuse with.
+> **Pick a model bundle before the first run.** Three setup paths,
+> from lightest to heaviest. The trade is footprint vs. candidate
+> diversity (and therefore fusion quality):
+>
+> | Profile | Command | Disk | What you get |
+> |---|---|---|---|
+> | **Minimal** | `./scripts/pull_defaults.sh --minimal` | ~3 GB | One local judge (`qwen3:4b`) and the embedding model (`nomic-embed-text`). Fastest onboarding. Fan-out is K=1 unless you add a remote API key. |
+> | **Full local** | `./scripts/pull_defaults.sh` | ~15 GB | One capable model from each major OSS family (Qwen, Llama, Gemma, Phi) + a vision-language model + the embedding model. Designed for cross-family fan-out + fusion. |
+> | **Remote-augmented** | `./scripts/pull_defaults.sh --minimal` + an API key in `.env` | ~3 GB local | Same local judge as Minimal, but the fan-out includes remote candidates (OpenRouter, OpenAI, etc.). Best quality, weakest privacy. See [docs/PRIVACY.md](docs/PRIVACY.md). |
+>
+> If you're unsure, start with `--minimal`. You can upgrade later by
+> running the script again without the flag.
 
 ---
 

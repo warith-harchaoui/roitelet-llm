@@ -12,11 +12,11 @@
 
 ## Le roitelet
 
-Dans la vieille fable, les oiseaux de la forêt décident que celui qui
-volera le plus haut sera couronné roi. L'aigle s'élève sans effort
-au-dessus de tous les autres. Mais un minuscule roitelet, caché dans
-ses plumes, s'est laissé porter tout en haut — et au sommet, d'un
-petit battement d'ailes supplémentaire, lui rafle la couronne.
+Il était une fois, dans la forêt, les oiseaux qui décidèrent que celui
+qui volerait le plus haut serait couronné roi. L'aigle s'éleva sans
+effort au-dessus de tous les autres. Mais un minuscule roitelet,
+caché dans ses plumes, se laissa porter tout en haut — et au sommet,
+d'un petit battement d'ailes supplémentaire, lui rafla la couronne.
 
 Ce n'est pas que le roitelet soit l'oiseau le plus fort — il ne
 l'est pas. Ce qui compte, c'est ce que de petits mouvements locaux,

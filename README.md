@@ -11,7 +11,7 @@
 
 ## The wren
 
-In the old fable, the birds of the forest agreed that whoever flew
+Once upon a time, the birds of the forest agreed that whoever flew
 highest would be crowned king. The eagle climbed effortlessly past
 every other bird. But a tiny wren had hidden in the eagle's feathers,
 rode all the way up, and at the very top fluttered a few wingbeats
@@ -147,13 +147,21 @@ tool whose primary role matches what you're actually trying to do.
 
 ## Why fusion can help — and where the judge bias sits
 
-Judging and fusing K already-written candidate answers is a different
-job from generating a strong answer from scratch. The judge does not
-have to know everything: it has K drafts in front of it, and its job
-is to compare them, find overlaps, drop contradictions, preserve
-useful details, and emit a single fused answer. A relatively small
-local model can sometimes do that well — comparing K versions is
-easier than producing the first one.
+The whole synthesis-judge idea rests on a single asymmetry:
+**evaluating and synthesising is easier than creating from scratch.**
+
+A judge that has K already-written candidate answers in front of it
+does not have to know the answer; it has to compare drafts, find
+overlaps, drop contradictions, preserve useful details, and emit a
+single fused response. That's a fundamentally smaller task than
+producing the first answer with no scaffolding. A relatively small
+local model can do it credibly for the same reason a teaching
+assistant can grade a stack of essays without being able to write
+the best one themselves.
+
+This asymmetry is what makes Roitelet's "small local model on top of
+strong remote candidates" pipeline plausible at all. The judge's job
+is curation, not invention.
 
 **But this is not free magic.** The judge is not an objective oracle:
 
