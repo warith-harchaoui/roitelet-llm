@@ -186,10 +186,14 @@ class TestRunRoiteletChat:
         assert convo.messages[0].content == prompt
         assert convo.messages[1].content == response.synthesis.content
 
-        # The assistant message preserves full router + responses + synthesis payload.
+        # The assistant message preserves full router + responses +
+        # synthesis payload, plus the end-to-end pipeline wall-clock so
+        # the GUI can render the user-perceived latency.
         meta = convo.messages[1].metadata
-        assert set(meta.keys()) == {'router', 'responses', 'synthesis'}
+        assert {'router', 'responses', 'synthesis', 'total_latency_s'} <= set(meta.keys())
         assert len(meta['responses']) == 3
+        assert isinstance(meta['total_latency_s'], (int, float))
+        assert meta['total_latency_s'] >= 0.0
 
         # --- Telemetry persisted ---
         records = storage.list_telemetry()
