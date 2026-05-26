@@ -13,7 +13,6 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import pytest
 
@@ -21,11 +20,27 @@ import pytest
 def _reset_singletons() -> None:
     """Drop cached settings so each test sees the tmp_path-rooted state."""
     from core.config import get_settings
-    from core.registry import ollama_cache
+    from core.registry import get_registry, ollama_cache
+    from core.storage import get_storage
 
     get_settings.cache_clear()
+    get_storage.cache_clear()
+    get_registry.cache_clear()
     ollama_cache._models = []
     ollama_cache._fetched_at = time.monotonic()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_singletons():
+    """Reset cached singletons after every test so we never leak a tmp_path.
+
+    The personal-mode tests reroot ``ROITELET_DATA_DIR`` via monkeypatch;
+    the registry / storage / settings lru_caches would otherwise pin a
+    tmp-path-rooted config that subsequent tests (or the real data dir)
+    can't recover from.
+    """
+    yield
+    _reset_singletons()
 
 
 class TestPersonalPaths:
@@ -50,7 +65,7 @@ class TestIngest:
     async def test_text_file_is_passthrough(self, tmp_path, monkeypatch):
         monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
         _reset_singletons()
-        from core.personal import ingest_inbox, inbox_dir, wiki_dir
+        from core.personal import inbox_dir, ingest_inbox, wiki_dir
 
         (inbox_dir() / 'note.md').write_text('# A note\n\nHello world.', encoding='utf-8')
         results = await ingest_inbox()
@@ -69,7 +84,7 @@ class TestIngest:
     async def test_unknown_extension_is_skipped(self, tmp_path, monkeypatch):
         monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
         _reset_singletons()
-        from core.personal import ingest_inbox, inbox_dir
+        from core.personal import inbox_dir, ingest_inbox
 
         (inbox_dir() / 'weird.xyz').write_text('junk', encoding='utf-8')
         results = await ingest_inbox()
@@ -83,7 +98,7 @@ class TestIngest:
         """Running ingest twice must not regenerate already-processed files."""
         monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
         _reset_singletons()
-        from core.personal import ingest_inbox, inbox_dir
+        from core.personal import inbox_dir, ingest_inbox
 
         (inbox_dir() / 'note.md').write_text('# Note\n\nFirst version.', encoding='utf-8')
         first = await ingest_inbox()
@@ -121,7 +136,7 @@ class TestIngest:
         async def _real_convert_stub(path, modality):
             return f'(text from {modality})'
 
-        from core.personal import ingest_inbox, inbox_dir
+        from core.personal import inbox_dir, ingest_inbox
 
         (inbox_dir() / 'recording.m4a').write_bytes(b'\x00\x00')  # fake bytes
         results = await ingest_inbox()
@@ -203,6 +218,60 @@ class TestPersonalStatus:
 
         status = personal_status()
         assert status == {'inbox': 0, 'wiki': 0, 'wiki_chars': 0, 'mode': 'empty'}
+
+
+class TestEmbeddingViz:
+    """``project_chunks_2d`` projects chunks into a 2-D scatter via PCA."""
+
+    def test_empty_corpus_returns_no_points(self, tmp_path, monkeypatch):
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+        from core.personal import project_chunks_2d
+
+        assert project_chunks_2d() == []
+
+    def test_embedding_failure_returns_no_points(self, tmp_path, monkeypatch):
+        """When the embedding model is unreachable, return [] cleanly."""
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+
+        # The projection imports `_embed_prompt` lazily from
+        # capability_classifier, so we patch it at the source module.
+        import core.capability_classifier as cc
+        monkeypatch.setattr(cc, '_embed_prompt', lambda prompt: None)
+
+        from core.personal import project_chunks_2d, wiki_dir
+        (wiki_dir() / 'a.md').write_text('# A\n\nHello.', encoding='utf-8')
+        assert project_chunks_2d() == []
+
+    def test_projection_returns_coords(self, tmp_path, monkeypatch):
+        """With a stubbed deterministic embedder, every chunk gets x/y."""
+        import numpy as np
+
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+
+        import core.capability_classifier as cc
+
+        def _stub_embed(text):
+            # Project text length + first-char hash into a 32-D vector so
+            # SVD has something to work with.
+            vec = np.zeros(32, dtype=np.float32)
+            vec[len(text) % 32] = 1.0
+            if text:
+                vec[ord(text[0]) % 32] += 0.5
+            return vec
+
+        monkeypatch.setattr(cc, '_embed_prompt', _stub_embed)
+
+        from core.personal import project_chunks_2d, wiki_dir
+        (wiki_dir() / 'topic-a.md').write_text('# Topic A\n\n' + ('alpha. ' * 50), encoding='utf-8')
+        (wiki_dir() / 'topic-b.md').write_text('# Topic B\n\n' + ('beta. ' * 50), encoding='utf-8')
+        points = project_chunks_2d()
+        assert points
+        for p in points:
+            assert {'path', 'chunk_index', 'text', 'x', 'y'} <= set(p)
+            assert isinstance(p['x'], float) and isinstance(p['y'], float)
 
 
 class TestSlashCommandPersonal:

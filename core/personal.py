@@ -520,6 +520,77 @@ def build_personal_context(prompt: str) -> str:
     )
 
 
+def project_chunks_2d() -> list[dict]:
+    """Embed every wiki chunk and project into 2-D for visualisation.
+
+    Returns
+    -------
+    list of dict
+        One entry per chunk. Keys:
+
+        * ``path`` — source wiki filename (string).
+        * ``chunk_index`` — 0-based position within the source.
+        * ``text`` — the chunk body.
+        * ``x``, ``y`` — 2-D PCA coordinates (floats, centred on the
+          corpus mean).
+
+        Empty list when the wiki is empty *or* when the embedding
+        model is unreachable; the caller surfaces that as "viz not
+        available right now."
+
+    Notes
+    -----
+    The projection is plain PCA (truncated SVD on the centred
+    embedding matrix). No t-SNE / UMAP — those add dependencies and
+    a personal corpus is rarely large enough for the non-linearity
+    to matter. The whole projection runs in memory on every request;
+    cache it if the corpus grows past a few thousand chunks.
+    """
+    import numpy as np
+
+    from .capability_classifier import _embed_prompt
+
+    pairs = _read_wiki_files()
+    if not pairs:
+        return []
+
+    chunks: list[tuple[Path, int, str, np.ndarray]] = []
+    for path, body in pairs:
+        for idx, piece in enumerate(_chunk(body)):
+            vec = _embed_prompt(piece)
+            if vec is None:
+                return []  # embedding model unavailable — bail
+            chunks.append((path, idx, piece, vec))
+    if not chunks:
+        return []
+
+    matrix = np.stack([c[3] for c in chunks]).astype(np.float32)
+    centred = matrix - matrix.mean(axis=0, keepdims=True)
+
+    # Top-2 components via SVD. Compute the full SVD only when the
+    # corpus is small enough; for larger ones the randomised SVD via
+    # sklearn would be faster, but a few thousand chunks at ~384 dims
+    # finishes in milliseconds on a laptop.
+    try:
+        _, _, vt = np.linalg.svd(centred, full_matrices=False)
+        components = vt[:2]
+        coords = centred @ components.T
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('Personal viz projection failed: %s', exc)
+        return []
+
+    points: list[dict] = []
+    for (path, idx, text, _), (x, y) in zip(chunks, coords, strict=True):
+        points.append({
+            'path': path.name,
+            'chunk_index': idx,
+            'text': text,
+            'x': float(x),
+            'y': float(y),
+        })
+    return points
+
+
 def personal_status() -> dict[str, int]:
     """Return a quick summary of the personal corpus.
 

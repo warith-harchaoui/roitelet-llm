@@ -22,9 +22,10 @@ import sys
 
 from core.personal import (
     build_personal_context,
-    ingest_inbox,
     inbox_dir,
+    ingest_inbox,
     personal_status,
+    project_chunks_2d,
     wiki_dir,
 )
 from core.pipeline import run_roitelet_chat
@@ -162,6 +163,96 @@ def personal_dispatch(args: argparse.Namespace) -> None:
                 print(f"  {path.name:40s}  {size:>8d} bytes")
     elif sub == 'ask':
         asyncio.run(personal_ask(args.prompt))
+    elif sub == 'viz':
+        _personal_viz(args.output)
+
+
+def _personal_viz(output_path: str) -> None:
+    """Project wiki chunks to 2-D and write a standalone HTML scatter.
+
+    Parameters
+    ----------
+    output_path : str
+        Destination file. Overwrites if it exists.
+    """
+    import json
+
+    points = project_chunks_2d()
+    if not points:
+        print('No wiki chunks to visualise, or embedding model unreachable.')
+        return
+    # Embed the points directly into a single-file HTML so the user can
+    # open it without serving anything. Avoids JS deps.
+    html = _PERSONAL_VIZ_TEMPLATE.replace('"__POINTS__"', json.dumps(points))
+    Path(output_path).write_text(html, encoding='utf-8')
+    print(f'Wrote {len(points)} points to {output_path}')
+
+
+_PERSONAL_VIZ_TEMPLATE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Roitelet — personal wiki embedding viz</title>
+<style>
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #fafafa; color: #1c1c1e; }
+  header { padding: 16px 24px; border-bottom: 1px solid #e5e5ea; background: white; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: 12px; color: #6e6e73; }
+  #chart { width: 100vw; height: calc(100vh - 70px); }
+  .dot { fill-opacity: 0.7; cursor: pointer; transition: fill-opacity 0.15s; }
+  .dot:hover { fill-opacity: 1; }
+  #tooltip {
+    position: absolute; pointer-events: none; max-width: 360px;
+    background: rgba(0,0,0,0.85); color: white; padding: 8px 12px;
+    font-size: 12px; line-height: 1.4; border-radius: 6px;
+    display: none; z-index: 10;
+  }
+</style></head><body>
+<header>
+  <h1>Personal wiki — 2-D embedding projection</h1>
+  <p>Each dot is one chunk. Color = source file. Spatial proximity reflects semantic similarity (PCA of nomic-embed-text vectors).</p>
+</header>
+<svg id="chart"></svg>
+<div id="tooltip"></div>
+<script>
+const points = "__POINTS__";
+const palette = ['#0a84ff','#ff9500','#34c759','#ff3b30','#af52de','#5856d6','#ff2d55','#5ac8fa','#ffcc00','#a2845e'];
+const fileToColor = new Map();
+function colorFor(path) {
+  if (!fileToColor.has(path)) fileToColor.set(path, palette[fileToColor.size % palette.length]);
+  return fileToColor.get(path);
+}
+const svg = document.getElementById('chart');
+const tooltip = document.getElementById('tooltip');
+function render() {
+  const W = window.innerWidth, H = window.innerHeight - 70;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.innerHTML = '';
+  if (!points.length) return;
+  const xs = points.map(p => p.x), ys = points.map(p => p.y);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const margin = 40;
+  const sx = x => margin + (W - 2*margin) * (xmax === xmin ? 0.5 : (x - xmin) / (xmax - xmin));
+  const sy = y => H - margin - (H - 2*margin) * (ymax === ymin ? 0.5 : (y - ymin) / (ymax - ymin));
+  for (const p of points) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', sx(p.x)); c.setAttribute('cy', sy(p.y));
+    c.setAttribute('r', 6); c.setAttribute('fill', colorFor(p.path));
+    c.setAttribute('class','dot');
+    c.addEventListener('mousemove', e => {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (e.pageX + 12) + 'px';
+      tooltip.style.top = (e.pageY + 12) + 'px';
+      tooltip.innerHTML = '<b>' + p.path + '</b> #' + p.chunk_index + '<br>' +
+        p.text.slice(0, 240).replace(/</g,'&lt;') + (p.text.length > 240 ? '…' : '');
+    });
+    c.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+    svg.appendChild(c);
+  }
+}
+window.addEventListener('resize', render); render();
+</script></body></html>
+"""
 
 
 def main() -> None:
@@ -202,6 +293,13 @@ def main() -> None:
         "ask", help="Ask a question with the personal knowledge base injected"
     )
     personal_ask_parser.add_argument("prompt", help="The question")
+    viz_parser = personal_sub.add_parser(
+        "viz", help="Write a Karpathy-style 2-D embedding scatter to a standalone HTML file",
+    )
+    viz_parser.add_argument(
+        "--output", default="personal-viz.html",
+        help="HTML file to write (default: personal-viz.html in the cwd)",
+    )
 
     args = parser.parse_args()
 

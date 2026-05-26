@@ -37,7 +37,7 @@ from core.commands import parse_command, render_help
 from core.config import get_settings
 from core.image_pipeline import NoImageProviderError, run_roitelet_image_chat
 from core.mcp import handle_mcp_request
-from core.personal import build_personal_context, ingest_inbox, personal_status
+from core.personal import build_personal_context, ingest_inbox, personal_status, project_chunks_2d
 from core.pipeline import AllCandidatesFailedError, run_roitelet_chat
 from core.registry import warm_ollama_cache
 from core.schemas import (
@@ -559,6 +559,27 @@ async def personal_state() -> dict[str, Any]:
         when the folders are empty).
     """
     return personal_status()
+
+
+@app.get('/api/personal/embeddings', dependencies=[Depends(require_api_token)])
+async def personal_embeddings() -> dict[str, Any]:
+    """Return 2-D PCA-projected embeddings for every wiki chunk.
+
+    Returns
+    -------
+    dict
+        ``{'points': [...]}`` where each point carries ``path``,
+        ``chunk_index``, ``text``, ``x``, ``y``. Empty ``points``
+        list when the wiki is empty or the local embedding model
+        (``nomic-embed-text`` by default) is unreachable.
+
+    Notes
+    -----
+    Karpathy-style scatter: similar topics cluster spatially because
+    cosine-near vectors project to nearby 2-D coordinates. The
+    rendering layer (web SPA) draws the points as an SVG scatter.
+    """
+    return {'points': project_chunks_2d()}
 
 
 @app.post('/api/personal/ingest', dependencies=[Depends(require_api_token)])

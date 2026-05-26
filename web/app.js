@@ -65,7 +65,7 @@ function renderMessages() {
         <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
         <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
         <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-          Tip — start a message with <code>/image</code>, <code>/local</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
+          Tip — start a message with <code>/image</code>, <code>/personal</code>, <code>/local</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
         </p>
       </div>`;
     return;
@@ -275,6 +275,120 @@ function newChat() {
 const IMAGE_CMD_RX  = /^\/(image|image-gen|img)\b\s*/i;
 const SPEECH_CMD_RX = /^\/(speech|stt|transcribe)\b\s*/i;
 
+// Helpers for the Personal panel — opening the modal calls the API
+// once, the ingest button calls it again, the status is rendered
+// inline. Defined at module scope so they're hoisted alongside the
+// other API helpers.
+async function fetchPersonalStatus() {
+  try { return await apiGet('/api/personal'); }
+  catch { return null; }
+}
+async function triggerPersonalIngest(force) {
+  return apiPost(`/api/personal/ingest?force=${force ? 'true' : 'false'}`, {});
+}
+async function refreshPersonalSummary() {
+  const s = await fetchPersonalStatus();
+  const el = document.getElementById('personalSummary');
+  if (!el) return;
+  if (!s) { el.textContent = 'Could not reach /api/personal.'; return; }
+  el.textContent = `${s.wiki} wiki file(s) · ${s.inbox} inbox file(s) · mode=${s.mode}`;
+}
+
+// ─── Personal embedding viz (Karpathy-style) ─────────────────────────────────
+//
+// 2-D PCA scatter where each dot is one wiki chunk and color is the
+// source file. The whole thing renders inline SVG; no extra deps. The
+// server projects via numpy SVD and returns the coordinates.
+
+const VIZ_PALETTE = ['#0a84ff','#ff9500','#34c759','#ff3b30','#af52de',
+                     '#5856d6','#ff2d55','#5ac8fa','#ffcc00','#a2845e'];
+
+async function openPersonalViz() {
+  let payload;
+  try { payload = await apiGet('/api/personal/embeddings'); }
+  catch (err) { showToast('Could not fetch embeddings: ' + err.message); return; }
+  const points = payload?.points || [];
+  if (!points.length) {
+    showToast('No wiki chunks to visualise, or embedding model unreachable.');
+    return;
+  }
+  renderVizModal(points);
+}
+
+function renderVizModal(points) {
+  // Lazy: build the modal nodes on first open so the empty case
+  // doesn't bloat the DOM.
+  let modal = document.getElementById('vizModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'vizModal';
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
+    modal.innerHTML = `
+      <div class="bg-white dark:bg-[#1c1c1e] w-[95vw] h-[90vh] flex flex-col overflow-hidden rounded-[10px] shadow-2xl">
+        <div class="px-5 py-3 border-b border-gray-200 dark:border-white/[0.08] flex items-center justify-between">
+          <div>
+            <div class="text-[14px] font-semibold">Personal wiki — embedding projection</div>
+            <div class="text-[11px] text-gray-500 dark:text-gray-400" id="vizMeta"></div>
+          </div>
+          <button id="vizClose" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="flex-1 relative">
+          <svg id="vizSvg" class="w-full h-full"></svg>
+          <div id="vizTooltip"
+            class="absolute pointer-events-none max-w-[360px] hidden z-10 px-3 py-2 rounded-[10px] bg-black/85 text-white text-[12px] leading-relaxed shadow-lg"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#vizClose').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  const svg = modal.querySelector('#vizSvg');
+  const tooltip = modal.querySelector('#vizTooltip');
+  const meta = modal.querySelector('#vizMeta');
+  const fileToColor = new Map();
+  const colorFor = p => {
+    if (!fileToColor.has(p)) fileToColor.set(p, VIZ_PALETTE[fileToColor.size % VIZ_PALETTE.length]);
+    return fileToColor.get(p);
+  };
+  const sources = Array.from(new Set(points.map(p => p.path)));
+  meta.textContent = `${points.length} chunks across ${sources.length} file(s) — hover a dot for the excerpt.`;
+
+  const draw = () => {
+    const rect = svg.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = '';
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    const xmin = Math.min(...xs), xmax = Math.max(...xs);
+    const ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const margin = 32;
+    const sx = x => margin + (W - 2*margin) * (xmax === xmin ? 0.5 : (x - xmin) / (xmax - xmin));
+    const sy = y => H - margin - (H - 2*margin) * (ymax === ymin ? 0.5 : (y - ymin) / (ymax - ymin));
+    for (const p of points) {
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', sx(p.x)); c.setAttribute('cy', sy(p.y));
+      c.setAttribute('r', 6); c.setAttribute('fill', colorFor(p.path));
+      c.setAttribute('opacity', 0.75);
+      c.style.cursor = 'pointer';
+      c.addEventListener('mousemove', e => {
+        tooltip.classList.remove('hidden');
+        tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+        tooltip.style.top  = (e.clientY - rect.top + 12) + 'px';
+        tooltip.innerHTML = `<b>${escapeHtml(p.path)}</b> #${p.chunk_index}<br>${escapeHtml(p.text.slice(0, 280))}${p.text.length > 280 ? '…' : ''}`;
+      });
+      c.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
+      svg.appendChild(c);
+    }
+  };
+  draw();
+  // Redraw on window resize so the scatter scales with the modal.
+  const onResize = () => { if (document.body.contains(modal)) draw(); else window.removeEventListener('resize', onResize); };
+  window.addEventListener('resize', onResize);
+}
+
 async function send() {
   const prompt = $('prompt').value.trim();
   const files = state.attachments;
@@ -457,6 +571,57 @@ async function openSettings() {
 
   const form = $('settingsForm');
   form.innerHTML = '';
+
+  // Personal-mode panel — shows current corpus state and exposes an
+  // "Ingest now" button that walks data/personal/inbox/ via the
+  // multimodal extractors. Lives at the top of the sheet so it's
+  // discoverable without scrolling past every credential.
+  const personalPanel = document.createElement('div');
+  personalPanel.className = 'mb-4 p-3 rounded-[10px] bg-black/5 dark:bg-white/[0.05] space-y-2';
+  personalPanel.id = 'personalPanel';
+  personalPanel.innerHTML = `
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-[13px] font-semibold">Personal knowledge base</div>
+        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="personalSummary">Loading…</div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button type="button" id="personalVizBtn"
+          class="min-h-[32px] px-3 py-1 text-[12px] font-medium border border-gray-300 dark:border-white/[0.12] hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
+          Visualize
+        </button>
+        <button type="button" id="personalIngestBtn"
+          class="min-h-[32px] px-3 py-1 text-[12px] font-medium bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
+          Ingest inbox
+        </button>
+      </div>
+    </div>
+    <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+      Drop audio, image, PDF, or Markdown files into <code>data/personal/inbox/</code>. Click <em>Ingest inbox</em>
+      to convert them via whisper.cpp / Ollama VLM / kreuzberg. Hand-edited <code>.md</code> files in
+      <code>data/personal/wiki/</code> are picked up automatically. Use <code>/personal &lt;question&gt;</code>
+      in chat to query the knowledge base.
+    </p>
+  `;
+  form.appendChild(personalPanel);
+  refreshPersonalSummary();
+  $('personalVizBtn').addEventListener('click', openPersonalViz);
+  $('personalIngestBtn').addEventListener('click', async () => {
+    const btn = $('personalIngestBtn');
+    btn.disabled = true;
+    btn.textContent = 'Ingesting…';
+    try {
+      const res = await triggerPersonalIngest(false);
+      const added = (res.results || []).filter(r => r.wiki_path && !r.error).length;
+      showToast(`Ingested ${added} file(s). Wiki now has ${res.status?.wiki ?? '?'} entries.`);
+      refreshPersonalSummary();
+    } catch (err) {
+      showToast('Ingest failed: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Ingest inbox';
+    }
+  });
   for (const f of SETTINGS_FIELDS) {
     const wrap = document.createElement('label');
     wrap.className = 'flex flex-col gap-1.5';
