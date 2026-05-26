@@ -185,6 +185,39 @@ tentative qui a révélé l'interaction avec le filtre VLM, et le
 re-run qui l'a corrigée) sont conservés dans le répertoire
 `eval_runs/` ignoré.
 
+### Et le juge compte — beaucoup (judge-swap à K=2, 2026-05-26)
+
+Dataset, routeur, candidats et K figés sur le point d'équilibre §4.3 ;
+seul le juge de synthèse tourne sur trois tailles (`qwen3:8b`,
+`gemma3:4b`, `llama3.2:3b`). Même grader `qwen3:8b` pour les trois :
+
+| Juge | exactitude moyenne | pass (≥0,6) | latence juge moyenne |
+|---|---|---|---|
+| **qwen3:8b** (8B)   | **0,93** | 24 / 25 | 38,9 s |
+| **gemma3:4b** (4B)  | 0,88     | 23 / 25 | 18,4 s |
+| **llama3.2:3b** (3B) | 0,72    | 19 / 25 | 20,3 s |
+
+**Verdict** : le juge 8B bat le juge 3B de **+22 points** d'exactitude
+moyenne sur les mêmes prompts avec les mêmes candidats. La majorité
+du temps mur passé sur Roitelet *est* le juge — le réduire restitue
+de la qualité, pas seulement de la vitesse. Le juge 4B est le point
+de Pareto pour les régimes contraints en latence (−5 points pour
+deux fois moins de temps juge). Les 25/25 prompts montrent un
+désaccord sur l'ensemble des gagnants entre juges ; 8/25 montrent
+un PASS/FAIL franchement opposé — preuve forte que **Roitelet apprend
+des préférences conditionnées au juge, pas universelles**, exactement
+ce que le mécanisme §1.1 annonce.
+
+Par catégorie, les points faibles des petits juges sont **l'écriture**
+(0,40 sous llama3.2:3b contre 0,95–1,00 sous les juges plus gros) et
+**le multilingue** (0,47 sous gemma3:4b contre 0,97 sous qwen3:8b).
+La crainte naïve « les juges préfèrent leur propre famille » n'apparaît
+ici que faiblement ; le motif plus fort est un **biais anti-candidat
+laconique sur les petits juges** (gemma3:4b ne choisit le candidat
+`llama3.2:3b`, plus terse, que 1/25 fois). Détail par prompt et
+mises en garde : [docs/EVALUATION.md §4.4](docs/EVALUATION.md). JSON
+brut : `judgeswap-20260526T123130Z.json`.
+
 Cela dit, **ce n'est pas magique** :
 
 - Roitelet apprend des préférences *conditionnées au juge*. Si Qwen

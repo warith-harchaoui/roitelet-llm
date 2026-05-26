@@ -196,6 +196,39 @@ investigate-the-judge follow-up live in
 exposed the VLM-filter interaction, and the rerun that fixed it)
 are preserved in the ignored `eval_runs/` directory.
 
+### And the judge matters — a lot (2026-05-26 judge-swap at K=2)
+
+Holding the dataset, router, candidates and K fixed at the §4.3
+sweet spot, only the synthesis judge is rotated across three sizes
+(`qwen3:8b`, `gemma3:4b`, `llama3.2:3b`). Same `qwen3:8b` grader for
+all three runs:
+
+| Judge | mean correctness | pass (≥0.6) | mean judge latency |
+|---|---|---|---|
+| **qwen3:8b** (8B)   | **0.93** | 24 / 25 | 38.9 s |
+| **gemma3:4b** (4B)  | 0.88     | 23 / 25 | 18.4 s |
+| **llama3.2:3b** (3B) | 0.72    | 19 / 25 | 20.3 s |
+
+**Headline:** the 8B judge beats the 3B judge by **+22 pp mean
+correctness** on the same prompts with the same candidates — most of
+the wall-clock you spend on Roitelet *is* the judge, and downsizing
+it gives back substantial quality, not just speed. The 4B judge is
+the Pareto sweet spot for latency-bound regimes (−5 pp for half the
+judge wall-clock). All 25/25 prompts show winner-set disagreement
+between judges; 8/25 show outright PASS/FAIL splits — strong
+evidence that **Roitelet learns judge-conditioned preferences, not
+universal ones**, exactly as the §1.1 mechanism section warned.
+
+Per-category, the smaller judges' weak spots are **writing** (0.40
+under llama3.2:3b vs 0.95–1.00 under the larger judges) and
+**multilingual** (0.47 under gemma3:4b vs 0.97 under qwen3:8b). The
+naive worry "judges prefer their own family" only shows up weakly
+here; the stronger pattern is **anti-terse-candidate bias on smaller
+judges** (gemma3:4b picks the terse `llama3.2:3b` candidate only
+1/25 times). Full per-prompt breakdown and caveats:
+[docs/EVALUATION.md §4.4](docs/EVALUATION.md). Raw JSON:
+`judgeswap-20260526T123130Z.json`.
+
 **But this is not free magic.** The judge is not an objective oracle:
 
 - Roitelet learns *judge-conditioned* preferences. If Qwen is your

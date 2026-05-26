@@ -293,10 +293,135 @@ K=2**. K=3 buys you almost nothing on this judge for double the
 wall-clock. K=1 leaves measurable quality on the table on multilingual
 and coding prompts.
 
-That's the load-bearing run. Everything in §5 below is **planned**
-until proven otherwise. Both raw JSON reports
-(`ksweep-20260526T045340Z.json` and `ksweep-20260526T083344Z.json`)
-live in the ignored `eval_runs/` working directory.
+### 4.4 — Judge-swap at K=2 (2026-05-26)
+
+The §4.2 / §4.3 runs hold the judge fixed. This run holds *everything
+else* fixed and rotates the synthesis judge across three sizes, so any
+shift in the fused answer is attributable to the judge itself, not the
+candidates.
+
+**Configuration**
+
+- Dataset: identical to §4.2 (25 prompts, 8 categories).
+- Router: heuristic, `independence=True`, `allow_vlms=True`.
+- Candidate pool: `llama3.2:3b`, `qwen2.5:3b`, `gemma3:4b`.
+- K: **2** (the §4.3 sweet spot — locks the fan-out so the judge is
+  the only moving part).
+- Synthesis judges (rotated): `qwen3:8b` (8B, the default), `llama3.2:3b` (3B),
+  `gemma3:4b` (4B).
+- DeepEval `GEval(correctness)` grader: **`qwen3:8b`** held constant
+  across all three judge runs. Treat absolute scores for the `qwen3:8b`
+  judge with caution (same-family grader/judge); the comparison
+  between judges is still informative because the grader is the same
+  for all three.
+- Total wall time: **137.9 min** (62.9 min inference + 75.0 min grading).
+- Artefact: `eval_runs/judgeswap-20260526T123130Z.json` in the
+  ignored working directory.
+
+**Headline results**
+
+| Judge | mean correctness | median | pass (≥0.6) | n | mean turn latency | mean judge latency |
+|---|---|---|---|---|---|---|
+| **qwen3:8b** (8B)   | **0.93** | 1.00 | 24 / 25 | 25 | 53.6 s | 38.9 s |
+| **gemma3:4b** (4B)  | 0.88     | 1.00 | 23 / 25 | 25 | 56.4 s | 18.4 s |
+| **llama3.2:3b** (3B) | 0.72    | 1.00 | 19 / 25 | 25 | 40.8 s | 20.3 s |
+
+**Per-category mean** (rows = judge, columns = category):
+
+| Judge | analysis | coding | long_ctx | math | multilingual | reasoning | summarisation | writing |
+|---|---|---|---|---|---|---|---|---|
+| qwen3:8b   | 0.90 | 0.90 | 0.60 | **1.00** | 0.97 | **1.00** | 0.80 | 0.95 |
+| gemma3:4b  | 0.95 | **1.00** | 0.60 | 0.94 | 0.47 | 0.96 | 0.80 | **1.00** |
+| llama3.2:3b | 0.85 | 0.96 | 0.60 | 0.70 | 0.67 | 0.66 | 0.60 | 0.40 |
+
+**Winner attribution** — which candidate the judge chose as the
+fused-answer winner, summed over the 25 prompts (K=2, so 1–2 winners
+per turn; a "winning candidate" is selected at least once per turn):
+
+| Judge | gemma3:4b chosen | qwen2.5:3b chosen | llama3.2:3b chosen |
+|---|---|---|---|
+| qwen3:8b    | 23 | **4**  | 19 |
+| gemma3:4b   | 21 | 20     | **1** |
+| llama3.2:3b | 20 | 16     | 6 |
+
+**Findings**
+
+1. **Judge size matters and the gap is big.** The 8B judge scores
+   **+22 pp** over the 3B judge on the same prompts with the same
+   candidates (0.93 vs 0.72). The 4B judge sits in between at 0.88.
+   This is the load-bearing result: most of Roitelet's wall-clock is
+   the judge, and downsizing the judge gives back substantial
+   correctness — not just speed. Budget the judge, don't starve it.
+2. **Latency cost of the larger judge is ~2×, not free.** Mean judge
+   wall-clock: qwen3:8b 38.9 s, gemma3:4b 18.4 s, llama3.2:3b 20.3 s.
+   So the 8B judge buys +22 pp correctness at ~+19 s per turn versus
+   the 3B judge. On a laptop that trade is worth making; in a
+   latency-budgeted regime (chat-completion, real-time UI) a 4B judge
+   is the better Pareto point — only −5 pp correctness for half the
+   judge wall-clock.
+3. **Self-preference is not the dominant judge bias on this dataset.**
+   The naive worry ("a judge prefers its own family") is only partly
+   borne out: `gemma3:4b` judge does pick `gemma3:4b` candidate most
+   often (21/25), but the more striking pattern is **anti-llama3.2:3b
+   bias on the smaller judges** — `gemma3:4b` picks `llama3.2:3b`
+   only **1/25** times, and `llama3.2:3b` itself picks the
+   `llama3.2:3b` candidate only 6/25. The likely mechanism: the
+   smaller judges are weaker at parsing terse responses, and
+   `llama3.2:3b` candidate answers were the most terse in this pool.
+4. **Strongest disagreement is on writing and multilingual.** Writing:
+   qwen3:8b 0.95 vs gemma3:4b 1.00 vs llama3.2:3b 0.40 — the small
+   judge marks creative-tone outputs as failures that the bigger
+   judges accept. Multilingual: qwen3:8b 0.97 vs gemma3:4b 0.47 vs
+   llama3.2:3b 0.67 — `gemma3:4b` judge is the worst on multilingual
+   despite being family-neutral on those candidates, suggesting it
+   evaluates non-English idioms less reliably than even the 3B
+   llama judge.
+5. **Per-prompt disagreement is universal.** All 25/25 prompts have at
+   least one judge picking a different winner set; 8/25 prompts have
+   judges disagreeing on PASS/FAIL outright. Notable PASS→FAIL splits
+   under `llama3.2:3b`: `math-quadratic` (0.00 vs 1.00 from qwen3:8b
+   and gemma3:4b), `reasoning-birthday-paradox` (0.00 vs 1.00 / 1.00),
+   `writing-tone-rewrite` (0.00 vs 0.90 / 1.00). The smaller judge
+   is not just noisier — it is **systematically harsher** on prompts
+   where the gold answer requires nuanced verification (math
+   identities, paradox framing, register shifts).
+6. **Long-context is the universal weak spot, judge-independent.**
+   All three judges score 0.60 on `long_context` (the single-prompt
+   category, `long-context-document-types`). This is consistent with
+   §4.2/§4.3 and confirms the regression is in the candidate
+   answers or the reference set, not in the judge.
+
+**Honest caveats**
+
+- The grader (`qwen3:8b`) is the same family as one of the judges
+  (`qwen3:8b`). This *could* bias the qwen3:8b judge's absolute
+  score up; the comparison **between** judges remains fair because
+  the grader is constant. To break the circularity fully, swap to a
+  stronger external grader (§5 #8).
+- N=25 prompts × 3 judges = 75 grades. Headline gaps (22 pp between
+  8B and 3B; 5 pp between 8B and 4B) are large enough to survive
+  noise, but per-category cells with 1–2 prompts (`long_context`,
+  `summarisation`) are not statistically resolvable. Direction, not
+  magnitude.
+- The candidate pool is intentionally small and OSS-only. A
+  remote-augmented pool would likely narrow the small-vs-large judge
+  gap because frontier candidates produce clearer, less ambiguous
+  text that even the 3B judge can grade.
+- K=2 is the §4.3 sweet spot. The judge-swap effect at K=3 is likely
+  larger (more drafts to fuse → judge reasoning quality matters
+  more), but expensive to measure on the same compute budget.
+
+**Practical recommendation**: keep `qwen3:8b` as the default judge on
+machines with the headroom; **fall back to `gemma3:4b` (not `llama3.2:3b`)
+when judge latency is the binding constraint** — 4B costs you 5 pp
+of correctness for half the wall-clock; 3B costs you 22 pp and
+introduces strong anti-terse-candidate bias.
+
+That's the load-bearing run set. Everything in §5 below is **planned**
+until proven otherwise. Raw JSON reports
+(`ksweep-20260526T045340Z.json`, `ksweep-20260526T083344Z.json`,
+`judgeswap-20260526T123130Z.json`) live in the ignored `eval_runs/`
+working directory.
 
 ---
 
@@ -309,9 +434,10 @@ live in the ignored `eval_runs/` working directory.
 1. **K-sweep with heuristic router** (`K ∈ {1, 2, 3, 5}`) on the full
    25-prompt dataset, with the default Qwen 3 8B judge. Goal: pin
    down where K stops paying off.
-2. **Judge-swap** at fixed K=3: Qwen 3 8B vs Llama 3.2 3B vs Gemma 3
-   4B as the synthesis judge, same dataset. Goal: surface
-   judge-conditioned drift in the winner set.
+2. ~~**Judge-swap** at fixed K: Qwen 3 8B vs Llama 3.2 3B vs Gemma 3
+   4B as the synthesis judge, same dataset.~~ Done in §4.4
+   (2026-05-26) at K=2. 8B judge wins by +22 pp over 3B; 4B is the
+   Pareto sweet spot if judge latency is binding.
 3. **Local-only vs full-fleet** at fixed K=3 with the default judge.
    Goal: quantify the quality cost of `independence` mode — the
    single most important number for the local-first value prop.
