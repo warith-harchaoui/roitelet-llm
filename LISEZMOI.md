@@ -165,6 +165,30 @@ C'est cette asymétrie qui rend plausible le pipeline « petit modèle
 local par-dessus de gros candidats distants » de Roitelet. Le travail
 du juge est la curation, pas l'invention.
 
+### Est-ce que ça aide vraiment ? (K-sweep du 2026-05-26)
+
+Première campagne multi-prompts sur 25 prompts de catégories
+variées, **local-only** (3 petits candidats OSS, juge `qwen3:8b`),
+notée par DeepEval `GEval(correctness, threshold=0.6)` :
+
+| K | exactitude moyenne | pass (≥0.6) | latence totale | part du juge |
+|---|---|---|---|---|
+| 1 | 0,78 | 21 / 25 | 27,7 s | 90 % |
+| 2 | **0,90** | 23 / 25 | 37,8 s | 82 % |
+| 3 | (0,87 — voir mise en garde) | 23 / 25 | 43,2 s | 82 % |
+
+Passer de K=1 à K=2 produit un gain réel de **+12 points** de
+moyenne pour **+10 s** de temps mur sur un laptop, largement
+distribué sur les catégories coding, math, reasoning, multilingual
+et long-context. La ligne K=3 du tableau **n'est pas** un vrai test
+de K=3 — chaque tour K=3 a fini à deux candidats (bug de routage
+désormais documenté comme l'item bloquant à régler en priorité).
+Tous les chiffres, le détail par catégorie, les échecs persistants
+et les notes de reproductibilité vivent dans
+[docs/EVALUATION.md §4.2](docs/EVALUATION.md). L'artefact (JSON par
+tour, chaque réponse fusionnée, chaque note) est conservé dans le
+répertoire `eval_runs/` ignoré.
+
 Cela dit, **ce n'est pas magique** :
 
 - Roitelet apprend des préférences *conditionnées au juge*. Si Qwen

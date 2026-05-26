@@ -177,6 +177,29 @@ This asymmetry is what makes Roitelet's "small local model on top of
 strong remote candidates" pipeline plausible at all. The judge's job
 is curation, not invention.
 
+### Does it actually help? (2026-05-26 K-sweep)
+
+A first multi-prompt, end-to-end run on a 25-prompt mixed-task
+dataset, local-only (3 small OSS candidates, `qwen3:8b` judge),
+graded with DeepEval `GEval(correctness, threshold=0.6)`:
+
+| K | mean correctness | pass (≥0.6) | total latency | judge share |
+|---|---|---|---|---|
+| 1 | 0.78 | 21 / 25 | 27.7 s | 90 % |
+| 2 | **0.90** | 23 / 25 | 37.8 s | 82 % |
+| 3 | (0.87 — see caveat) | 23 / 25 | 43.2 s | 82 % |
+
+K=1 → K=2 is a real **+12 pp** mean-correctness uplift for **+10 s**
+of wall-clock on a laptop, broadly distributed across coding, math,
+reasoning, multilingual and long-context categories. K=3 in the
+table is **not** a real K=3 test — every K=3 turn collapsed to
+two candidates (a routing-pool bug now documented as the top
+unblocking item). Full numbers, per-category breakdown, persistent
+failures and reproducibility notes live in
+[docs/EVALUATION.md §4.2](docs/EVALUATION.md). The artefact
+(per-turn JSON, every fused answer, every grade) is preserved in the
+ignored `eval_runs/` directory.
+
 **But this is not free magic.** The judge is not an objective oracle:
 
 - Roitelet learns *judge-conditioned* preferences. If Qwen is your
