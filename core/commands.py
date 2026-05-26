@@ -55,6 +55,7 @@ RouteTarget = Literal['chat', 'image', 'speech', 'help']
 HELP_LINES: tuple[tuple[str, str], ...] = (
     ('/image <prompt>', 'Generate an image. Routes to the image-gen pipeline (K=1, no fusion).'),
     ('/speech', 'Speech-to-text + diarisation only. Requires an audio attachment via /api/chat/multimodal.'),
+    ('/personal <prompt>', 'Inject your personal knowledge base (data/personal/wiki/) into the prompt.'),
     ('/local <prompt>', 'Force independence mode (local OSS models only) for this turn.'),
     ('/cheap <usd> <prompt>', 'Set max_cost_usd for this turn. Filters paid candidates above the budget.'),
     ('/k <n> <prompt>', 'Override the top-K fan-out (1–8) for this turn.'),
@@ -84,6 +85,10 @@ class ParsedCommand:
         Value set by ``/cheap``, or ``None``.
     top_k_override:
         Value set by ``/k``, or ``None``.
+    personal_override:
+        ``True`` when ``/personal`` fired — the chat endpoint should
+        prepend the personal-knowledge-base context block to the prompt
+        before fan-out.
     """
 
     route_to: RouteTarget = 'chat'
@@ -91,6 +96,7 @@ class ParsedCommand:
     independence_override: bool | None = None
     max_cost_usd_override: float | None = None
     top_k_override: int | None = None
+    personal_override: bool = False
     matched_commands: list[str] = field(default_factory=list)
 
 
@@ -157,6 +163,12 @@ def parse_command(prompt: str) -> ParsedCommand:
         if name == 'local':
             result.independence_override = True
             result.matched_commands.append('/local')
+            remaining = rest
+            continue
+
+        if name == 'personal':
+            result.personal_override = True
+            result.matched_commands.append('/personal')
             remaining = rest
             continue
 

@@ -42,7 +42,9 @@ class Storage(Protocol):
 
     # Conversations ------------------------------------------------------
 
-    def create_conversation(self, title: str = ...) -> Conversation: ...
+    def create_conversation(self, title: str = ...) -> Conversation:
+        """Create a new conversation and return it persisted."""
+        ...
 
     def conversation_path(self, conversation_id: str) -> Path:
         """Return the on-disk path for a conversation.
@@ -52,27 +54,43 @@ class Storage(Protocol):
         """
         ...
 
-    def save_conversation(self, conversation: Conversation) -> None: ...
+    def save_conversation(self, conversation: Conversation) -> None:
+        """Persist the full conversation document atomically."""
+        ...
 
-    def get_conversation(self, conversation_id: str) -> Conversation | None: ...
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
+        """Return the conversation by id, or ``None`` if it does not exist."""
+        ...
 
-    def list_conversations(self) -> list[Conversation]: ...
+    def list_conversations(self) -> list[Conversation]:
+        """Return every stored conversation, newest first."""
+        ...
 
     def append_message(
         self, conversation_id: str, message: ConversationMessage
-    ) -> Conversation: ...
+    ) -> Conversation:
+        """Append ``message`` to the conversation and return the updated record."""
+        ...
 
     # Telemetry ----------------------------------------------------------
 
-    def save_telemetry(self, record: TelemetryRecord) -> Path: ...
+    def save_telemetry(self, record: TelemetryRecord) -> Path:
+        """Persist one per-turn telemetry record and return its path."""
+        ...
 
-    def list_telemetry(self) -> list[TelemetryRecord]: ...
+    def list_telemetry(self) -> list[TelemetryRecord]:
+        """Return every stored telemetry record, newest first."""
+        ...
 
     # App settings -------------------------------------------------------
 
-    def load_app_settings(self) -> AppSettingsPayload: ...
+    def load_app_settings(self) -> AppSettingsPayload:
+        """Return the persisted control-room settings (with secrets present)."""
+        ...
 
-    def save_app_settings(self, payload: AppSettingsPayload) -> None: ...
+    def save_app_settings(self, payload: AppSettingsPayload) -> None:
+        """Persist control-room settings, replacing the previous payload."""
+        ...
 
     # Provider cache -----------------------------------------------------
 
@@ -86,4 +104,6 @@ class Storage(Protocol):
 
     def set_cache(
         self, provider_name: str, payload_str: str, response_data: dict
-    ) -> None: ...
+    ) -> None:
+        """Store one provider response in the cache."""
+        ...

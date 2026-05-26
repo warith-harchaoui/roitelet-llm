@@ -1,4 +1,4 @@
-"""One-shot audio transcription + diarization for Roitelet.
+r"""One-shot audio transcription + diarization for Roitelet.
 
 Adapted from operator-assistance — its streaming/VAD/accumulator machinery
 is stripped out because Roitelet only ever sees one complete file at a time.
@@ -11,7 +11,7 @@ Pipeline (single coroutine, ``transcribe_audio``):
    diarization segments. Run concurrently with (2).
 4. Overlap-based speaker assignment per whisper segment.
 5. Collapse consecutive same-speaker lines, format as
-   ``"[SPEAKER_00] text\\n[SPEAKER_01] text"``.
+   ``"[SPEAKER_00] text\n[SPEAKER_01] text"``.
 
 The whisper and NeMo models are lazy-loaded and cached at module scope —
 the first request after server boot pays ~1 GB of weights download plus

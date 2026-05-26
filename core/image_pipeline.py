@@ -48,12 +48,24 @@ class NoImageProviderError(RuntimeError):
 
 
 def _image_capable(spec) -> bool:
-    """A model is image-capable when its priors expose a non-zero ``image_gen`` score.
+    """Return ``True`` when the spec's priors expose a non-zero ``image_gen`` score.
 
-    The bootstrap entries don't include ``image_gen`` for any model yet
-    (the feature scaffold). Operators add an image-gen model the same
-    way they add any other paid LLM: via ``paid_openai_compatible_models``
-    plus a hand-edited bootstrap entry with ``image_gen`` set.
+    Parameters
+    ----------
+    spec : ModelSpec
+        Registered model spec.
+
+    Returns
+    -------
+    bool
+        ``True`` iff ``spec.capabilities['image_gen'] > 0``.
+
+    Notes
+    -----
+    The bootstrap entries don't include ``image_gen`` for any model by
+    default; operators add an image-gen model the same way they add
+    any other paid LLM — via ``paid_openai_compatible_models`` plus a
+    hand-edited bootstrap entry with ``image_gen`` set.
     """
     return spec.capabilities.get('image_gen', 0.0) > 0.0
 

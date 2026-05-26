@@ -120,7 +120,7 @@ class _OllamaModelCache:
         self._base_url = base_url.rstrip('/')
 
     def _fetch(self) -> list[str]:
-        """Synchronously fetch the live model list from Ollama."""
+        """Fetch the live model list from Ollama synchronously."""
         if not self._base_url:
             return []
         try:

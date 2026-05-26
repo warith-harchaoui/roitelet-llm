@@ -37,6 +37,7 @@ from core.commands import parse_command, render_help
 from core.config import get_settings
 from core.image_pipeline import NoImageProviderError, run_roitelet_image_chat
 from core.mcp import handle_mcp_request
+from core.personal import build_personal_context, ingest_inbox, personal_status
 from core.pipeline import AllCandidatesFailedError, run_roitelet_chat
 from core.registry import warm_ollama_cache
 from core.schemas import (
@@ -251,7 +252,19 @@ def _apply_command_overrides(payload: ChatRequest) -> tuple[ChatRequest, str | N
         )
 
     overrides: dict = {}
-    if parsed.stripped_prompt != payload.prompt:
+    # If /personal fired, splice the personal-knowledge-base context
+    # in front of the (already-stripped) prompt before any other
+    # rewrite. The injection respects the wiki-vs-RAG strategy in
+    # ``core.personal``: small corpus → all in long context, large
+    # corpus → top-K retrieval.
+    if parsed.personal_override:
+        ctx = build_personal_context(parsed.stripped_prompt or payload.prompt)
+        if ctx:
+            new_prompt = f'{ctx}\n## Question\n\n{parsed.stripped_prompt or payload.prompt}'
+            overrides['prompt'] = new_prompt
+        elif parsed.stripped_prompt != payload.prompt:
+            overrides['prompt'] = parsed.stripped_prompt
+    elif parsed.stripped_prompt != payload.prompt:
         overrides['prompt'] = parsed.stripped_prompt
     pref_updates: dict = {}
     if parsed.independence_override is not None:
@@ -531,6 +544,51 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
             ),
         },
         'roitelet_metadata': response.model_dump(),
+    }
+
+
+@app.get('/api/personal', dependencies=[Depends(require_api_token)])
+async def personal_state() -> dict[str, Any]:
+    """Return personal-mode corpus stats.
+
+    Returns
+    -------
+    dict
+        Counts (inbox / wiki) and the active context strategy
+        (``wiki`` for inline concat, ``rag`` for retrieval, ``empty``
+        when the folders are empty).
+    """
+    return personal_status()
+
+
+@app.post('/api/personal/ingest', dependencies=[Depends(require_api_token)])
+async def personal_ingest(force: bool = False) -> dict[str, Any]:
+    """Walk ``data/personal/inbox/`` and convert each new file to a wiki entry.
+
+    Parameters
+    ----------
+    force : bool, default=False
+        Re-ingest every inbox file even if the manifest already
+        recorded a conversion (useful after an extractor upgrade).
+
+    Returns
+    -------
+    dict
+        ``{'results': [{'source', 'wiki_path', 'modality', 'error'}, ...],
+        'status': personal_status()}``.
+    """
+    results = await ingest_inbox(force=force)
+    return {
+        'results': [
+            {
+                'source': str(r.source),
+                'wiki_path': str(r.wiki_path) if r.wiki_path else None,
+                'modality': r.modality,
+                'error': r.error,
+            }
+            for r in results
+        ],
+        'status': personal_status(),
     }
 
 

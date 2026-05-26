@@ -1,4 +1,4 @@
-"""Local judging and synthesis.
+r"""Local judging and synthesis.
 
 Hardened version: the judge never sees model identities (each candidate is
 relabelled with a fresh per-call hex handle and the order is shuffled), the
@@ -9,7 +9,7 @@ yields *no* winners rather than silently crowning candidate 1.
 Examples
 --------
 >>> from core.judge import parse_winners
->>> parse_winners('Some prose.\\n===WINNERS===\\nab3c, 9e2f', {'ab3c', '9e2f'})
+>>> parse_winners('Some prose.\n===WINNERS===\nab3c, 9e2f', {'ab3c', '9e2f'})
 ['ab3c', '9e2f']
 
 Notes

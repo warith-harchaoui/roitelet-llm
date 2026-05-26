@@ -36,16 +36,51 @@ from ..schemas import GeneratedImage, ImageGenResponse
 
 
 def _images_dir() -> Path:
-    """Where generated image bytes live on disk."""
+    """Return the on-disk directory where generated image bytes live.
+
+    Returns
+    -------
+    pathlib.Path
+        Created on first call. Resolves to ``<ROITELET_DATA_DIR>/images``.
+    """
     path = get_settings().data_dir / 'images'
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 class OpenAIImagesClient:
-    """Async client for OpenAI-compatible image generation endpoints."""
+    """Async client for OpenAI-compatible image-generation endpoints.
+
+    Attributes
+    ----------
+    base_url : str
+        Endpoint root (e.g. ``https://api.openai.com/v1``). Trailing
+        slash is normalised at construction time.
+    api_key : str
+        Bearer token sent with every request.
+    provider_name : str
+        Friendly identifier stored in :class:`ImageGenResponse`
+        metadata for telemetry / debugging.
+    """
 
     def __init__(self, base_url: str, api_key: str, provider_name: str) -> None:
+        """Build an image client.
+
+        Parameters
+        ----------
+        base_url : str
+            OpenAI-compatible endpoint root (no trailing
+            ``/images/generations``).
+        api_key : str
+            Bearer token. Non-empty even for local servers that ignore
+            it — the registry's auth-aware filter prunes specs whose
+            keys are unset.
+        provider_name : str
+            Stored on :class:`ImageGenResponse` for downstream
+            telemetry. Convention: the same string used in the model
+            id prefix (``openai`` / ``openrouter`` /
+            ``openai-compatible``).
+        """
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
         self.provider_name = provider_name
@@ -60,11 +95,39 @@ class OpenAIImagesClient:
     ) -> ImageGenResponse:
         """Send one image-generation request and persist the bytes.
 
-        The OpenAI shape returns either ``url`` or ``b64_json`` per
-        choice. We default to b64 by passing ``response_format`` so we
-        can write the file regardless of whether the provider hosts the
-        result (URL-based providers expire links; local providers
-        return base64 directly).
+        Parameters
+        ----------
+        model_id : str
+            Fully-qualified Roitelet model id (e.g.
+            ``openai/gpt-image-1``). The provider name prefix is
+            stripped before the request goes upstream.
+        prompt : str
+            User-facing prompt forwarded verbatim. Some providers
+            (e.g. DALL-E 3) rewrite the prompt; the rewrite is
+            captured on :attr:`GeneratedImage.revised_prompt`.
+        size : str, default='1024x1024'
+            One of the OpenAI-defined sizes (``256x256``, ``512x512``,
+            ``1024x1024``, ``1792x1024``). The schema layer enforces
+            this; passing other values is a caller bug.
+        n : int, default=1
+            Number of images to generate. Clamped to ``>= 1``.
+        conversation_id : str or None, default=None
+            Set by the pipeline so the response carries it through to
+            storage. Empty string when called outside a conversation.
+
+        Returns
+        -------
+        ImageGenResponse
+            One entry per generated image. On any failure path the
+            response carries a single :class:`GeneratedImage` with
+            ``error`` populated and ``path`` empty.
+
+        Notes
+        -----
+        We default to base64 by passing ``response_format='b64_json'``
+        so we can write the file regardless of whether the provider
+        hosts the result (URL-based providers expire links; local
+        providers return base64 directly).
         """
         started = time.perf_counter()
         endpoint = f'{self.base_url}/images/generations'
@@ -139,6 +202,20 @@ class OpenAIImagesClient:
 async def _fetch_image_bytes(choice: dict) -> bytes | None:
     """Resolve an OpenAI-shaped image choice to raw bytes.
 
+    Parameters
+    ----------
+    choice : dict
+        One element of the ``data`` array in an OpenAI Images response.
+        Expected keys: ``b64_json`` (preferred) or ``url`` (hosted).
+
+    Returns
+    -------
+    bytes or None
+        Raw image bytes (typically PNG) ready to write to disk, or
+        ``None`` when neither format yields a usable payload.
+
+    Notes
+    -----
     Providers respond with either ``b64_json`` (inline base64, the
     common path now) or ``url`` (a hosted link, often expiring). We
     handle both so the pipeline keeps working when a provider flips
@@ -163,8 +240,28 @@ async def _fetch_image_bytes(choice: dict) -> bytes | None:
 
 
 def get_image_client(provider: str) -> OpenAIImagesClient:
-    """Pick an image-generation client by provider key.
+    """Return an image-generation client wired up for ``provider``.
 
+    Parameters
+    ----------
+    provider : str
+        One of ``'openai'``, ``'openrouter'``, ``'openai-compatible'``.
+        Matches the provider prefix of ``model_id`` strings.
+
+    Returns
+    -------
+    OpenAIImagesClient
+        A client whose ``base_url`` and ``api_key`` are sourced from
+        :class:`AppSettingsPayload` if the user configured them in the
+        Web UI, falling back to environment defaults.
+
+    Raises
+    ------
+    ValueError
+        When ``provider`` doesn't match any known provider key.
+
+    Notes
+    -----
     Mirrors :func:`core.providers.factory.get_provider_client` for the
     image side. Today the same endpoint shape covers every supported
     provider; future native clients (Stability v2beta, ComfyUI) would

@@ -41,4 +41,6 @@ class Router(Protocol):
         prompt: str,
         preferences: RouterPreferences,
         top_k: int = 3,
-    ) -> RouterDecision: ...
+    ) -> RouterDecision:
+        """Return a :class:`RouterDecision` for one ``(prompt, preferences)`` pair."""
+        ...

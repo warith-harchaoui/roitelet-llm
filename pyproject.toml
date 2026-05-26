@@ -69,7 +69,36 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# E/F/I/UP/B/SIM are the syntax + modernisation gate (always on).
+# D is pydocstyle — numpydoc convention — applied to the public
+# library surface only (core/, api/, cli/). Tests and scripts use a
+# looser style and are excluded below.
+select = ["E", "F", "I", "UP", "B", "SIM", "D"]
+
+# A pragmatic numpydoc gate: enforce summary lines and section
+# discipline, but skip the rules that fight a real codebase
+# (D203/D213 conflict with D211/D212; D104 demands docstrings on
+# every __init__.py; D107 demands separate __init__ docstrings even
+# when the class docstring covers them).
+ignore = [
+    "D100",  # missing docstring in public module — many small protocol files
+    "D104",  # missing docstring in public package (__init__.py)
+    "D105",  # missing docstring in magic method
+    "D107",  # missing docstring in __init__ (class docstring covers it)
+    "D203",  # 1 blank line before class docstring (we use D211 instead)
+    "D212",  # multi-line summary on first line (we use D213)
+    "D413",  # blank line after last section (numpydoc allows omission)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests, scripts, and the eval harness use a more freeform docstring
+# style; the public library surface in core/, api/, cli/ is what the
+# D rules gate.
+"tests/**" = ["D"]
+"scripts/**" = ["D"]
 
 # FastAPI's idiomatic dependency-injection pattern uses ``Depends(...)``
 # and ``Header(default=...)`` as parameter defaults; ruff's B008 flags

@@ -90,11 +90,26 @@ _EMBED_TIMEOUT_S: float = 8.0
 
 
 def _embed_model_name() -> str:
+    """Return the configured embedding model name.
+
+    Returns
+    -------
+    str
+        Value of ``ROITELET_EMBED_MODEL`` if set, else the default
+        ``nomic-embed-text``.
+    """
     return os.environ.get(_EMBED_MODEL_ENV, _EMBED_MODEL_DEFAULT)
 
 
 def _ollama_base_url() -> str:
-    """The Ollama base URL the embedding call should hit."""
+    """Return the Ollama base URL the embedding call should hit.
+
+    Returns
+    -------
+    str
+        The application's configured ``local_llm_base_url`` (env
+        ``LOCAL_LLM_BASE_URL``).
+    """
     return get_settings().local_llm_base_url
 
 
@@ -104,12 +119,26 @@ def _ollama_base_url() -> str:
 
 
 def _embed_prompt(prompt: str) -> np.ndarray | None:
-    """Synchronously embed one prompt via Ollama's ``/api/embeddings``.
+    """Embed one prompt synchronously via Ollama's ``/api/embeddings``.
 
-    Returns ``None`` on any failure — caller must fall back. The
-    ``timeout`` is deliberately short; on a healthy local Ollama this
-    completes in ~200 ms, on a hosed one we'd rather degrade than
-    block the route.
+    Parameters
+    ----------
+    prompt : str
+        Raw text to embed. No tokenisation or truncation is applied
+        on the client side — the embedding model handles it.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        A 1-D float32 vector of whatever dimensionality the configured
+        embedding model emits, or ``None`` on any failure (unreachable
+        server, missing model, malformed response, timeout).
+
+    Notes
+    -----
+    The HTTP timeout is deliberately short (~8 s); on a healthy local
+    Ollama this completes in well under one second, and on a hosed one
+    we'd rather degrade to the keyword detector than block the route.
     """
     base = _ollama_base_url()
     if not base:
@@ -142,11 +171,28 @@ class _CapabilityClassifier:
     Fit lazily on first ``predict`` so import time stays fast. If the
     embedding call fails during fit (offline laptop, model not pulled,
     etc.) the classifier marks itself as ``unavailable`` and the public
-    ``detect_capabilities_embedding`` shim transparently routes to the
-    keyword detector.
+    :func:`detect_capabilities_embedding` shim transparently routes to
+    the keyword detector.
+
+    Attributes
+    ----------
+    _available : bool
+        ``True`` once :meth:`fit` succeeds. The public surface checks
+        this and falls back to keywords when ``False``.
+    _labels : list of str
+        Ordered list of capability labels the classifier predicts.
+        Length matches the first dimension of ``_coef``.
+    _coef : numpy.ndarray or None
+        ``(len(_labels), embed_dim)`` matrix of per-label LR weights.
+    _intercept : numpy.ndarray or None
+        ``(len(_labels),)`` vector of per-label biases.
+    _embed_dim : int or None
+        Width of the embedding model's output; cached so :meth:`predict`
+        can fail fast if the model is silently swapped underneath us.
     """
 
     def __init__(self) -> None:
+        """Initialise an untrained classifier with empty state."""
         self._available: bool = False
         self._labels: list[str] = []
         self._coef: np.ndarray | None = None
@@ -154,7 +200,20 @@ class _CapabilityClassifier:
         self._embed_dim: int | None = None
 
     def fit(self) -> None:
-        """Embed labelled prompts, train one-vs-rest LR per capability."""
+        """Embed labelled prompts, train one-vs-rest LR per capability.
+
+        Reads the labelled corpus at :data:`_TRAINING_PROMPTS_PATH`,
+        embeds every prompt via :func:`_embed_prompt`, then fits a
+        ``LogisticRegression`` per label with ``class_weight='balanced'``.
+        On any failure path the classifier silently stays unavailable
+        — the caller falls back to the keyword detector.
+
+        Notes
+        -----
+        Idempotent: re-calling :meth:`fit` resets ``_available`` only
+        after the new fit succeeds. A failed second fit leaves the
+        previous successful state in place.
+        """
         if not _TRAINING_PROMPTS_PATH.exists():
             logger.debug('Embedding classifier: training corpus missing at %s', _TRAINING_PROMPTS_PATH)
             return
@@ -247,10 +306,33 @@ class _CapabilityClassifier:
 
     @property
     def available(self) -> bool:
+        """Whether the classifier has at least one fitted label.
+
+        Returns
+        -------
+        bool
+            ``True`` after a successful :meth:`fit`; ``False`` before
+            or after any failure path.
+        """
         return self._available
 
     def predict(self, prompt: str) -> dict[str, float] | None:
-        """Return a normalised capability distribution or ``None`` on failure."""
+        """Return a normalised capability distribution.
+
+        Parameters
+        ----------
+        prompt : str
+            User text to classify.
+
+        Returns
+        -------
+        dict of str to float, or None
+            Per-capability probabilities normalised to sum to 1. Labels
+            below the noise threshold (0.05) are dropped before
+            renormalisation. ``None`` when the classifier is not
+            available, when embedding fails, or when the embedding
+            dimensionality drifted from the fitted state.
+        """
         if not self._available or self._coef is None or self._intercept is None:
             return None
         vec = _embed_prompt(prompt)
@@ -274,7 +356,16 @@ class _CapabilityClassifier:
 
 @lru_cache(maxsize=1)
 def _get_classifier() -> _CapabilityClassifier:
-    """Lazy classifier singleton — fit-once, predict-many."""
+    """Return the lazy classifier singleton, fitting on first call.
+
+    Returns
+    -------
+    _CapabilityClassifier
+        A process-wide singleton. The first call triggers
+        :meth:`_CapabilityClassifier.fit`; subsequent calls reuse the
+        cached instance. Call :func:`refresh_classifier` to force a
+        re-fit after the labelled corpus changes.
+    """
     classifier = _CapabilityClassifier()
     classifier.fit()
     return classifier
@@ -286,9 +377,24 @@ def _get_classifier() -> _CapabilityClassifier:
 
 
 def detect_capabilities_embedding(prompt: str) -> dict[str, float]:
-    """Hybrid detector: classifier when available, keyword when not.
+    """Predict capability weights with the classifier, fall back to keywords.
 
-    The signature matches :func:`core.capabilities.detect_capabilities`
+    Parameters
+    ----------
+    prompt : str
+        User text to classify.
+
+    Returns
+    -------
+    dict of str to float
+        Normalised capability distribution (values sum to 1). On any
+        classifier failure path, falls back to
+        :func:`core.capabilities.detect_capabilities` so the caller
+        always receives a usable dict.
+
+    Notes
+    -----
+    Signature matches :func:`core.capabilities.detect_capabilities`
     exactly so swapping the import-site is a one-line change.
     """
     classifier = _get_classifier()
@@ -300,11 +406,20 @@ def detect_capabilities_embedding(prompt: str) -> dict[str, float]:
 
 
 def detect_capabilities_active(prompt: str) -> dict[str, float]:
-    """Dispatch on the ``ROITELET_CAPABILITY_DETECTOR`` env var.
+    """Dispatch capability detection on the ``ROITELET_CAPABILITY_DETECTOR`` env var.
 
-    Set to ``embedding`` to use the classifier; anything else (default)
-    keeps the keyword detector. This is the public seam every caller
-    that wants the configurable behaviour should import.
+    Parameters
+    ----------
+    prompt : str
+        User text to classify.
+
+    Returns
+    -------
+    dict of str to float
+        Normalised capability distribution from either the
+        embedding-based classifier (when
+        ``ROITELET_CAPABILITY_DETECTOR=embedding``) or the keyword
+        detector (default).
     """
     flavour = os.environ.get('ROITELET_CAPABILITY_DETECTOR', 'keyword').lower().strip()
     if flavour == 'embedding':
@@ -313,6 +428,13 @@ def detect_capabilities_active(prompt: str) -> dict[str, float]:
 
 
 def refresh_classifier() -> None:
-    """Force a re-fit. Call after dropping new labelled training data on disk."""
+    """Force a re-fit after adding labelled training data on disk.
+
+    Notes
+    -----
+    Clears the lru_cache that backs :func:`_get_classifier` and
+    triggers a fresh fit immediately so the next call to
+    :func:`detect_capabilities_embedding` sees the new state.
+    """
     _get_classifier.cache_clear()
     _get_classifier()

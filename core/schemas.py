@@ -262,8 +262,10 @@ class AppSettingsPayload(BaseModel):
         return self.model_copy(update=replacements)
 
     def merge_unmasked(self, incoming: AppSettingsPayload) -> AppSettingsPayload:
-        """Merge an incoming payload over self, preserving secrets where the
-        incoming value still equals ``SECRET_MASK``.
+        """Merge an incoming payload over self, preserving masked secrets.
+
+        Secrets whose incoming value still equals ``SECRET_MASK`` keep
+        the stored value; every other field is overwritten.
 
         This lets the web UI round-trip settings without ever seeing the real
         API keys: it reads masked values, sends them back unchanged, and the
