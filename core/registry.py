@@ -297,6 +297,30 @@ class ModelRegistry:
                     capabilities=dict(_DEFAULT_CAPABILITIES),
                 )
 
+        # Multi-engine OpenAI-compatible registration. Each engine in
+        # ``custom_engines`` has its own ``label / base_url / api_key
+        # / models`` and registers as
+        # ``openai-compatible/<label>/<model_name>`` so two engines
+        # serving the same model name (e.g. both Together and
+        # Anyscale serving ``mistralai/Mistral-7B``) don't collide.
+        for engine in (getattr(app_settings, 'custom_engines', None) or []):
+            label = (engine.label or '').strip()
+            if not label:
+                continue
+            for model_name in (engine.models or []):
+                model_id = f'openai-compatible/{label}/{model_name}'
+                if model_id not in self.models:
+                    self.models[model_id] = ModelSpec(
+                        model_id=model_id,
+                        provider='openai-compatible',
+                        local=False,
+                        vlm=False,
+                        pricing=dict(_OPENAI_COMPATIBLE_DEFAULTS['pricing']),
+                        latency_s=_OPENAI_COMPATIBLE_DEFAULTS['latency_s'],
+                        energy_kwh=_OPENAI_COMPATIBLE_DEFAULTS['energy_kwh'],
+                        capabilities=dict(_DEFAULT_CAPABILITIES),
+                    )
+
     def _merge_live_ollama(self) -> None:
         """Reconcile the model pool with what Ollama actually serves.
 

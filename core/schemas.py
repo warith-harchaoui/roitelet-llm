@@ -242,6 +242,33 @@ SECRET_FIELDS = (
 )
 
 
+class CustomEngine(BaseModel):
+    """One user-added OpenAI-compatible engine.
+
+    Attributes
+    ----------
+    label : str
+        Short identifier used as a namespace in model ids
+        (``openai-compatible/<label>/<model>``). Must be a non-empty
+        slug; the GUI enforces this client-side.
+    base_url : str
+        OpenAI-compatible endpoint root (no trailing
+        ``/chat/completions``). Example: ``https://api.mistral.ai/v1``.
+    api_key : str
+        Bearer token sent to the endpoint. Empty strings disable the
+        engine — the registry auto-prunes models from unauthorized
+        engines.
+    models : list of str
+        Model names served by this endpoint. Each registers as
+        ``openai-compatible/<label>/<name>``.
+    """
+
+    label: str
+    base_url: str
+    api_key: str = ''
+    models: list[str] = Field(default_factory=list)
+
+
 class AppSettingsPayload(BaseModel):
     """Settings payload edited from the web control room."""
 
@@ -262,38 +289,69 @@ class AppSettingsPayload(BaseModel):
     independence_local_only: bool = False
     selected_ollama_models: list[str] = Field(default_factory=list)
     paid_openrouter_models: list[str] = Field(default_factory=list)
-    # Any paid LLM with an OpenAI-compatible chat-completions endpoint can
-    # be added without a bootstrap edit. Pair these with
-    # ``openai_compatible_base_url`` + ``openai_compatible_api_key``; each
-    # entry becomes a registry model under the ``openai-compatible``
-    # provider. Useful for Mistral, Together, Groq, llama.cpp's
-    # ``llama-server``, and any future provider that ships an
-    # ``/v1/chat/completions`` interface.
+    # Legacy single-endpoint OpenAI-compatible configuration. Kept for
+    # backwards compatibility with .env-driven setups and the older
+    # Settings UI. New deployments should add engines via
+    # ``custom_engines`` below.
     paid_openai_compatible_models: list[str] = Field(default_factory=list)
+    # Universal extension: any number of OpenAI-compatible engines,
+    # each with its own label / URL / key / model list. Edited
+    # dynamically from the Settings sheet via the "+ Add engine"
+    # button. Each engine's models register as
+    # ``openai-compatible/<label>/<model_name>`` in the routing pool.
+    custom_engines: list[CustomEngine] = Field(default_factory=list)
 
     def masked(self) -> AppSettingsPayload:
-        """Return a copy with non-empty secret fields replaced by ``SECRET_MASK``."""
+        """Return a copy with non-empty secret fields replaced by ``SECRET_MASK``.
+
+        Covers both the top-level ``*_api_key`` fields and the
+        per-engine ``api_key`` inside every :class:`CustomEngine`.
+        Empty keys stay empty (so the UI can tell which engines have
+        no credentials configured yet).
+        """
         replacements = {
             field: SECRET_MASK
             for field in SECRET_FIELDS
             if getattr(self, field)
         }
+        masked_engines = [
+            engine.model_copy(update={'api_key': SECRET_MASK} if engine.api_key else {})
+            for engine in self.custom_engines
+        ]
+        replacements['custom_engines'] = masked_engines
         return self.model_copy(update=replacements)
 
     def merge_unmasked(self, incoming: AppSettingsPayload) -> AppSettingsPayload:
         """Merge an incoming payload over self, preserving masked secrets.
 
         Secrets whose incoming value still equals ``SECRET_MASK`` keep
-        the stored value; every other field is overwritten.
+        the stored value; every other field is overwritten. Also
+        round-trips per-engine API keys: an incoming custom engine
+        whose ``api_key`` is ``SECRET_MASK`` inherits the stored key
+        from the engine with the same ``label`` on the server. New
+        engines (label not on file) keep whatever they were sent with;
+        deleted engines disappear because they're simply absent from
+        ``incoming.custom_engines``.
 
         This lets the web UI round-trip settings without ever seeing the real
         API keys: it reads masked values, sends them back unchanged, and the
         server keeps the stored credentials.
         """
-        replacements = {}
+        replacements: dict = {}
         for field in SECRET_FIELDS:
             if getattr(incoming, field) == SECRET_MASK:
                 replacements[field] = getattr(self, field)
+        # Per-engine key round-trip, keyed on engine label.
+        stored_by_label = {e.label: e for e in self.custom_engines}
+        merged_engines: list[CustomEngine] = []
+        for engine in incoming.custom_engines:
+            if engine.api_key == SECRET_MASK and engine.label in stored_by_label:
+                merged_engines.append(
+                    engine.model_copy(update={'api_key': stored_by_label[engine.label].api_key})
+                )
+            else:
+                merged_engines.append(engine)
+        replacements['custom_engines'] = merged_engines
         return incoming.model_copy(update=replacements)
 
 
