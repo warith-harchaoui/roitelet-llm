@@ -270,6 +270,102 @@ class TestEmbeddingViz:
             assert isinstance(p['x'], float) and isinstance(p['y'], float)
 
 
+class TestRagIndex:
+    """The persistent RAG index caches embeddings between queries."""
+
+    def _stub_embed(self, text: str):
+        """Deterministic 16-D embedding keyed on first char + length."""
+        import numpy as np
+
+        vec = np.zeros(16, dtype=np.float32)
+        if text:
+            vec[ord(text[0]) % 16] = 1.0
+            vec[len(text) % 16] += 0.25
+        return vec
+
+    def test_retrieval_caches_embeddings_across_queries(self, tmp_path, monkeypatch):
+        """A second query must not re-invoke the embedder for chunks."""
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+
+        call_log: list[str] = []
+        import core.capability_classifier as cc
+
+        def counting_embed(text):
+            call_log.append(text)
+            return self._stub_embed(text)
+
+        monkeypatch.setattr(cc, '_embed_prompt', counting_embed)
+
+        from core.personal import _retrieve_chunks, wiki_dir
+        wiki = wiki_dir()
+        (wiki / 'a.md').write_text('alpha alpha alpha. ' * 80, encoding='utf-8')
+        (wiki / 'b.md').write_text('beta beta beta. ' * 80, encoding='utf-8')
+
+        result1 = _retrieve_chunks('alpha please', top_k=2)
+        first_call_count = len(call_log)
+        assert result1, 'cold-start retrieval should return chunks'
+
+        # Second query: chunks are cached, only the query is embedded.
+        call_log.clear()
+        result2 = _retrieve_chunks('beta please', top_k=2)
+        assert result2, 'warm retrieval should still return chunks'
+        assert len(call_log) == 1, (
+            f'expected exactly 1 embed call (the query) on warm cache, '
+            f'got {len(call_log)} — chunks should be served from .npy'
+        )
+        # And the cold-start invocation count must dominate (chunks + query).
+        assert first_call_count > 1
+
+    def test_cache_invalidates_on_wiki_change(self, tmp_path, monkeypatch):
+        """Mutating a wiki file triggers a rebuild on the next call."""
+        import time
+
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+
+        call_log: list[str] = []
+        import core.capability_classifier as cc
+        monkeypatch.setattr(cc, '_embed_prompt',
+                            lambda t: (call_log.append(t), self._stub_embed(t))[1])
+
+        from core.personal import _retrieve_chunks, wiki_dir
+        wiki = wiki_dir()
+        (wiki / 'a.md').write_text('alpha. ' * 80, encoding='utf-8')
+
+        _retrieve_chunks('alpha', top_k=1)
+        warm_calls = list(call_log)
+        call_log.clear()
+
+        # Mutate the file; force mtime advance so the fingerprint changes
+        # even on filesystems with second-resolution mtimes.
+        time.sleep(0.01)
+        (wiki / 'a.md').write_text('alpha. ' * 80 + 'NEW CONTENT.', encoding='utf-8')
+
+        _retrieve_chunks('alpha', top_k=1)
+        # The rebuild must have re-embedded the (now-changed) chunks
+        # plus the new query, i.e. more than one call.
+        assert len(call_log) > 1, (
+            f'expected a rebuild after wiki mutation; embedder was called '
+            f'{len(call_log)} times (warm baseline was {len(warm_calls)})'
+        )
+
+    def test_empty_chunks_returns_empty(self, tmp_path, monkeypatch):
+        """A wiki with whitespace-only content returns no chunks safely."""
+        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+        _reset_singletons()
+
+        import core.capability_classifier as cc
+        monkeypatch.setattr(cc, '_embed_prompt', self._stub_embed)
+
+        from core.personal import _retrieve_chunks, wiki_dir
+        # No wiki files at all.
+        assert _retrieve_chunks('anything') == []
+        # Empty file.
+        (wiki_dir() / 'empty.md').write_text('', encoding='utf-8')
+        assert _retrieve_chunks('anything') == []
+
+
 class TestSlashCommandPersonal:
     """The `/personal` parser branch must set the personal_override flag."""
 

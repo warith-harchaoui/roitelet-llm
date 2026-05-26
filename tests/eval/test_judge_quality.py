@@ -32,7 +32,7 @@ import pytest
 
 # DeepEval is required — conftest.py importorskips early if it isn't installed.
 from deepeval.metrics import AnswerRelevancyMetric, FaithfulnessMetric, GEval
-from deepeval.test_case import LLMTestCase, LLMTestCaseParams
+from deepeval.test_case import LLMTestCase, SingleTurnParams
 
 from core.pipeline import run_roitelet_chat
 from core.schemas import ChatRequest, RouterPreferences
@@ -61,9 +61,9 @@ def correctness_metric(ollama_judge):
             'false ones is not.'
         ),
         evaluation_params=[
-            LLMTestCaseParams.INPUT,
-            LLMTestCaseParams.ACTUAL_OUTPUT,
-            LLMTestCaseParams.EXPECTED_OUTPUT,
+            SingleTurnParams.INPUT,
+            SingleTurnParams.ACTUAL_OUTPUT,
+            SingleTurnParams.EXPECTED_OUTPUT,
         ],
         model=ollama_judge,
         threshold=0.6,

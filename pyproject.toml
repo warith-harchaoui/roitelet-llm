@@ -59,6 +59,19 @@ multimodal = [
     "audio-helper>=0.1",
     "kreuzberg>=3.0",
 ]
+# Personal-mode ANN retrieval. The base install ships a pure-numpy
+# brute-force scan that's perfectly adequate up to a few thousand
+# wiki chunks; the `[personal]` extra installs `turbovec` (Rust + Python
+# bindings, MIT) for compressed ANN search that stays sub-millisecond
+# at 100k+ chunks with ~16× embedding compression. Install with:
+#   pip install -e .[personal]
+# The retrieval path auto-detects turbovec at runtime; both code
+# paths share the same persistent on-disk embeddings cache so the
+# embedding model is invoked once per chunk per wiki revision, not
+# once per query.
+personal = [
+    "turbovec>=0.5",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

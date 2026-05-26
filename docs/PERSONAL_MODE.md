@@ -126,8 +126,34 @@ The size threshold lives at
 - **Above the threshold** — chunks of size
   `_RAG_CHUNK_CHARS` (default 1 200 chars) with
   `_RAG_CHUNK_OVERLAP` (200 chars) are embedded via Ollama's
-  `nomic-embed-text`; cosine similarity selects the top
-  `_RAG_TOP_K` (default 5) chunks to inject.
+  `nomic-embed-text`; the top `_RAG_TOP_K` (default 5) chunks are
+  injected.
+
+### Persistent index + ANN (turbovec)
+
+Roitelet's RAG path is **not** a re-embed-on-every-query implementation:
+
+- **Embeddings are computed once per wiki revision.** The first
+  retrieval (or `personal ingest`) walks the wiki, embeds every chunk
+  via `nomic-embed-text`, and persists three sidecar files next to
+  the wiki:
+  - `.rag_index.json` — fingerprint + chunk text manifest
+  - `.rag_embeddings.npy` — canonical dense `(N, dim)` float32 matrix
+  - `.rag_index.tq` — compressed [turbovec](https://github.com/RyanCodrai/turbovec)
+    `IdMapIndex` (when the `[personal]` extra is installed)
+- **Subsequent queries embed only the question** and search the
+  cached index. Cold-start is dominated by the first wiki ingest;
+  every later turn is one embedding call + one ANN lookup.
+- **Auto-invalidation.** The sidecar JSON carries a SHA-256 fingerprint
+  over each wiki file's `(name, mtime, size)` plus the chunking knobs.
+  Any change — adding, editing, deleting a wiki file, or changing
+  `_RAG_CHUNK_CHARS` — drifts the fingerprint and triggers a rebuild
+  on the next call.
+- **Two search backends, same on-disk format.** With
+  `pip install -e .[personal]` the compressed turbovec index is used
+  (~16× embedding compression, sub-millisecond search at 100k+
+  chunks). Without it, the pure-numpy brute-force scan over the
+  `.npy` matrix runs — still fast on personal-scale corpora.
 
 If the embedding call fails (server down, model not pulled), Roitelet
 **skips** the personal-context injection rather than guessing — the
@@ -139,9 +165,10 @@ response (it says "I don't have that in your notes").
 
 ## What this is not
 
-- **Not** a vector database. The index lives in memory and is rebuilt
-  per request. Fine for personal-scale corpora (≤ 10 MB of text);
-  swap in a real vector store if you scale to a corporate wiki.
+- **Not** a server-grade vector database. The persistent on-disk
+  index handles personal-scale corpora well (tested up to a few
+  thousand chunks); swap in pgvector / Qdrant / LanceDB if you scale
+  to a corporate wiki.
 - **Not** a multi-user knowledge base. Everything is one folder, one
   user, one machine. Multi-tenant support would need a per-user
   `data_dir`.
