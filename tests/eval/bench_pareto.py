@@ -146,7 +146,17 @@ def test_emit_pareto_report(correctness_metric):
         )
         fused_score = _score(correctness_metric, prompt, fused.synthesis.content, reference)
         fused_cost = sum(r.cost_usd or 0.0 for r in fused.responses)
-        fused_latency = max((r.latency_s for r in fused.responses), default=0.0)
+        # User-perceived latency is the full pipeline wall-clock:
+        # router + max(candidate_latencies) + judge + telemetry write.
+        # The pipeline measures this end-to-end; falling back to
+        # ``max(candidate) + judge`` for older snapshots that lacked
+        # ``total_latency_s``.
+        candidate_max = max((r.latency_s for r in fused.responses), default=0.0)
+        judge_latency = getattr(fused.synthesis, 'latency_s', 0.0) or 0.0
+        fused_latency = (
+            getattr(fused, 'total_latency_s', 0.0)
+            or (candidate_max + judge_latency)
+        )
 
         # Score each candidate the pipeline actually called, in isolation.
         # Comparing those isolated scores against the fused score is the
@@ -173,6 +183,8 @@ def test_emit_pareto_report(correctness_metric):
                 'score': fused_score,
                 'cost_usd': fused_cost,
                 'latency_s': fused_latency,
+                'candidate_max_latency_s': candidate_max,
+                'judge_latency_s': judge_latency,
                 'winning_model_ids': fused.synthesis.winning_model_ids,
             },
             'candidates': per_candidate,
