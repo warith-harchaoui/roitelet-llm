@@ -24,8 +24,21 @@
             mono: ['ui-monospace','"SF Mono"','Menlo','Monaco','Consolas','monospace'],
           },
           colors: {
-            sysblue: '#0a84ff',
-            sysblueHover: '#0071e3',
+            // Aligned to https://harchaoui.org/warith/colors — Blue.
+            // ``sysblue`` keeps its name (every component class uses it)
+            // but the hex is now the canonical palette value.
+            sysblue: '#007AFF',
+            sysblueHover: '#0062CC',
+            // The 8 user-palette accents, exposed as Tailwind colors so
+            // any UI surface can reach for them without re-inventing.
+            uRed:        '#FF3B30',
+            uOrange:     '#FF9500',
+            uYellow:     '#FFCC00',
+            uGreen:      '#28CD41',
+            uBlue:       '#007AFF',
+            uTurquoise:  '#79DBDC',
+            uPurple:     '#AF52DE',
+            uPink:       '#FF2D55',
           },
           borderRadius: {
             // Continuous 10px corner is the brand radius for cards, inputs,

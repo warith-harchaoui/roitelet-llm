@@ -181,7 +181,7 @@ function setBusy(busy, label) {
   $('prompt').disabled = busy;
   $('sendIcon').classList.toggle('hidden', busy);
   $('sendSpinner').classList.toggle('hidden', !busy);
-  $('statusDot').className = `w-1.5 h-1.5 rounded-full ${busy ? 'bg-sysblue animate-pulse' : 'bg-emerald-500'}`;
+  $('statusDot').className = `w-1.5 h-1.5 rounded-full ${busy ? 'bg-sysblue animate-pulse' : 'bg-uGreen'}`;
   $('statusText').textContent = busy ? (label || 'Thinking…') : 'Ready';
 }
 
@@ -300,8 +300,15 @@ async function refreshPersonalSummary() {
 // source file. The whole thing renders inline SVG; no extra deps. The
 // server projects via numpy SVD and returns the coordinates.
 
-const VIZ_PALETTE = ['#0a84ff','#ff9500','#34c759','#ff3b30','#af52de',
-                     '#5856d6','#ff2d55','#5ac8fa','#ffcc00','#a2845e'];
+// Aligned to https://harchaoui.org/warith/colors — the 8 base accents
+// (Red, Orange, Yellow, Green, Blue, Turquoise, Purple, Pink). Gray
+// closes the cycle as a neutral so 9 source files still get distinct
+// colors before we wrap.
+const VIZ_PALETTE = [
+  '#007AFF', '#FF9500', '#FFCC00', '#28CD41',
+  '#79DBDC', '#AF52DE', '#FF2D55', '#FF3B30',
+  '#808080',
+];
 
 async function openPersonalViz() {
   let payload;

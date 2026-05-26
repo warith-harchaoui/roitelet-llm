@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 
 from core.personal import (
     build_personal_context,
@@ -208,13 +209,17 @@ _PERSONAL_VIZ_TEMPLATE = """<!doctype html>
 </style></head><body>
 <header>
   <h1>Personal wiki — 2-D embedding projection</h1>
-  <p>Each dot is one chunk. Color = source file. Spatial proximity reflects semantic similarity (PCA of nomic-embed-text vectors).</p>
+  <p>Each dot is one chunk. Color = source file.
+     Spatial proximity reflects semantic similarity
+     (PCA of nomic-embed-text vectors).</p>
 </header>
 <svg id="chart"></svg>
 <div id="tooltip"></div>
 <script>
 const points = "__POINTS__";
-const palette = ['#0a84ff','#ff9500','#34c759','#ff3b30','#af52de','#5856d6','#ff2d55','#5ac8fa','#ffcc00','#a2845e'];
+// Aligned to https://harchaoui.org/warith/colors — Red, Orange, Yellow,
+// Green, Blue, Turquoise, Purple, Pink (+ neutral Gray to close the cycle).
+const palette = ['#007AFF','#FF9500','#FFCC00','#28CD41','#79DBDC','#AF52DE','#FF2D55','#FF3B30','#808080'];
 const fileToColor = new Map();
 function colorFor(path) {
   if (!fileToColor.has(path)) fileToColor.set(path, palette[fileToColor.size % palette.length]);
