@@ -27,7 +27,7 @@ import json
 import shutil
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -58,7 +58,7 @@ def _seed_tmp(tmp_path: Path, with_telemetry: int = 0) -> None:
     for i in range(with_telemetry):
         record = {
             'record_id': str(uuid.uuid4()),
-            'created_at': datetime.now(timezone.utc).isoformat(),
+            'created_at': datetime.now(UTC).isoformat(),
             'conversation_id': str(uuid.uuid4()),
             'prompt': f'Write a Python function fizzbuzz_{i}(n) that prints fizz buzz.',
             'router_decision': {

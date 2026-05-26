@@ -311,6 +311,33 @@ sequenceDiagram
 
 ---
 
+## 5.5 Alternative router: `ROITELET_ROUTER=mf`
+
+A second router lives in `core/router_mf.py`: a learned matrix-factorisation
+prototype that reads accumulated telemetry and blends a learned per-prompt
+quality score with the heuristic's per-capability score.
+
+| Aspect | Heuristic (default) | Learned MF (opt-in) |
+|---|---|---|
+| **Selection signal** | Curated priors + rolling Elo + keyword detector | Same, blended 50/50 with TF-IDF + truncated-SVD per-model centres trained on `data/telemetry/` |
+| **Trains on** | Nothing — priors edited by hand or `crawl_arena.py` | Per-turn winners crowned by the synthesis judge |
+| **Cold-start behaviour** | Always works | Falls back to heuristic until ≥ 32 telemetry turns exist |
+| **Activation** | Default | `ROITELET_ROUTER=mf` env var before launch |
+| **Cost** | Zero — pure Python | TF-IDF + 16-component SVD over telemetry on startup; sklearn already a runtime dep |
+
+The learned router never *replaces* the heuristic — it composes it. The
+cost-budget regime, the ambiguous-prompt generalist boost, and the
+independence filter all keep working. The only change is the quality
+term in the linear blend.
+
+**Why it isn't yet the default**: we don't have a head-to-head benchmark
+proving it beats the heuristic. The Pareto runner under
+`tests/eval/bench_pareto.py` is the seam for that comparison — once it
+shows a consistent improvement across the eval dataset, the env-var
+gate can be flipped to "default learned with `=heuristic` opt-out."
+
+---
+
 ## 6. On-disk layout
 
 Roitelet deliberately avoids a database. Everything is JSON, atomically
@@ -338,11 +365,14 @@ half-formed mix.
 | Module | Lines | What to look for |
 |---|---|---|
 | `core/pipeline.py` | ~225 | The whole orchestration in one file — start here |
-| `core/router.py` | ~120 | The scoring formula and the filter logic |
-| `core/registry.py` | ~460 | Bootstrap loading, live discovery, Elo update |
-| `core/capabilities.py` | ~125 | Keyword lists + normalisation |
+| `core/router.py` | ~150 | The scoring formula, regime hooks, and filter logic |
+| `core/regimes.py` | ~155 | The six regimes that drive hybrid routing math |
+| `core/router_mf.py` | ~290 | Learned matrix-factorisation router (opt-in alt) |
+| `core/registry.py` | ~480 | Bootstrap loading, live discovery, Elo update |
+| `core/capabilities.py` | ~140 | Keyword lists + normalisation |
 | `core/judge.py` | ~255 | Anonymized handles, WINNERS sentinel, fail-closed parse |
 | `core/multimodal/` | ~420 | Audio (whisper.cpp + NeMo), image (Ollama VLM), PDF (kreuzberg) |
 | `core/providers/openai_compatible.py` | ~120 | The contract every remote provider must satisfy |
 | `api/main.py` | ~490 | All four API surfaces (native, multimodal, OpenAI-compat, MCP) in one file |
+| `tests/eval/bench_pareto.py` | ~250 | Cost-quality Pareto: fusion vs single-best baseline |
 | `tests/test_pipeline.py` | ~470 | Worked example of running the pipeline end-to-end with stubs |
