@@ -1,50 +1,128 @@
 # Roitelet LLM
 
-> **Le LLM Universel :** Le meilleur grand modèle de langage pour votre prompt, quoi qu'il arrive.
+> **Un atelier local-first de routage et de fusion de LLM.** Roitelet
+> route les prompts vers des modèles locaux et distants, compare leurs
+> réponses, synthétise une réponse finale localement, et apprend ses
+> préférences de routage au fil du temps à partir de son propre signal
+> de juge.
 
-Chaque semaine, un nouveau modèle toujours plus puissant est publié par un géant de l'IA. Évaluer, comparer et maintenir l'intégration avec chacun d'entre eux est épuisant.
-
-**Roitelet** est un routeur adaptatif qui fait le tri pour vous. Au lieu de choisir manuellement un modèle, vous interrogez Roitelet. Le système détecte la nature de votre question, prédit les 3 meilleurs modèles pour cette tâche, les exécute en parallèle, et utilise un modèle open source local pour fusionner et livrer la meilleure réponse possible.
+Ce n'est **pas** un « LLM universel », ni une garantie d'obtenir la
+meilleure réponse pour toute requête. C'est une plateforme
+d'expérimentation pour les compromis coût / latence / vie privée /
+qualité qui apparaissent dès qu'on cesse de s'engager sur un seul
+modèle.
 
 ![Roitelet](assets/roitelet.jpg)
 
+---
+
+## Ce que Roitelet fait
+
+Pour un prompt donné, Roitelet :
+
+1. Note chaque modèle enregistré (local + distant optionnel) à l'aide
+   d'un routeur hybride — a priori de capacité curés, Elo glissant, et
+   un petit jeu d'ajustements régime-conscients (budget coût,
+   prompt trivial, long contexte, …).
+2. Fan-out parallèle sur les top-K candidats (K=3 par défaut).
+3. Transmet les K réponses, **anonymisées et mélangées**, à un juge
+   de synthèse local qui les fusionne en une réponse unique.
+4. Persiste la télémétrie par tour et ajuste légèrement les scores
+   Elo par capacité pour améliorer le routage du prompt suivant.
+
+Chaque étape est inspectable. La décision du routeur, les réponses
+candidates, le raisonnement du juge et l'état Elo glissant atterrissent
+sous forme de JSON sur le disque ; rien n'est caché derrière un
+service opaque.
+
+### Ce pourquoi c'est utile
+
+- **Comparer des familles de modèles** sur un même prompt sans
+  jongler avec trois SDK.
+- **Lancer une passe de synthèse locale** par-dessus les réponses
+  candidates distantes — utile quand on veut que le mot final vienne
+  d'un modèle que l'on contrôle.
+- **Expérimenter avec des stratégies de routage et de fusion**
+  (filtres de budget, routeur appris par factorisation matricielle,
+  détecteur de capacité par embeddings) sous une même API.
+- **Étudier les compromis** entre coût, latence, vie privée et
+  qualité de réponse, avec la traçabilité nécessaire pour rendre ces
+  études reproductibles.
+
+### Ce que ce projet ne prétend **pas**
+
+- Que la réponse fusionnée est toujours meilleure que le meilleur
+  candidat individuel. La fusion aide ou non selon la classe du
+  prompt, le modèle juge et la diversité des candidats ; c'est
+  précisément ce que mesure la feuille de route d'ablation dans
+  [docs/EVALUATION.md](docs/EVALUATION.md).
+- Que le juge de synthèse local soit un oracle objectif. Roitelet
+  apprend des préférences *conditionnées au juge* — différents juges
+  produisent différentes trajectoires d'Elo. Ce biais du juge est
+  une caractéristique à inspecter, pas un bug à cacher.
+- Qu'il soit automatiquement « privé ». Roitelet est local-**first**,
+  pas local-**only**. Les prompts peuvent toujours sortir vers des
+  fournisseurs distants quand ils sont sélectionnés comme candidats.
+  Voir [docs/PRIVACY.md](docs/PRIVACY.md) pour la distinction
+  précise.
 
 ---
 
-## La Métaphore du Roitelet
+## Le roitelet
 
-Il était une fois, dans la grande forêt des Intelligences Artificielles, un minuscule roitelet qui rêvait de voler plus haut que les majestueux aigles royaux. Mais ses ailes étaient si petites qu'il peinait à dépasser la cime des arbres ! Le petit oiseau rusé décida alors de se cacher dans le plumage d'un aigle. Il se laissa porter jusqu'au sommet du ciel et, au dernier instant, battit de ses propres ailes pour les surpasser tous.
-
-La vraie puissance ne réside pas dans le budget ou le nombre de paramètres, mais dans la ruse. Roitelet LLM incarne cette philosophie à chaque prompt.
-
-### Comment fonctionnent les "Battements d'ailes" ?
-
-Roitelet remplace l'appel traditionnel par un vol en trois temps :
-
-1. 🦅 **Battement 1 — Découverte rusée :** Notre IA de routage prédit quels 3 LLMs du marché (comme GPT-4o, Claude 3.7, Gemini 2.5) sont les plus susceptibles d'exceller sur votre question en se basant sur un historique Elo et des "a-prioris".
-2. 🦅 **Battement 2 — Trio aérien :** Les trois modèles sélectionnés génèrent leurs réponses en parallèle. Fini la dépendance à un fournisseur unique.
-3. 🦅 **Battement 3 — Couronnement :** Un modèle local de confiance (comme Qwen2.5 exécuté via Ollama) joue le juge. Il lit les trois réponses, en extrait le meilleur, et synthétise une réponse finale hautement qualitative.
-
-De votre point de vue, vous recevez une réponse unique comme si vous interrogiez un super-cerveau. Le reste n'est que ruse et plumage.
+Le projet porte le nom du roitelet, un tout petit oiseau qui, dans
+la fable, se cache dans le plumage de l'aigle et bat des ailes
+légèrement plus haut au dernier moment. La métaphore parle de
+composer de petits mouvements locaux par-dessus de grands modèles
+externes — pas de prétendre être le meilleur oiseau de la forêt.
 
 ---
 
 ## Fonctionnalités
 
-- 🧠 **Routage Dynamique :** Plus besoin de choisir votre modèle.
-- 🌐 **Fusion Multi-Familles :** Le juge fusionne K réponses parallèles issues de *familles OSS différentes* (Qwen + Llama + Gemma + Phi par défaut), pas trois variantes du même fournisseur — la réponse finale est meilleure qu'aucun candidat seul.
-- ⚡ **Synthèse Locale :** Le juge final tourne en local via Ollama, garantissant la confidentialité et le contrôle de l'arbitrage.
-- 🌍 **Intégrations Natives :** Support d'OpenRouter, des points de terminaison compatibles OpenAI, Anthropic, Gemini, Perplexity, etc.
-- 🖼️ **Pièces jointes multimodales :** Glissez images, PDF ou audio dans le chat — extraits localement (légende VLM Ollama, texte PDF par kreuzberg, transcription whisper.cpp + diarisation NeMo) avant la pipeline textuelle.
-- 🎨 **Génération d'image :** Routage des prompts visuels vers le meilleur modèle image-gen enregistré. K=1 — la fusion d'images n'est pas définie. Compatible OpenAI Images, relais OpenRouter, ou Stable Diffusion local via l'API OpenAI-compatible. Voir [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md).
-- 🗂️ **Mode personnel (RAG + wiki Karpathy) :** Déposez vos propres fichiers dans `data/personal/inbox/`, ingestion en un clic — audio transcrit, images légendées, PDF extraits. Les petits corpus s'injectent en long-context (style LLM-wiki Karpathy) ; les gros basculent vers la recherche par similarité. Inclut une projection PCA 2-D pour *voir* votre base de connaissances. Voir [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
-- 🔬 **Deux routeurs, une pipeline.** Heuristique par défaut + `ROITELET_ROUTER=mf` optionnel (factorisation matricielle apprise sur la télémétrie). Régimes hybrides (`trivial`, `budget_constrained`, `ambiguous`, …) qui ajustent les maths par tour.
-- 🌐 **Deux détecteurs de capacité.** Scan par mots-clés par défaut + `ROITELET_CAPABILITY_DETECTOR=embedding` optionnel — classifieur entraîné sur embeddings Ollama (`nomic-embed-text`). Repli transparent hors ligne.
-- 📊 **Monitoring Coût / Énergie :** Dashboard intégré pour suivre la consommation de tokens, évaluer l'énergie (kWh) et l'empreinte carbone (gCO₂e).
-- 🔄 **Apprentissage Continu :** Un système de mises à jour basées sur un score d'évaluation Elo roule en permanence pour prioriser les modèles les plus pertinents au fil du temps.
-- 🔌 **API Standard :** Expose une route `/v1/chat/completions` (OpenAI-compatible), un point de terminaison natif FastAPI, ainsi qu'un serveur JSON-RPC (MCP). Génération d'images via `/api/images` (et `/v1/images/generations` OpenAI-compatible).
-- 💬 **Commandes slash :** `/image`, `/speech`, `/personal`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — surcharges par tour analysées au début du prompt. Voir [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
-- 🔐 **Gate Bearer-Token optionnel :** Définissez `ROITELET_API_TOKEN` pour verrouiller chat, settings, conversations et télémétrie. Désactivé par défaut pour l'usage local mono-utilisateur.
+- **Routage hybride.** A priori de capacité + Elo glissant +
+  ajustements régime-conscients (budget coût, prompt trivial, long
+  contexte, ambigu, capacité dominante). Routeur appris optionnel par
+  factorisation matricielle (`ROITELET_ROUTER=mf`).
+- **Fan-out parallèle top-K.** K=3 par défaut, configurable par tour.
+  Le temps mur est borné par le candidat le plus lent (voir la
+  section [latence et coût](#latence-et-coût) ci-dessous).
+- **Passe de synthèse locale.** Les réponses candidates sont
+  anonymisées, mélangées et transmises à un modèle local Ollama qui
+  les fusionne. Le juge est remplaçable.
+- **Elo glissant par capacité.** À chaque tour, les gagnants du juge
+  gagnent de l'Elo sur les capacités appelées par le prompt ; les
+  perdants en perdent. Mises à jour bornées ; pas d'emballement.
+- **Point d'extension universel.** Tout LLM payant avec une API
+  `/v1/chat/completions` compatible OpenAI s'enregistre via trois
+  champs de réglage. Idem pour tout GGUF local servi par
+  `llama-server`.
+- **Pièces jointes multimodales.** Glissez images, PDF, audio —
+  extraits localement (Ollama VLM, kreuzberg, whisper.cpp + NeMo)
+  avant la pipeline textuelle.
+- **Génération d'images.** Routage K=1 vers le modèle image-gen
+  enregistré le plus apte (pas de fusion — l'ensemblage d'images
+  n'est pas défini).
+- **Mode personnel.** Déposez vos propres fichiers dans un dossier ;
+  petits corpus injectés en long-context (style LLM-wiki à la
+  Karpathy), gros corpus basculés sur recherche par embeddings.
+  Inclut une projection PCA 2-D. Voir
+  [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
+- **Deux détecteurs de capacité.** Scan par mots-clés par défaut +
+  classifieur sur embeddings locaux Ollama en option.
+- **Commandes slash.** `/image`, `/speech`, `/personal`, `/local`,
+  `/cheap <usd>`, `/k <n>`, `/help`. Voir
+  [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- **Endpoints standardisés.** `/v1/chat/completions` +
+  `/v1/images/generations` compatibles OpenAI, FastAPI natif, MCP
+  JSON-RPC.
+- **Télémétrie locale.** Enregistrement JSON par tour de la décision
+  du routeur, de chaque réponse candidate (y compris les échecs),
+  de la synthèse et des gagnants. Voir
+  [docs/PRIVACY.md](docs/PRIVACY.md) pour ce qui est enregistré.
+- **Gate Bearer-token optionnel.** `ROITELET_API_TOKEN` verrouille
+  tous les endpoints mutants ou de listage. Désactivé par défaut
+  pour préserver l'UX mono-utilisateur en local.
 
 ---
 

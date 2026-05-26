@@ -118,6 +118,107 @@ wren being the best bird in the forest.
 
 ---
 
+## How Roitelet differs from neighbouring projects
+
+Roitelet lives in an active space. The table below positions it
+against the closest neighbours, fairly and at a high level. None of
+these projects "lose" — they solve different problems.
+
+| Project | Primary role | Strengths | How Roitelet differs |
+|---|---|---|---|
+| [**LiteLLM**](https://github.com/BerriAI/litellm) | Provider gateway / OpenAI-compatible abstraction over many APIs. | Broad provider coverage, drop-in OpenAI client, server mode, robust SDK. | Roitelet is narrower and more opinionated: local-first by default, focused on multi-model fan-out + a local synthesis pass + an inspectable rolling-Elo loop. LiteLLM is one of the providers Roitelet could plug into. |
+| [**OpenRouter**](https://openrouter.ai) | Hosted marketplace + routing for many remote models behind one billing surface. | Huge model catalogue, hosted convenience, single API key. | Roitelet runs on your machine and lets you inspect / modify the routing and fusion loop. OpenRouter is an excellent *candidate provider* for Roitelet, not a replacement. |
+| [**RouteLLM**](https://github.com/lm-sys/RouteLLM) | Research framework for cost-aware routing between a strong and a weak model, trained on human preference data. | Principled `P(strong wins)` estimator, published cost-quality Pareto curves, calibrated threshold knob. | Roitelet does top-K fan-out + fusion rather than binary routing, and is set up as a personal workbench rather than a research benchmark. RouteLLM's `mf` router slots cleanly behind Roitelet's `Router` Protocol if you want both. |
+| [**LangChain / LangGraph**](https://www.langchain.com) | General LLM-orchestration frameworks. | Composable graphs, broad ecosystem, agent patterns. | Roitelet is an end-user system, not a framework. It ships an opinionated pipeline (router → parallel candidates → local judge → telemetry) with HTTP, CLI and web entry points, instead of leaving the orchestration to you. |
+| [**DSPy**](https://github.com/stanfordnlp/dspy) | Programming model for compiling prompt pipelines, optimising them against metrics. | Powerful abstractions for optimisation-driven prompting and retrieval. | Roitelet doesn't compile programs — it routes and fuses at inference time, with the rolling-Elo loop as its only online "optimisation". DSPy and Roitelet can coexist (DSPy could be the candidate; Roitelet could be the runner). |
+| **Single-model chat clients** (OpenAI playground, Ollama desktop, etc.) | One model in, one answer out. | Simple, fast, low-latency, low-cost. | Roitelet deliberately trades simplicity and latency for comparison, redundancy and synthesis. For a trivial prompt to a familiar model, those clients win. For "I want three opinions and a local synthesis", Roitelet is the one. |
+
+The honest summary: Roitelet is a **workbench**, not a gateway, not a
+hosted marketplace, not a framework, and not a chat client. Pick the
+tool whose primary role matches what you're actually trying to do.
+
+---
+
+## Why fusion can help — and where the judge bias sits
+
+Judging and fusing K already-written candidate answers is a different
+job from generating a strong answer from scratch. The judge does not
+have to know everything: it has K drafts in front of it, and its job
+is to compare them, find overlaps, drop contradictions, preserve
+useful details, and emit a single fused answer. A relatively small
+local model can sometimes do that well — comparing K versions is
+easier than producing the first one.
+
+**But this is not free magic.** The judge is not an objective oracle:
+
+- Roitelet learns *judge-conditioned* preferences. If Qwen is your
+  local judge, the rolling-Elo loop will quietly internalise what Qwen
+  tends to prefer. Useful for routing under that judge; not a
+  universal quality signal.
+- A clueless or biased judge will fuse confidently in the wrong
+  direction. The fail-closed parse on the winners marker
+  (`core/judge.py`) limits how badly a broken judge can corrupt the
+  Elo state, but the *content* of a bad fusion is still bad.
+- Whether fusion of three OSS candidates beats the strongest single
+  paid candidate depends on the prompt class, the candidate
+  diversity, and the judge. The answer is empirical, not theoretical.
+
+This is why ablation studies are first-class concerns in this project,
+not a "future maybe" — see [docs/EVALUATION.md](docs/EVALUATION.md).
+The matrix there proposes single-best vs top-K vs top-K+fusion vs
+different judge models, against tasks that span coding, reasoning,
+writing, multilingual, factual QA, and long-context summarisation.
+
+---
+
+## Latency and cost tradeoffs
+
+Roitelet's design choices have measurable consequences. They are
+worth understanding before you run the system in front of users.
+
+**Latency.** K parallel calls are *not* K times slower than one — the
+fan-out runs through `asyncio.gather`. But the wall-clock time of a
+turn is bounded by **the slowest selected candidate**, plus the
+fusion pass on the local judge. For three local OSS models running
+side by side on a laptop CPU, that's a few tens of seconds; for a
+mix of one frontier API + two locals, the frontier latency dominates.
+
+**Fusion overhead.** The judge is one extra local generation, with
+the system prompt + the K candidate answers as input. On a small
+local judge (Qwen 3 8B by default), that adds roughly the same wall
+time as one candidate. The result: total time is approximately
+`max(candidate_latencies) + judge_latency`.
+
+**Cost.** Local models are free at the marginal token but pay for
+themselves in RAM/VRAM and disk. Remote candidates cost what their
+provider charges — Roitelet does not arbitrage; it just calls them.
+The cost-budget regime (`/cheap <usd>` slash command or
+`max_cost_usd` in `RouterPreferences`) drops candidates above the
+budget *before* scoring.
+
+### When **not** to use Roitelet
+
+- **Very low-latency chat UX.** A single fast model beats Roitelet's
+  fan-out + fusion. If your UI lives or dies by sub-second response
+  times, this is the wrong tool.
+- **Trivial prompts.** "What's 2+2?" doesn't need three opinions and
+  a synthesis. The `trivial` regime surfaces it in telemetry but
+  doesn't auto-collapse K — that's a maintainer call.
+- **High-volume production traffic where every token matters.**
+  Roitelet calls K models and a judge for every turn; the cost is
+  multiplicative. A single calibrated model + caching is cheaper.
+- **Prompts that must never leave the local machine**, unless you
+  explicitly enable local-only mode and use only local candidates.
+  See [docs/PRIVACY.md](docs/PRIVACY.md).
+- **You just want one provider gateway.** That is exactly LiteLLM's
+  job; pick LiteLLM and stop here.
+
+Use Roitelet when you value comparison, redundancy, model diversity,
+local synthesis on top of remote answers, or the ability to study
+how those tradeoffs play out in your data.
+
+---
+
 ## User Interface & Control Room
 
 Roitelet ships with a web-based control room (vanilla JS, served by the API at `/`) that provides a transparent view into your LLM fleet:
