@@ -97,7 +97,7 @@ async def _query_one(model_id: str, messages: Sequence[ChatMessage]) -> ModelRes
         A populated unified schema model output payload with injected cost logic.
     """
     spec = _registry_mod.get_registry().get(model_id)
-    client = get_provider_client(spec.provider)
+    client = get_provider_client(spec.provider, model_id=model_id)
     response = await client.generate(model_id=model_id, messages=messages)
     response.cost_usd = _estimate_cost(model_id, response)
     return response

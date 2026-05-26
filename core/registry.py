@@ -374,6 +374,12 @@ class ModelRegistry:
         Why: otherwise a high-prior remote (e.g. ``openai/gpt-4.1``) wins
         routing, the provider call 401s, and the synthesis judge has nothing
         to fuse — surfacing as "(no answer)" in the UI.
+
+        ``openai-compatible/<label>/<model>`` specs are checked
+        per-engine: only dropped if the matching ``custom_engines``
+        entry has an empty ``api_key``. Legacy
+        ``openai-compatible/<model>`` (no label) is gated by the old
+        single ``openai_compatible_api_key``.
         """
         settings = get_settings()
         runtime = app_settings
@@ -394,12 +400,24 @@ class ModelRegistry:
             'gemini': _key('gemini_api_key'),
             'perplexity': _key('perplexity_api_key'),
         }
-        to_drop = [
-            mid for mid, spec in self.models.items()
-            if not spec.local
-            and spec.provider in provider_keys
-            and not provider_keys[spec.provider]
-        ]
+        engines_by_label = {
+            e.label: e for e in (getattr(runtime, 'custom_engines', None) or [])
+        }
+
+        def _is_authorized(mid: str, spec: ModelSpec) -> bool:
+            if spec.local or spec.provider not in provider_keys:
+                return True
+            if spec.provider != 'openai-compatible':
+                return bool(provider_keys[spec.provider])
+            # ``openai-compatible/<label>/<model>`` → check engine.api_key.
+            suffix = mid.removeprefix('openai-compatible/')
+            head = suffix.split('/', 1)[0] if '/' in suffix else ''
+            if head and head in engines_by_label:
+                return bool(engines_by_label[head].api_key)
+            # No engine prefix → legacy single-endpoint case.
+            return bool(provider_keys['openai-compatible'])
+
+        to_drop = [mid for mid, spec in self.models.items() if not _is_authorized(mid, spec)]
         for mid in to_drop:
             logger.debug('Dropping remote model without API key: %s', mid)
             self.models.pop(mid, None)

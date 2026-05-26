@@ -68,8 +68,21 @@ class OpenAICompatibleClient:
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json',
         }
+        # Strip the provider-name prefix from the model id before
+        # sending upstream. Single-segment provider names like
+        # ``openai`` / ``openrouter`` peel one component
+        # (``openai/gpt-4.1`` → ``gpt-4.1``); multi-segment provider
+        # names like ``openai-compatible/mistral`` (multi-engine
+        # dispatch) peel two (``openai-compatible/mistral/mistral-large``
+        # → ``mistral-large``). Anything not prefixed by our provider
+        # name is forwarded unchanged.
+        prefix = f'{self.provider_name}/'
+        upstream_model = (
+            model_id[len(prefix):] if model_id.startswith(prefix)
+            else model_id.split('/', 1)[-1]
+        )
         payload = {
-            'model': model_id.split('/', 1)[-1],
+            'model': upstream_model,
             'messages': [message.model_dump() for message in messages],
         }
         payload_str = json.dumps(payload, sort_keys=True)
