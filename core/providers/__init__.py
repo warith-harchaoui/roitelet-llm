@@ -1,3 +1,1 @@
-"""Package marker.
-
-"""
+"""Package marker."""

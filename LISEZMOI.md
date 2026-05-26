@@ -131,6 +131,45 @@ Quelques mises en garde utiles à connaître d'emblée :
 
 ---
 
+## Pourquoi la fusion peut aider — et où se loge le biais du juge
+
+Toute l'idée du juge de synthèse repose sur une asymétrie unique :
+**évaluer et synthétiser est plus facile que créer à partir de zéro.**
+
+Un juge qui a sous les yeux K réponses candidates déjà rédigées n'a
+pas besoin de connaître la réponse ; il doit comparer des
+brouillons, repérer les recouvrements, écarter les contradictions,
+préserver les détails utiles, et produire une réponse fusionnée
+unique. C'est une tâche fondamentalement plus petite que produire
+la première réponse sans aucun échafaudage. Un modèle local
+relativement modeste peut s'en sortir, pour la même raison qu'un
+correcteur peut noter une pile de copies sans être capable d'écrire
+la meilleure lui-même.
+
+C'est cette asymétrie qui rend plausible le pipeline « petit modèle
+local par-dessus de gros candidats distants » de Roitelet. Le travail
+du juge est la curation, pas l'invention.
+
+Cela dit, **ce n'est pas magique** :
+
+- Roitelet apprend des préférences *conditionnées au juge*. Si Qwen
+  est le juge local, la boucle Elo glissante internalise discrètement
+  ce que Qwen tend à préférer. Utile pour router *sous ce juge* ;
+  pas un signal universel de qualité.
+- Un juge mal calibré fusionne avec assurance dans la mauvaise
+  direction. Le parse fail-closed du marqueur de gagnants
+  (`core/judge.py`) borne la dégradation de l'état Elo, mais le
+  *contenu* d'une mauvaise fusion reste mauvais.
+- Que la fusion de trois candidats OSS batte le meilleur candidat
+  payant dépend de la classe du prompt, de la diversité des
+  candidats et du juge. C'est empirique, pas théorique.
+
+Les études d'ablation sont donc une préoccupation de premier ordre,
+pas une note de bas de page. Voir
+[docs/EVALUATION.md](docs/EVALUATION.md).
+
+---
+
 ## Interface Utilisateur & Contrôle
 
 Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur `/`) offrant une vue transparente sur votre flotte d'IA :

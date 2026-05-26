@@ -1,5 +1,4 @@
-"""Base protocol for model providers.
-"""
+"""Base protocol for model providers."""
 
 from __future__ import annotations
 

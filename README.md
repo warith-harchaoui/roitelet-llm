@@ -278,14 +278,25 @@ conda activate roitelet-llm
 cp .env.example .env
 # Edit .env to add your API keys (OPENROUTER_API_KEY, ANTHROPIC_API_KEY, etc.)
 
-# 3. Pull the OSS default bundle (Qwen + Llama + Gemma + Phi + VLM)
+# 3. Pull a model bundle. Two profiles:
 chmod +x scripts/pull_defaults.sh
-./scripts/pull_defaults.sh
+
+#    Minimal (~3 GB): one small judge + the embedding model.
+#    Best onboarding path; pair with a remote API key for fan-out.
+./scripts/pull_defaults.sh --minimal
+
+#    OR Full local (~15 GB): one model per major OSS family + VLM.
+#    Designed for cross-family fan-out + fusion.
+# ./scripts/pull_defaults.sh
 
 # 4. Start the application
 chmod +x start.sh
 ./start.sh
 ```
+
+See [INSTALL.md](INSTALL.md) for the full comparison of minimal,
+full local, and remote-augmented setups, including the privacy
+implications of each.
 
 - **API Base URL:** `http://localhost:8000`
 - **Web Control Room:** `http://localhost:8000/` (served by the API)
@@ -350,6 +361,11 @@ you're trying to do.
   Karpathy-style 2-D embedding scatter.
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
   `/personal`, `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
+- **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
+  what's stored on disk, what goes over the network.
+- **[docs/EVALUATION.md](docs/EVALUATION.md)** — standing ablation
+  roadmap: which configurations to compare, which metrics, what's
+  been run, what's planned.
 
 ### Tier 3 — Contributors (you want to *modify* Roitelet)
 - **[MECHANISM.md](MECHANISM.md)** — full architectural walk-through
