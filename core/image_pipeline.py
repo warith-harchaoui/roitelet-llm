@@ -60,7 +60,7 @@ def _image_capable(spec) -> bool:
     -----
     The bootstrap entries don't include ``image_gen`` for any model by
     default; operators add an image-gen model the same way they add
-    any other paid LLM — via ``paid_openai_compatible_models`` plus a
+    any other paid LLM — via a ``custom_engines`` entry plus a
     hand-edited bootstrap entry with ``image_gen`` set.
     """
     return spec.capabilities.get('image_gen', 0.0) > 0.0

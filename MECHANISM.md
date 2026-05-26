@@ -202,7 +202,7 @@ flowchart LR
         B["data/bootstrap/model_priors.json<br/>curated benchmark-inspired priors:<br/>capabilities · pricing · latency · energy"]
     end
     subgraph S2["2 · User configuration"]
-        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>paid_openai_compatible_models<br/>(edited from the web UI)"]
+        U["AppSettingsPayload<br/>selected_ollama_models<br/>paid_openrouter_models<br/>custom_engines[*]<br/>(edited from the web UI)"]
     end
     subgraph S3["3 · Live discovery"]
         L["GET http://&lt;ollama&gt;/api/tags<br/>60 s TTL cache<br/>(warmed at API startup)"]
@@ -225,11 +225,13 @@ window without touching settings.
 
 **Universal extension point**: any paid LLM with an OpenAI-compatible
 `/v1/chat/completions` endpoint — Mistral, Together, Groq, Anyscale,
-Fireworks, llama.cpp's `llama-server` — registers via the
-``paid_openai_compatible_models`` list in user configuration. The factory
-routes ``openai-compatible/<name>`` requests against the configured
-``OPENAI_COMPATIBLE_BASE_URL`` and ``OPENAI_COMPATIBLE_API_KEY``. Walked
-through in [`docs/ADDING_PAID_LLM.md`](docs/ADDING_PAID_LLM.md) and
+Fireworks, llama.cpp's `llama-server` — registers via a
+``custom_engines`` entry in user configuration. Each engine carries
+its own ``label / base_url / api_key / models`` quartet, so two
+engines that serve the same model name don't collide; specs register
+under ``openai-compatible/<label>/<model>`` and the factory dispatches
+to each engine's own credentials at request time. Walked through in
+[`docs/ADDING_PAID_LLM.md`](docs/ADDING_PAID_LLM.md) and
 [`docs/ADDING_LOCAL_LLM.md`](docs/ADDING_LOCAL_LLM.md).
 
 ### Refreshing the bootstrap priors

@@ -411,7 +411,6 @@ def _isolate_ollama_cache():
 def _make_registry(
     extra_ollama: list[str] = None,
     extra_openrouter: list[str] = None,
-    extra_openai_compatible: list[str] = None,
 ):
     """Build a registry backed by the real bootstrap file.
 
@@ -433,7 +432,6 @@ def _make_registry(
         ollama_base_url='',  # disable configure() so refresh isn't triggered
         selected_ollama_models=extra_ollama or [],
         paid_openrouter_models=extra_openrouter or [],
-        paid_openai_compatible_models=extra_openai_compatible or [],
         # Sentinel keys so _prune_unauthorized_remotes leaves bootstrap
         # remotes in place. The tests don't make network calls, they only
         # assert registration shape.
@@ -472,29 +470,6 @@ class TestModelRegistry:
         registry = _make_registry(extra_openrouter=["mistralai/mistral-7b-instruct"])
         ids = {m.model_id for m in registry.list_models()}
         assert "openrouter/mistralai/mistral-7b-instruct" in ids
-
-    def test_user_openai_compatible_model_injection(self):
-        """Any paid LLM with an OpenAI-compatible endpoint registers cleanly.
-
-        The model name flows through verbatim (no auto-prefixing of an
-        unrelated provider) and the registered spec is marked remote so
-        the cost-budget regime can gate it the same way it gates
-        OpenRouter or direct OpenAI entries.
-        """
-        registry = _make_registry(extra_openai_compatible=["mistral-large-latest"])
-        ids = {m.model_id for m in registry.list_models()}
-        assert "openai-compatible/mistral-large-latest" in ids
-        spec = registry.get("openai-compatible/mistral-large-latest")
-        assert spec.provider == "openai-compatible"
-        assert spec.local is False
-        # Conservative cost default — non-zero so the cost-budget regime
-        # treats the entry as paid.
-        assert spec.pricing["input_per_1k"] > 0
-
-    def test_openai_compatible_prefix_not_duplicated(self):
-        registry = _make_registry(extra_openai_compatible=["openai-compatible/mistral-large-latest"])
-        ids = [m.model_id for m in registry.list_models()]
-        assert ids.count("openai-compatible/mistral-large-latest") == 1
 
     def test_custom_engines_register_with_label_namespace(self):
         """Each custom engine's models register as openai-compatible/<label>/<model>."""

@@ -32,7 +32,12 @@ LABEL org.opencontainers.image.title="Roitelet LLM" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    PATH="/install/bin:$PATH"
+    PATH="/install/bin:$PATH" \
+    # Container port-forwarding requires the in-container uvicorn to bind
+    # 0.0.0.0; the host-side firewall / docker-compose port mapping is
+    # what controls actual external exposure. `start.sh` defaults to
+    # 127.0.0.1 for bare-metal laptop users, which this ENV overrides.
+    ROITELET_APP_HOST=0.0.0.0
 
 # Copy installed packages from builder stage.
 COPY --from=builder /install /usr/local

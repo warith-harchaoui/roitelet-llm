@@ -274,29 +274,6 @@ class ModelRegistry:
                     energy_kwh=_OPENROUTER_DEFAULTS['energy_kwh'],
                     capabilities=dict(_DEFAULT_CAPABILITIES),
                 )
-        # Generic OpenAI-compatible endpoints: any paid LLM with an
-        # ``/v1/chat/completions`` interface can be added by name here,
-        # paired with ``openai_compatible_base_url`` + the matching API
-        # key. The factory routes ``openai-compatible/<name>`` requests
-        # through :class:`OpenAICompatibleClient` against that endpoint.
-        for model_name in (getattr(app_settings, 'paid_openai_compatible_models', None) or []):
-            model_id = (
-                f'openai-compatible/{model_name}'
-                if not model_name.startswith('openai-compatible/')
-                else model_name
-            )
-            if model_id not in self.models:
-                self.models[model_id] = ModelSpec(
-                    model_id=model_id,
-                    provider='openai-compatible',
-                    local=False,
-                    vlm=False,
-                    pricing=dict(_OPENAI_COMPATIBLE_DEFAULTS['pricing']),
-                    latency_s=_OPENAI_COMPATIBLE_DEFAULTS['latency_s'],
-                    energy_kwh=_OPENAI_COMPATIBLE_DEFAULTS['energy_kwh'],
-                    capabilities=dict(_DEFAULT_CAPABILITIES),
-                )
-
         # Multi-engine OpenAI-compatible registration. Each engine in
         # ``custom_engines`` has its own ``label / base_url / api_key
         # / models`` and registers as
@@ -377,9 +354,10 @@ class ModelRegistry:
 
         ``openai-compatible/<label>/<model>`` specs are checked
         per-engine: only dropped if the matching ``custom_engines``
-        entry has an empty ``api_key``. Legacy
-        ``openai-compatible/<model>`` (no label) is gated by the old
-        single ``openai_compatible_api_key``.
+        entry has an empty ``api_key``. Bare ``openai-compatible/<model>``
+        ids (no label) are still gated by the single
+        ``openai_compatible_api_key`` since the same endpoint is used
+        for image generation via :mod:`core.providers.openai_images`.
         """
         settings = get_settings()
         runtime = app_settings

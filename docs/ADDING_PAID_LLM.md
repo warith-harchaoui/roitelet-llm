@@ -23,37 +23,38 @@ zero-restart once configured.
 
 ### Step 1 — Configure the endpoint
 
-In the web UI's Settings sheet (or via `.env`), set the three knobs:
-
-```env
-OPENAI_COMPATIBLE_BASE_URL=https://api.mistral.ai/v1
-OPENAI_COMPATIBLE_API_KEY=...
-```
-
-(For Mistral. Substitute the values for your provider.)
-
-### Step 2 — Register the models
-
-Use the web UI's Settings sheet → "Paid OpenAI-compatible models" list,
-or POST to `/api/settings` with:
+In the web UI's Settings sheet, click **+ Add engine** under the
+"OpenAI-compatible engines" card and fill it in. Equivalent
+`/api/settings` payload (Mistral as the worked example — substitute
+your provider):
 
 ```json
 {
-  "paid_openai_compatible_models": [
-    "mistral-large-latest",
-    "mistral-medium"
+  "custom_engines": [
+    {
+      "label": "mistral",
+      "base_url": "https://api.mistral.ai/v1",
+      "api_key": "...",
+      "models": ["mistral-large-latest", "mistral-medium"]
+    }
   ]
 }
 ```
 
-Each entry becomes a routable model id `openai-compatible/<name>`. The
-router considers it on the next prompt — no restart needed. Conservative
-default priors (`coding=writing=…=0.65`, `input_per_1k=$0.002`) apply
-until you either (a) let the rolling-Elo loop adjust them through real
-use, or (b) hard-code richer priors in `data/bootstrap/model_priors.json`.
+Each entry becomes a routable model id
+`openai-compatible/<label>/<model>` — the label namespacing means two
+engines can serve the same model name (e.g. Together and Anyscale
+both serving `mistralai/Mistral-7B`) without collision. The router
+considers them on the next prompt — no restart needed. Conservative
+default priors (`coding=writing=…=0.65`, `input_per_1k=$0.002`)
+apply until you either (a) let the rolling-Elo loop adjust them
+through real use, or (b) hard-code richer priors in
+`data/bootstrap/model_priors.json`.
 
-That's it. The factory wires `openai-compatible/<name>` requests to the
-configured base URL + key via `core/providers/openai_compatible.py`.
+That's it. The factory wires
+`openai-compatible/<label>/<model>` requests to the configured
+base URL + key via `core/providers/openai_compatible.py` and the
+multi-engine dispatch in `core/providers/factory.py`.
 
 ### Worked example — direct OpenAI
 
@@ -99,10 +100,10 @@ Roitelet's routing pool is the union of these sources (see
 [MECHANISM.md](../MECHANISM.md) §4):
 
 1. **Bootstrap priors** — `data/bootstrap/model_priors.json`.
-2. **User-configured models** — three lists in `AppSettingsPayload`:
+2. **User-configured models** — three sources in `AppSettingsPayload`:
    * `selected_ollama_models` (local),
    * `paid_openrouter_models` (Path B),
-   * `paid_openai_compatible_models` (Path A — universal).
+   * `custom_engines[*].models` (Path A — one entry per OpenAI-compatible engine, each carrying its own base URL and API key).
 3. **Live Ollama discovery** — auto-detected via `/api/tags` every 60 s.
 
 The mapping from `model_id` prefix → provider client lives in

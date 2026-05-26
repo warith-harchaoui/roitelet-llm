@@ -104,34 +104,37 @@ llama-server -m /models/my-model-q4.gguf \
 The server exposes `http://localhost:8080/v1/chat/completions` in
 standard OpenAI shape.
 
-### Step 2 — Point Roitelet at it
+### Step 2 — Add it as a custom engine
 
-In the web UI's Settings sheet (or via `.env`):
+In the web UI's Settings sheet, click **+ Add engine** in the
+"OpenAI-compatible engines" card and fill in:
 
-```env
-OPENAI_COMPATIBLE_BASE_URL=http://localhost:8080/v1
-OPENAI_COMPATIBLE_API_KEY=any-non-empty-string
-```
+| Field | Value |
+|---|---|
+| Label | `llama-server` (any short slug; becomes part of the model id) |
+| Base URL | `http://localhost:8080/v1` |
+| API key | `any-non-empty-string` — `llama-server` ignores it but the field must be non-empty, otherwise the registry's `_prune_unauthorized_remotes` drops the candidate |
+| Models | `my-model` (comma-separated if you serve more than one) |
 
-`llama-server` ignores the API key but the field must be non-empty —
-the Roitelet registry skips registering candidates whose key is unset
-(`registry._prune_unauthorized_remotes`).
-
-### Step 3 — Register the model name
-
-In Settings → "Paid OpenAI-compatible models", or via POST to
-`/api/settings`:
+Equivalent payload to `POST /api/settings`:
 
 ```json
 {
-  "paid_openai_compatible_models": ["my-model"]
+  "custom_engines": [
+    {
+      "label": "llama-server",
+      "base_url": "http://localhost:8080/v1",
+      "api_key": "any-non-empty-string",
+      "models": ["my-model"]
+    }
+  ]
 }
 ```
 
-The router now considers `openai-compatible/my-model` on the next
-prompt. To force-prefer it on cost (free, after all), set
-`max_cost_usd=0` on the request preferences — the cost-budget regime
-will exclude paid candidates and the local GGUF wins.
+The router now considers `openai-compatible/llama-server/my-model`
+on the next prompt. To force-prefer it on cost (free, after all),
+set `max_cost_usd=0` on the request preferences — the cost-budget
+regime will exclude paid candidates and the local GGUF wins.
 
 ### Why Path C *isn't* the default
 

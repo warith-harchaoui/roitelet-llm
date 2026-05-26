@@ -32,6 +32,52 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+class MultimodalDependencyMissing(ImportError):
+    """Raised when the ``[multimodal]`` extra is needed but not installed.
+
+    The audio pipeline depends on heavyweight Python packages
+    (``pywhispercpp``, ``nemo-toolkit[asr]``, ``soundfile``,
+    ``audio-helper``) that ship in the optional ``[multimodal]`` extra
+    rather than the base install. Surfacing a dedicated exception class
+    here lets the API layer translate the failure into an actionable
+    HTTP response (``pip install -e .[multimodal]``) instead of leaking
+    a raw ``ModuleNotFoundError`` traceback to the user.
+    """
+
+
+def _import_or_raise(module: str, attr: str | None = None) -> Any:
+    """Import ``module`` (optionally ``attr`` from it) or raise a clear error.
+
+    Parameters
+    ----------
+    module:
+        Fully-qualified module name to import.
+    attr:
+        Optional attribute name to fetch from the module after import.
+
+    Returns
+    -------
+    Any
+        The imported module, or the requested attribute when supplied.
+
+    Raises
+    ------
+    MultimodalDependencyMissing
+        With a one-line install hint pointing the user at the
+        ``[multimodal]`` extra.
+    """
+    try:
+        import importlib
+        loaded = importlib.import_module(module)
+    except ImportError as exc:  # pragma: no cover - exercised only when extra is missing
+        raise MultimodalDependencyMissing(
+            f"audio pipeline needs '{module}' — install with: "
+            "pip install -e '.[multimodal]'"
+        ) from exc
+    return getattr(loaded, attr) if attr else loaded
+
+
 # Defaults tuned for Apple Silicon laptops — good quality/speed tradeoff.
 _WHISPER_MODEL = os.environ.get('ROITELET_WHISPER_MODEL', 'medium')
 _WHISPER_THREADS = int(os.environ.get('ROITELET_WHISPER_THREADS', '4'))
@@ -59,7 +105,7 @@ if not hasattr(np, 'sctypes'):
 @lru_cache(maxsize=1)
 def _whisper_model() -> Any:
     """Load whisper.cpp once and cache. Auto-downloads ggml weights."""
-    from pywhispercpp.model import Model  # type: ignore[import-not-found]
+    Model = _import_or_raise('pywhispercpp.model', 'Model')
     logger.info('Loading whisper.cpp model: %s', _WHISPER_MODEL)
     return Model(
         model=_WHISPER_MODEL,
@@ -73,12 +119,19 @@ def _whisper_model() -> Any:
 @lru_cache(maxsize=1)
 def _nemo_model() -> Any:
     """Load NeMo Sortformer once and cache. Auto-downloads weights from HF."""
-    try:
-        from nemo.collections.asr.models import SortformerEncLabelModel  # type: ignore[import-not-found]
-        cls = SortformerEncLabelModel
-    except ImportError:
-        from nemo.collections.asr.models import EncDecDiarLabelModel  # type: ignore[import-not-found]
-        cls = EncDecDiarLabelModel
+    # Recent NeMo wheels renamed SortformerEncLabelModel; the helper
+    # raises MultimodalDependencyMissing if neither class is importable
+    # (i.e. NeMo itself isn't installed), which the API layer turns
+    # into a 503 + install hint.
+    nemo_models = _import_or_raise('nemo.collections.asr.models')
+    cls = getattr(nemo_models, 'SortformerEncLabelModel', None) \
+        or getattr(nemo_models, 'EncDecDiarLabelModel', None)
+    if cls is None:  # pragma: no cover - shouldn't happen on a current NeMo
+        raise MultimodalDependencyMissing(
+            'nemo.collections.asr.models is installed but exposes neither '
+            'SortformerEncLabelModel nor EncDecDiarLabelModel. Upgrade NeMo '
+            "with: pip install -e '.[multimodal]'"
+        )
     logger.info('Loading NeMo diarization model: %s (%s)', _NEMO_MODEL, cls.__name__)
     model = cls.from_pretrained(model_name=_NEMO_MODEL)
     model.eval()
@@ -92,7 +145,7 @@ def _nemo_model() -> Any:
 
 def _load_audio(path: Path) -> np.ndarray:
     """Load any common audio format as 16 kHz mono float32 numpy."""
-    import audio_helper as ah  # type: ignore[import-not-found]
+    ah = _import_or_raise('audio_helper')
     data, _ = ah.load_audio(str(path), target_sample_rate=_TARGET_SR, to_numpy=True)
     if data.dtype != np.float32:
         data = data.astype(np.float32)
@@ -138,8 +191,8 @@ def _diarize(path: Path, audio: np.ndarray) -> list[dict]:
     chunk is written to a temporary WAV — NeMo's diarize() expects file
     paths, not raw tensors.
     """
-    import soundfile as sf  # type: ignore[import-not-found]
-    import torch  # type: ignore[import-not-found]
+    sf = _import_or_raise('soundfile')
+    torch = _import_or_raise('torch')
 
     model = _nemo_model()
     total = len(audio)

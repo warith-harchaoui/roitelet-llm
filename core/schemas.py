@@ -289,11 +289,6 @@ class AppSettingsPayload(BaseModel):
     independence_local_only: bool = False
     selected_ollama_models: list[str] = Field(default_factory=list)
     paid_openrouter_models: list[str] = Field(default_factory=list)
-    # Legacy single-endpoint OpenAI-compatible configuration. Kept for
-    # backwards compatibility with .env-driven setups and the older
-    # Settings UI. New deployments should add engines via
-    # ``custom_engines`` below.
-    paid_openai_compatible_models: list[str] = Field(default_factory=list)
     # Universal extension: any number of OpenAI-compatible engines,
     # each with its own label / URL / key / model list. Edited
     # dynamically from the Settings sheet via the "+ Add engine"

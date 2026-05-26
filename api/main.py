@@ -410,18 +410,30 @@ async def roitelet_chat_multimodal(
             with os.fdopen(fd, 'wb') as fh:
                 fh.write(await upload.read())
             tmp = Path(tmp_path)
-            if modality == 'audio':
-                from core.multimodal.audio import transcribe_audio
-                text = await transcribe_audio(tmp)
-                label = f'[Audio: {upload.filename}]'
-            elif modality == 'image':
-                from core.multimodal.image import describe_image
-                text = await describe_image(tmp)
-                label = f'[Image: {upload.filename}]'
-            else:  # pdf
-                from core.multimodal.pdf import extract_pdf
-                text = await extract_pdf(tmp)
-                label = f'[PDF: {upload.filename}]'
+            try:
+                if modality == 'audio':
+                    from core.multimodal.audio import transcribe_audio
+                    text = await transcribe_audio(tmp)
+                    label = f'[Audio: {upload.filename}]'
+                elif modality == 'image':
+                    from core.multimodal.image import describe_image
+                    text = await describe_image(tmp)
+                    label = f'[Image: {upload.filename}]'
+                else:  # pdf
+                    from core.multimodal.pdf import extract_pdf
+                    text = await extract_pdf(tmp)
+                    label = f'[PDF: {upload.filename}]'
+            except ImportError as exc:
+                # Surface the missing-extra hint from MultimodalDependencyMissing
+                # (or any other ImportError raised by a lazy heavyweight dep)
+                # as a clean 503 rather than a 500 traceback.
+                raise HTTPException(
+                    status_code=503,
+                    detail=(
+                        f"{modality} attachment requires an optional dependency that "
+                        f"is not installed: {exc}"
+                    ),
+                ) from exc
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)

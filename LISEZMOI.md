@@ -256,22 +256,32 @@ Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur
 
 ## Note sur la sécurité
 
-Les valeurs par défaut de Roitelet — `ROITELET_APP_HOST=0.0.0.0` et
-un `ROITELET_API_TOKEN` vide — sont pensées pour un usage
-**localhost-only, mono-utilisateur sur laptop**. C'est pratique
-dans ce cas, et dangereux partout ailleurs. Si le processus est
-joignable depuis un LAN, une IP publique, une VM avec port-forward,
-ngrok, Tailscale, ou un conteneur avec port publié, faites deux
-choses avant l'exposition :
+Roitelet est **sécurisé par défaut** côté réseau : `start.sh` (et la
+valeur par défaut `Settings.app_host` en bare-metal) écoute sur
+`127.0.0.1`, et `ROITELET_API_TOKEN` est vide. Localhost-only sans
+authentification convient à un usage laptop mono-utilisateur.
+
+L'image Docker est la seule exception — uvicorn dans le conteneur
+écoute sur `0.0.0.0` car le port-forwarding du conteneur l'exige.
+L'exposition réseau réelle est alors gouvernée par votre mapping
+de ports dans `docker-compose.yml` et le pare-feu hôte, pas par
+l'adresse de bind interne.
+
+Si vous voulez exposer l'API sur un LAN, une IP publique, une VM
+avec port-forward, ngrok, Tailscale, ou n'importe où d'accessible
+depuis une autre machine, faites **d'abord deux choses** :
 
 1. Définissez `ROITELET_API_TOKEN` à une valeur non vide (verrouille
    `/api/chat`, `/api/settings`, `/api/conversations`,
    `/api/telemetry`, `/api/personal*`, `/api/images`, et
    `/v1/chat/completions`).
-2. Soit liez-vous à `127.0.0.1` (`ROITELET_APP_HOST=127.0.0.1`),
-   soit placez le service derrière un reverse proxy.
+2. Soit conservez le service derrière un reverse proxy qui gère
+   l'authentification, soit acceptez que le jeton est votre seule
+   ligne de défense. Si vous basculez
+   `ROITELET_APP_HOST=0.0.0.0` pour un `./start.sh` bare-metal, le
+   LAN vous voit dès qu'uvicorn écoute.
 
-Sans ces deux étapes, quiconque peut joindre le port peut lire vos
+Sans ces étapes, quiconque peut joindre le port peut lire vos
 conversations, votre télémétrie brute (qui contient les prompts et
 les réponses des fournisseurs), et déclencher des appels payants
 sur vos clés API. Modèle de menace détaillé :

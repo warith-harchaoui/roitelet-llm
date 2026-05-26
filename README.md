@@ -316,19 +316,30 @@ Roitelet ships with a web-based control room (vanilla JS, served by the API at `
 
 ## Security note
 
-Roitelet's defaults — `ROITELET_APP_HOST=0.0.0.0` and an empty
-`ROITELET_API_TOKEN` — are tuned for **localhost-only, single-user
-laptop** use. They are convenient there and dangerous everywhere
-else. If the process will be reachable from a LAN, a public IP, a VM
-with a port forward, ngrok, Tailscale, or a container with a
-published port, do two things before exposing it:
+Roitelet ships with **safe-by-default** networking: `start.sh` (and
+the bare-metal `Settings.app_host` default) binds `127.0.0.1`, and
+`ROITELET_API_TOKEN` is empty. Localhost-only with no auth is fine
+for a single-user laptop.
+
+The Docker image is the one exception — the in-container uvicorn
+binds `0.0.0.0` because container port-forwarding requires it.
+Actual external exposure is then governed by your
+`docker-compose.yml` port map and your host firewall, not by the
+container's bind address.
+
+If you want to expose the API on a LAN, a public IP, a VM with a
+port forward, ngrok, Tailscale, or anywhere else reachable from
+another machine, do **two things first**:
 
 1. Set `ROITELET_API_TOKEN` to a non-empty value (gates
    `/api/chat`, `/api/settings`, `/api/conversations`,
    `/api/telemetry`, `/api/personal*`, `/api/images`, and
    `/v1/chat/completions`).
-2. Either bind to `127.0.0.1` (`ROITELET_APP_HOST=127.0.0.1`) or
-   put the service behind a reverse proxy.
+2. Either keep the service behind a reverse proxy that handles
+   auth, OR accept that the token is your only line of defence.
+   If you flip `ROITELET_APP_HOST=0.0.0.0` for a bare-metal
+   `./start.sh` run, the LAN can see you the instant uvicorn
+   binds.
 
 Without those, anyone who can reach the port can read your
 conversations, your raw telemetry (which contains prompts and

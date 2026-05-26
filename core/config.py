@@ -90,7 +90,12 @@ class Settings(BaseSettings):
     # ``ROITELET_DEFAULT_TOP_K`` or per-request ``top_k``.
     default_top_k: int = Field(default=2, alias='ROITELET_DEFAULT_TOP_K')
     candidate_pool_size: int = Field(default=8, alias='ROITELET_CANDIDATE_POOL_SIZE')
-    app_host: str = Field(default='0.0.0.0', alias='ROITELET_APP_HOST')
+    # Safe default: localhost-only. start.sh applies the same default
+    # for direct bare-metal runs; Docker overrides this to 0.0.0.0 in
+    # the Dockerfile because container port-forwarding requires it.
+    # Override here only when serving a real LAN — see the Security
+    # note in README.md and .env.example before doing so.
+    app_host: str = Field(default='127.0.0.1', alias='ROITELET_APP_HOST')
     app_port: int = Field(default=8000, alias='ROITELET_APP_PORT')
     public_base_url: str = Field(default='http://localhost:8000', alias='ROITELET_PUBLIC_BASE_URL')
     # Comma-separated list of allowed CORS origins. Defaults to same-origin

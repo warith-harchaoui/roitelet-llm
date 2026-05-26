@@ -96,8 +96,10 @@ the cost-budget regime treats it the same as any other paid candidate.
 
 For an OpenAI-compatible local server (AUTOMATIC1111, ComfyUI's
 OpenAI-shaped extension, llama.cpp's image-gen experimental endpoints,
-etc.) use `provider: "openai-compatible"` and add the model name to
-`paid_openai_compatible_models` in the Settings sheet.
+etc.) use `provider: "openai-compatible"` and add the model under a
+`custom_engines` entry in the Settings sheet (label + base_url +
+api_key + models). The image-generation pipeline shares the same
+multi-engine dispatch as text chat.
 
 ---
 
