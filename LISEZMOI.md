@@ -136,13 +136,43 @@ roitelet-llm/
 ├── docker-compose.yml  # Déploiement en conteneur
 ├── environment.yaml    # Dépendances Conda
 ├── requirements.txt    # Dépendances natives Python (pip)
-├── MECHANISM.md        # Architecture détaillée (diagrammes Mermaid)
 ├── INSTALLER.md        # Guide d'installation (FR)
 ├── INSTALL.md          # Guide d'installation (EN)
-├── MODEDEMPLOI.md      # Manuel d'utilisation (FR)
-├── MANUAL.md           # Manuel d'utilisation (EN)
+├── MECHANISM.md        # Architecture détaillée (Mermaid) — contributeurs
 └── .env.example
 ```
+
+---
+
+## Plan de la documentation
+
+La documentation est organisée en trois niveaux. Choisissez celui qui
+correspond à ce que vous voulez faire.
+
+### Niveau 1 — Utilisateurs (vous voulez *lancer* Roitelet)
+- **[LISEZMOI.md](LISEZMOI.md)** / **[README.md](README.md)** — ce
+  qu'est Roitelet, pourquoi il existe, démarrage rapide en 5 minutes.
+- **[INSTALLER.md](INSTALLER.md)** / **[INSTALL.md](INSTALL.md)** —
+  guide d'installation complet (conda, venv, Docker).
+
+### Niveau 2 — Tech (vous voulez *utiliser* les fonctionnalités)
+- **[docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md)** — brancher
+  n'importe quel LLM payant compatible OpenAI (ChatGPT, Mistral, …).
+- **[docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md)** — apporter
+  votre propre GGUF via Ollama ou `llama-server`.
+- **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — activer
+  la génération d'images (DALL-E, Stable Diffusion local, …).
+- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
+  `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
+
+### Niveau 3 — Contributeurs (vous voulez *modifier* Roitelet)
+- **[MECHANISM.md](MECHANISM.md)** — visite architecturale complète
+  avec diagrammes Mermaid. Maths de routage, régimes, boucle Elo,
+  les deux routeurs, les deux détecteurs de capacité, pipeline
+  image-gen.
+- **`.private/`** (gitignored) — études de design et audits.
+  Non publié, mais utile si vous avez cloné le repo et voulez voir
+  comment les décisions ont été prises.
 
 ---
 © 2025 deraison.ai | `warithmetics@deraison.ai`

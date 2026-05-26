@@ -131,14 +131,43 @@ roitelet-llm/
 ├── docker-compose.yml  # Deploy stack definition
 ├── environment.yaml    # Conda environment manifest
 ├── requirements.txt    # Pip dependencies
-├── MECHANISM.md        # Architecture deep-dive (Mermaid diagrams)
 ├── INSTALL.md          # English install guide
-├── MANUAL.md           # English usage guide
 ├── INSTALLER.md        # French install guide
-├── MODEDEMPLOI.md      # French usage guide
 ├── LISEZMOI.md         # French README mirror
+├── MECHANISM.md        # Architecture deep-dive (Mermaid diagrams) — contributors
 └── .env.example
 ```
+
+---
+
+## Documentation map
+
+The docs are split into three tiers — pick the one that matches what
+you're trying to do.
+
+### Tier 1 — Users (you want to *run* Roitelet)
+- **[README.md](README.md)** / **[LISEZMOI.md](LISEZMOI.md)** — what
+  Roitelet is, why it exists, 5-minute quickstart.
+- **[INSTALL.md](INSTALL.md)** / **[INSTALLER.md](INSTALLER.md)** —
+  full installation guide (conda, venv, Docker).
+
+### Tier 2 — Tech (you want to *use* Roitelet's features)
+- **[docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md)** — wire any
+  OpenAI-compatible paid LLM (ChatGPT, Mistral, Together, …).
+- **[docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md)** — bring
+  your own GGUF via Ollama or `llama-server`.
+- **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — set up
+  image generation (DALL-E, local Stable Diffusion, …).
+- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
+  `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
+
+### Tier 3 — Contributors (you want to *modify* Roitelet)
+- **[MECHANISM.md](MECHANISM.md)** — full architectural walk-through
+  with Mermaid diagrams. Routing math, regimes, Elo loop, the two
+  routers, the two capability detectors, image-gen pipeline.
+- **`.private/`** (gitignored) — design studies and audits. Not
+  shipped, but useful if you've cloned the repo and want to see how
+  decisions were made.
 
 ---
 © 2025 deraison.ai | `warithmetics@deraison.ai`
