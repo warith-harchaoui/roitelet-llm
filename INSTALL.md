@@ -70,8 +70,10 @@ stays light:
 Install one or several:
 
 ```bash
-pip install -e .[dev]
-pip install -e .[multimodal]      # image captioning is server-side via the local Ollama VLM — no extra Python deps
+# Quote the extras so zsh doesn't expand the brackets.
+pip install -e '.[dev]'
+pip install -e '.[multimodal]'    # audio + PDF extractors; image captioning is server-side via Ollama VLM
+pip install -e '.[eval]'          # DeepEval-graded answer-quality suite
 ```
 
 ---
@@ -191,14 +193,14 @@ Expected health response:
 ## Running the test suite
 
 ```bash
-# Install dev dependencies first
-pip install -e .[dev]
+# Install dev dependencies first (quote the extras for zsh).
+pip install -e '.[dev]'
 
-# Run the default suite (network-free, ~1 second)
+# Run the default suite (network-free, ~2 seconds)
 pytest tests/ -q
 
 # Optional: run the answer-quality eval suite (requires a real local Ollama judge)
-pip install -e .[eval]
+pip install -e '.[eval]'
 pytest -m eval -q
 ```
 

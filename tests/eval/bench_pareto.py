@@ -58,19 +58,14 @@ from deepeval.metrics import GEval
 from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from core.pipeline import run_roitelet_chat
-from core.providers.factory import get_provider_client
 from core.registry import get_registry
-from core.schemas import ChatMessage, ChatRequest, RouterPreferences
+from core.schemas import ChatRequest, RouterPreferences
 
 _DATASET = json.loads((Path(__file__).parent / 'dataset.json').read_text())
 
 # Persist the report under .private/ so it doesn't pollute tracked state
 # but is still inspectable + diffable across runs.
 _REPORT_DIR = Path(__file__).resolve().parent.parent.parent / '.private' / 'eval_runs'
-
-
-def _ids(case):
-    return case['id']
 
 
 def _now_stamp() -> str:
@@ -111,17 +106,6 @@ def _score(metric, prompt: str, answer: str, reference: str) -> float:
     case = LLMTestCase(input=prompt, actual_output=answer, expected_output=reference)
     metric.measure(case)
     return float(metric.score or 0.0)
-
-
-async def _query_candidate(model_id: str, prompt: str):
-    """Run a single candidate model in isolation, mirroring pipeline call shape."""
-    registry = get_registry()
-    spec = registry.get(model_id)
-    client = get_provider_client(spec.provider)
-    return await client.generate(
-        model_id=model_id,
-        messages=[ChatMessage(role='user', content=prompt)],
-    )
 
 
 def _candidate_cost(response, spec) -> float:

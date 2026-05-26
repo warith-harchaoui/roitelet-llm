@@ -24,10 +24,10 @@ install:
 	pip install -e .
 
 install-eval:
-	pip install -e .[eval]
+	pip install -e '.[eval]'
 
 install-multimodal:
-	pip install -e .[multimodal]
+	pip install -e '.[multimodal]'
 
 # Fast suite. Same default as `pytest` in pyproject.toml (excludes `-m eval`).
 test:
