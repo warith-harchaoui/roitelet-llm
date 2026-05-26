@@ -6,24 +6,7 @@
 > préférences de routage au fil du temps à partir de son propre signal
 > de juge.
 
-> ⚠️ **Sécurité — à lire avant toute exposition réseau.**
-> Roitelet utilise par défaut **`ROITELET_APP_HOST=0.0.0.0`** (écoute
-> sur toutes les interfaces) et **`ROITELET_API_TOKEN=""`** (pas
-> d'authentification). Ces réglages sont pratiques pour
-> `http://localhost:8000` sur un laptop mono-utilisateur, **et
-> dangereux partout ailleurs.** Si la machine est sur un LAN,
-> derrière une IP publique, dans une VM avec port-forward, ou dans
-> un réseau d'entreprise, quiconque atteint le port peut lire vos
-> conversations, votre télémétrie (qui contient les prompts bruts +
-> les réponses des fournisseurs), et indirectement vos clés API
-> via les requêtes routées. **Définissez `ROITELET_API_TOKEN` à une
-> valeur non vide avant d'exposer le service**, et envisagez de lier
-> à `127.0.0.1` si l'accès distant n'est pas requis. Voir
-> [docs/PRIVACY.md](docs/PRIVACY.md).
-
 ![Roitelet](assets/roitelet.jpg)
-
-![Interface web Roitelet — un prompt utilisateur, trois candidats OSS locaux exécutés en parallèle, le juge local fusionne leurs réponses et indique celles qu'il a effectivement utilisées.](assets/screenshot.png)
 
 ---
 
@@ -229,6 +212,33 @@ Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur
 * **Configuration :** Sauvegardez vos clés API, calibrez le choix du modèle local, et modifiez vos paramètres de routage (Puissance Pure, Frugalité, Indépendance).
 * **Usage & Dashboard :** Surveillez l'utilisation de vos modèles et vérifiez vos estimations de consommation énergétique.
 * **Découverte Automatique :** Branchez le système sur votre instance locale Ollama. Roitelet scannera en direct pour ingérer tout nouveau modèle (ex: `ollama pull llama3.3:70b-instruct`) et l'ajoutera automatiquement au processus de routage en 60 secondes.
+
+![Interface web Roitelet — un prompt utilisateur, trois candidats OSS locaux exécutés en parallèle, le juge local fusionne leurs réponses et indique celles qu'il a effectivement utilisées.](assets/screenshot.png)
+
+---
+
+## Note sur la sécurité
+
+Les valeurs par défaut de Roitelet — `ROITELET_APP_HOST=0.0.0.0` et
+un `ROITELET_API_TOKEN` vide — sont pensées pour un usage
+**localhost-only, mono-utilisateur sur laptop**. C'est pratique
+dans ce cas, et dangereux partout ailleurs. Si le processus est
+joignable depuis un LAN, une IP publique, une VM avec port-forward,
+ngrok, Tailscale, ou un conteneur avec port publié, faites deux
+choses avant l'exposition :
+
+1. Définissez `ROITELET_API_TOKEN` à une valeur non vide (verrouille
+   `/api/chat`, `/api/settings`, `/api/conversations`,
+   `/api/telemetry`, `/api/personal*`, `/api/images`, et
+   `/v1/chat/completions`).
+2. Soit liez-vous à `127.0.0.1` (`ROITELET_APP_HOST=127.0.0.1`),
+   soit placez le service derrière un reverse proxy.
+
+Sans ces deux étapes, quiconque peut joindre le port peut lire vos
+conversations, votre télémétrie brute (qui contient les prompts et
+les réponses des fournisseurs), et déclencher des appels payants
+sur vos clés API. Modèle de menace détaillé :
+[docs/PRIVACY.md](docs/PRIVACY.md).
 
 ---
 

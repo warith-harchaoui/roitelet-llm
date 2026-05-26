@@ -274,6 +274,32 @@ Roitelet ships with a web-based control room (vanilla JS, served by the API at `
 * **Usage & Monitoring:** Monitor how models are routing and verify energy estimations and carbon intensity.
 * **Auto-Discovery:** Plug in your local Ollama instance, and Roitelet will automatically live-discover all models you have pulled (e.g. `ollama pull llama3.3:70b-instruct`) and inject them into the routing pool within 60 seconds.
 
+![Roitelet web UI — one user prompt, three local OSS candidates fanned out in parallel, the local synthesis judge fuses their answers and surfaces which ones it actually used.](assets/screenshot.png)
+
+---
+
+## Security note
+
+Roitelet's defaults — `ROITELET_APP_HOST=0.0.0.0` and an empty
+`ROITELET_API_TOKEN` — are tuned for **localhost-only, single-user
+laptop** use. They are convenient there and dangerous everywhere
+else. If the process will be reachable from a LAN, a public IP, a VM
+with a port forward, ngrok, Tailscale, or a container with a
+published port, do two things before exposing it:
+
+1. Set `ROITELET_API_TOKEN` to a non-empty value (gates
+   `/api/chat`, `/api/settings`, `/api/conversations`,
+   `/api/telemetry`, `/api/personal*`, `/api/images`, and
+   `/v1/chat/completions`).
+2. Either bind to `127.0.0.1` (`ROITELET_APP_HOST=127.0.0.1`) or
+   put the service behind a reverse proxy.
+
+Without those, anyone who can reach the port can read your
+conversations, your raw telemetry (which contains prompts and
+provider responses), and trigger paid provider calls against your
+API keys. Full threat-model breakdown:
+[docs/PRIVACY.md](docs/PRIVACY.md).
+
 ---
 
 ## Adding more LLMs
