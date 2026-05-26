@@ -13,15 +13,19 @@ Guide d'installation complet pour tous les modes de déploiement supportés.
 | [conda](https://docs.conda.io) **ou** venv | toute | Isolation de l'environnement |
 | [Docker](https://docs.docker.com/get-docker/) | 24+ | Déploiement conteneurisé (optionnel) |
 
-> **Bundle OSS recommandé — à télécharger avant le premier lancement :**
-> ```bash
-> ./scripts/pull_defaults.sh
-> ```
-> Roitelet fusionne K réponses en parallèle ; le script installe un
-> modèle de chaque grande famille OSS (Qwen, Llama, Gemma, Phi) plus
-> un modèle vision-langage. Empreinte disque totale ≈ 15 Go. Sans au
-> moins le modèle de synthèse par défaut (`qwen3:8b`), l'étape
-> de couronnement n'a rien à fusionner.
+> **Choisissez un profil avant le premier lancement.** Trois chemins
+> d'installation, du plus léger au plus lourd. L'arbitrage est
+> empreinte disque vs diversité de candidats (et donc qualité de
+> fusion) :
+>
+> | Profil | Commande | Disque | Ce que vous obtenez |
+> |---|---|---|---|
+> | **Minimal** | `./scripts/pull_defaults.sh --minimal` | ~3 Go | Un juge local (`qwen3:4b`) et le modèle d'embeddings (`nomic-embed-text`). Onboarding le plus rapide. Fan-out à K=1 sauf si vous ajoutez une clé API distante. |
+> | **Full local** | `./scripts/pull_defaults.sh` | ~15 Go | Un modèle de chaque grande famille OSS (Qwen, Llama, Gemma, Phi) + un modèle vision-langage + le modèle d'embeddings. Conçu pour le fan-out + fusion cross-family. |
+> | **Augmenté distant** | `./scripts/pull_defaults.sh --minimal` + une clé API dans `.env` | ~3 Go local | Même juge local que Minimal, mais le fan-out inclut des candidats distants (OpenRouter, OpenAI, etc.). Meilleure qualité, moins bonne confidentialité. Voir [docs/PRIVACY.md](docs/PRIVACY.md). |
+>
+> En cas de doute, commencez par `--minimal`. Vous pourrez relancer le
+> script sans le flag plus tard pour passer au bundle complet.
 
 ---
 

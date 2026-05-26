@@ -137,10 +137,19 @@ function metadataNode(meta) {
   summary.textContent = `Roitelet · ${selected || '—'}${winners ? '  ·  won: ' + winners : ''}`;
   det.appendChild(summary);
 
+  // Latency breakdown: candidate fan-out is bounded by the slowest
+  // candidate; the judge runs on top of that; the total is the full
+  // pipeline wall-clock (router + gather + judge + telemetry write).
+  const candMax = Math.max(0, ...((meta.responses || []).map(r => r.latency_s || 0)));
+  const judgeLat = meta.synthesis?.latency_s || 0;
+  const totalLat = meta.total_latency_s ?? (candMax + judgeLat);
+  const latencyLine = `total ${totalLat.toFixed(1)}s = cand_max ${candMax.toFixed(1)}s + judge ${judgeLat.toFixed(1)}s`;
+
   const body = document.createElement('div');
   body.className = 'mt-2 space-y-2';
   body.innerHTML = `
     <div><span class="text-gray-400">Capabilities</span> &nbsp;${escapeHtml(caps)}</div>
+    <div><span class="text-gray-400">Latency</span> &nbsp;<span class="tabular-nums">${escapeHtml(latencyLine)}</span></div>
     <div class="space-y-1.5">
       ${(meta.responses || []).map(r => `
         <div class="flex items-baseline justify-between gap-3">
@@ -484,6 +493,7 @@ function finalizeChatResponse(res) {
       router: res.router,
       responses: res.responses,
       synthesis: res.synthesis,
+      total_latency_s: res.total_latency_s,
     },
   });
 }

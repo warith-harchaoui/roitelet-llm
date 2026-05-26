@@ -190,10 +190,18 @@ async def run_roitelet_chat(
     losers = [response.model_id for response in selected_responses if response.model_id not in winners]
     registry.update_elo(winners=winners, losers=losers, capabilities=decision.categories)
 
+    # Measure total latency before persisting so the stored payload
+    # carries it too. The trailing ``append_message`` + ``save_telemetry``
+    # add ~ms of disk-write cost on top, which we deliberately don't
+    # include — the user perceives the turn as done at the point the
+    # ChatResponse is ready.
+    total_latency_s = time.perf_counter() - turn_started
+
     assistant_payload = {
         'router': decision.model_dump(),
         'responses': [response.model_dump() for response in selected_responses],
         'synthesis': synthesis.model_dump(),
+        'total_latency_s': total_latency_s,
     }
     storage.append_message(
         conversation.conversation_id,
@@ -213,12 +221,11 @@ async def run_roitelet_chat(
         metadata={
             'shadow_full_pool': request.shadow_full_pool,
             'top_k': request.top_k,
+            'total_latency_s': total_latency_s,
         },
     )
     storage.save_telemetry(telemetry)
 
-
-    total_latency_s = time.perf_counter() - turn_started
     return ChatResponse(
         conversation_id=conversation.conversation_id,
         router=decision,
@@ -227,3 +234,4 @@ async def run_roitelet_chat(
         telemetry_id=telemetry.record_id,
         total_latency_s=total_latency_s,
     )
+
