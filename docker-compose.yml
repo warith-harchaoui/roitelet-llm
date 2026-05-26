@@ -7,22 +7,26 @@ services:
     image: roitelet-llm:latest
     container_name: roitelet-llm
     ports:
+      # Roitelet exposes a single port (FastAPI serves the JSON API and
+      # the static SPA on the same listener). No Streamlit; no second
+      # port required.
       - "${ROITELET_APP_PORT:-8000}:8000"
-      - "${ROITELET_STREAMLIT_PORT:-8501}:8501"
     env_file:
       - .env
     environment:
       # Ensure Ollama points to the host machine when running inside Docker.
       LOCAL_LLM_BASE_URL: "${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434}"
     volumes:
-      # Persist conversations, telemetry, Elo state, and runtime settings.
+      # Persist conversations, telemetry, Elo state, runtime settings,
+      # generated images, and the personal-mode inbox/wiki.
       - roitelet_data:/app/data
     restart: unless-stopped
-    # Use the HEALTHCHECK defined in the Dockerfile.
-    # docker compose ps will show "healthy" once the API is up.
+    # Ping the dedicated /healthz endpoint instead of the static SPA so
+    # an OK status genuinely reflects the API being reachable rather
+    # than just the static mount answering.
     healthcheck:
       test: ["CMD", "python3", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz').read()"]
       interval: 30s
       timeout: 10s
       start_period: 20s
