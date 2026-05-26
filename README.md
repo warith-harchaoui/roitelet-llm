@@ -191,11 +191,17 @@ graded with DeepEval `GEval(correctness, threshold=0.6)`:
 
 K=1 → K=2 is a real **+12 pp** mean-correctness uplift for **+10 s**
 of wall-clock on a laptop, broadly distributed across coding, math,
-reasoning, multilingual and long-context categories. K=3 in the
-table is **not** a real K=3 test — every K=3 turn collapsed to
-two candidates (a routing-pool bug now documented as the top
-unblocking item). Full numbers, per-category breakdown, persistent
-failures and reproducibility notes live in
+reasoning, multilingual and long-context categories. The K=3 row is
+**not** a real K=3 test: one of the three "small local" models I
+picked for the pool, `gemma3:4b`, is registered as a VLM in the
+bootstrap, and the router's `allow_vlms=False` filter correctly
+excluded it on every non-vision prompt. That left the router with
+two text candidates regardless of `top_k`, so the K=3 row is
+identical to the K=2 row in candidate set. A real K=3 needs a
+third text-only candidate in the pool (re-run tracked in
+[docs/EVALUATION.md §5 #0](docs/EVALUATION.md)). Full numbers,
+per-category breakdown, persistent failures and reproducibility
+notes live in
 [docs/EVALUATION.md §4.2](docs/EVALUATION.md). The artefact
 (per-turn JSON, every fused answer, every grade) is preserved in the
 ignored `eval_runs/` directory.

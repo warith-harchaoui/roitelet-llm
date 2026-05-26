@@ -180,14 +180,20 @@ notée par DeepEval `GEval(correctness, threshold=0.6)` :
 Passer de K=1 à K=2 produit un gain réel de **+12 points** de
 moyenne pour **+10 s** de temps mur sur un laptop, largement
 distribué sur les catégories coding, math, reasoning, multilingual
-et long-context. La ligne K=3 du tableau **n'est pas** un vrai test
-de K=3 — chaque tour K=3 a fini à deux candidats (bug de routage
-désormais documenté comme l'item bloquant à régler en priorité).
-Tous les chiffres, le détail par catégorie, les échecs persistants
-et les notes de reproductibilité vivent dans
-[docs/EVALUATION.md §4.2](docs/EVALUATION.md). L'artefact (JSON par
-tour, chaque réponse fusionnée, chaque note) est conservé dans le
-répertoire `eval_runs/` ignoré.
+et long-context. La ligne K=3 **n'est pas** un vrai test de K=3 :
+l'un des trois « petits modèles locaux » du pool, `gemma3:4b`, est
+enregistré comme VLM dans les a priori bootstrap, et le filtre
+`allow_vlms=False` du routeur l'a (correctement) exclu sur chaque
+prompt non-vision. Le routeur s'est donc retrouvé avec deux
+candidats textuels quel que soit `top_k`, et la ligne K=3 a le même
+ensemble de candidats que la ligne K=2. Un vrai K=3 demande un
+troisième candidat purement textuel dans le pool (re-run prévu en
+[docs/EVALUATION.md §5 #0](docs/EVALUATION.md)). Tous les chiffres,
+le détail par catégorie, les échecs persistants et les notes de
+reproductibilité vivent dans
+[docs/EVALUATION.md §4.2](docs/EVALUATION.md). L'artefact (JSON
+par tour, chaque réponse fusionnée, chaque note) est conservé dans
+le répertoire `eval_runs/` ignoré.
 
 Cela dit, **ce n'est pas magique** :
 

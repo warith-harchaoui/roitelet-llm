@@ -159,15 +159,23 @@ directory.
    `coding-async-vs-thread` (+0.40), `multilingual-spanish-greeting`
    (+0.40), `summarization-photosynthesis` (+0.40). One regression:
    `coding-dict-merge` (−0.10).
-2. **The K=3 row does not actually test K=3.** Every K=3 turn
-   collapsed to `fan_out=2` even though three local candidates were
-   available — i.e. the router asked for top_k=3 but only two
-   responses came back. The recorded K=3 numbers are therefore K=2
-   with a different candidate selection, not a real K=3 test. The
-   root cause is open — likely in the live-discovery cache + bootstrap
-   prune interaction during turn N+1 — and is now item §5 #0 below.
-   Until that is fixed, **the K-sweep tested K=1 vs K=2 only** and
-   the third row should be read as "K=3-requested, K=2-effective".
+2. **The K=3 row does not actually test K=3 — and the cause is an
+   experimental-design mistake, not a routing bug.** Every K=3 turn
+   collapsed to `fan_out=2` because one of the three "small local"
+   models I picked for the pool, `gemma3:4b`, is registered as a
+   VLM in `data/bootstrap/model_priors.json` (`vlm: 1`, with a
+   `vision` capability prior). The router's VLM-protection filter
+   correctly drops VLM specs on non-vision prompts when
+   `allow_vlms=False`: `if not preferences.allow_vlms and spec.vlm
+   and 'vision' not in categories: continue`. Across all 25 prompts
+   in the dataset, none triggered the `vision` capability detector
+   (no `image`, `photo`, `diagram`, `screenshot`, `chart` keywords),
+   so `gemma3:4b` was filtered every turn and the router was left
+   with two text candidates regardless of `top_k`. The K=3 row is
+   therefore K=2 with the same candidate set as the K=2 row, not a
+   real K=3 measurement. To get real K ≥ 3 the pool needs a third
+   *text* candidate (e.g. `qwen2.5-coder:latest`, `llama3.2:1b`),
+   or `allow_vlms=True`. Tracked as §5 #0 below.
 3. **The judge dominates wall-clock.** Across all K, the synthesis
    pass took 89–82 % of the total turn time. Candidate fan-out is
    tiny on local small models (≤ 8 s at K=2). User-perceived
@@ -212,11 +220,15 @@ Everything in §5 below is **planned** until proven otherwise.
 
 ## 5. Planned ablations (priority order)
 
-0. **Resolve the K=3 `fan_out=2` regression.** The K-sweep above
-   could not measure real K=3 because the router collapsed to K=2
-   on every turn. Likely root cause: a race between the live-Ollama
-   discovery TTL and the bootstrap-pool prune at the start of
-   `route()`. Until this is fixed, K ≥ 3 results are not trustworthy.
+0. **Re-run the K-sweep with a real K=3 candidate pool.** The pool
+   used in §4.2 contained one VLM (`gemma3:4b`) that the
+   `allow_vlms=False` filter correctly excluded from every
+   non-vision prompt. Swap it for a text-only third model
+   (`qwen2.5-coder:latest`, `phi4-mini:3.8b` once pulled, or
+   `llama3.2:1b`) and re-run the K=2 vs K=3 comparison. The
+   alternative is `allow_vlms=True`, but that lets the rest of the
+   live-discovered VLMs (`qwen2.5vl:7b`, `llama3.2-vision`) into
+   the pool too, which is a different experiment.
 1. **K-sweep with heuristic router** (`K ∈ {1, 2, 3, 5}`) on the full
    25-prompt dataset, with the default Qwen 3 8B judge. Goal: pin
    down where K stops paying off.
