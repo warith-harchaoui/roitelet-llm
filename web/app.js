@@ -544,6 +544,19 @@ function onFilesPicked(fileList) {
 // `csv-list` fields are persisted as `List[str]` server-side but edited
 // as a comma-separated string in the UI for one-line tractability. The
 // (de)serialisation happens at the form-submit boundary, not in state.
+// The Settings sheet has three sections:
+//
+//   1. Personal panel (rendered first; built dynamically).
+//   2. Engines panel — the "+ Add engine" list. Each engine is an
+//      OpenAI-compatible endpoint with its own label/URL/key/models.
+//      Replaces the previous hardcoded enumeration. Built dynamically
+//      from current.custom_engines.
+//   3. The fields below — pre-built integrations (Ollama local stack,
+//      well-known providers we ship dedicated wiring for), and the
+//      routing knobs. Pre-built integrations stay first-class because
+//      they have curated bootstrap priors keyed on their provider
+//      prefix (``openai/...``, ``openrouter/...``); rebuilding them
+//      as custom engines would lose those priors.
 const SETTINGS_FIELDS = [
   // Local stack
   {key: 'ollama_base_url',                  label: 'Ollama base URL',                  type: 'text',     placeholder: 'http://localhost:11434'},
@@ -551,7 +564,7 @@ const SETTINGS_FIELDS = [
   {key: 'local_vlm_model',                  label: 'Local VLM (image captioning)',     type: 'text',     placeholder: 'qwen2.5vl:7b'},
   {key: 'selected_ollama_models',           label: 'Extra Ollama models (comma-sep)',  type: 'csv-list', placeholder: 'phi4-mini:3.8b, gemma3:4b'},
 
-  // Paid providers
+  // Pre-built integrations (have bootstrap priors keyed on the prefix)
   {key: 'openrouter_api_key',               label: 'OpenRouter API key',               type: 'password'},
   {key: 'paid_openrouter_models',           label: 'OpenRouter models (comma-sep)',    type: 'csv-list', placeholder: 'anthropic/claude-3.7-sonnet'},
   {key: 'openai_api_key',                   label: 'OpenAI API key',                   type: 'password'},
@@ -559,16 +572,24 @@ const SETTINGS_FIELDS = [
   {key: 'gemini_api_key',                   label: 'Gemini API key',                   type: 'password'},
   {key: 'perplexity_api_key',               label: 'Perplexity API key',               type: 'password'},
 
-  // Universal OpenAI-compatible (Mistral, Together, Groq, llama-server, …)
-  {key: 'openai_compatible_base_url',       label: 'OpenAI-compat base URL',           type: 'text',     placeholder: 'https://api.mistral.ai/v1'},
-  {key: 'openai_compatible_api_key',        label: 'OpenAI-compat API key',            type: 'password'},
-  {key: 'paid_openai_compatible_models',    label: 'OpenAI-compat models (comma-sep)', type: 'csv-list', placeholder: 'mistral-large-latest'},
-
   // Routing knobs
   {key: 'raw_power_weight',                 label: 'Raw power weight',                 type: 'number', step: '0.05', min: 0, max: 1},
   {key: 'frugality_weight',                 label: 'Frugality weight',                 type: 'number', step: '0.05', min: 0, max: 1},
   {key: 'independence_local_only',          label: 'Local models only',                type: 'checkbox'},
   {key: 'enable_vlms',                      label: 'Allow vision-language',            type: 'checkbox'},
+];
+
+// Live state of the engines panel between open/save. Each entry has
+// {label, base_url, api_key, models}. Kept at module scope so the
+// "+ Add engine" handler can mutate it without re-fetching settings.
+let engineState = [];
+
+// Preset URLs we'll suggest as placeholders for new engine rows.
+const ENGINE_PRESETS = [
+  {label: 'mistral',  base_url: 'https://api.mistral.ai/v1'},
+  {label: 'together', base_url: 'https://api.together.xyz/v1'},
+  {label: 'groq',     base_url: 'https://api.groq.com/openai/v1'},
+  {label: 'fireworks', base_url: 'https://api.fireworks.ai/inference/v1'},
 ];
 
 function csvParse(raw) {
@@ -579,6 +600,59 @@ function csvParse(raw) {
 }
 function csvFormat(list) {
   return Array.isArray(list) ? list.join(', ') : '';
+}
+
+function renderEngineList() {
+  const host = document.getElementById('engineList');
+  if (!host) return;
+  if (!engineState.length) {
+    host.innerHTML = `
+      <p class="text-[11px] text-gray-500 dark:text-gray-400 italic">
+        No engines yet. Click <strong>+ Add engine</strong>. Common presets:
+        ${ENGINE_PRESETS.map(p => `<code>${p.label}</code> (${p.base_url})`).join(', ')}.
+      </p>`;
+    return;
+  }
+  host.innerHTML = '';
+  engineState.forEach((engine, idx) => {
+    const card = document.createElement('div');
+    card.className = 'p-2 rounded-[10px] bg-white/60 dark:bg-white/[0.04] space-y-1.5 border border-gray-200 dark:border-white/[0.08]';
+    card.innerHTML = `
+      <div class="flex items-center justify-between gap-2">
+        <input type="text" data-i="${idx}" data-field="label" value="${escapeHtml(engine.label)}" placeholder="label (e.g. mistral)"
+          class="flex-1 px-2 py-1 text-[12px] font-medium border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
+        <button type="button" data-rm="${idx}" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10" title="Remove engine">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+        </button>
+      </div>
+      <input type="text" data-i="${idx}" data-field="base_url" value="${escapeHtml(engine.base_url)}" placeholder="https://api.example.com/v1"
+        class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
+      <input type="password" data-i="${idx}" data-field="api_key" value="${escapeHtml(engine.api_key)}" placeholder="api key"
+        class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
+      <input type="text" data-i="${idx}" data-field="models" value="${escapeHtml(csvFormat(engine.models))}" placeholder="models (comma-sep)"
+        class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
+    `;
+    host.appendChild(card);
+  });
+  // Wire inputs to mutate engineState live so the form-submit handler
+  // can just read the array (no per-card DOM scraping).
+  host.querySelectorAll('input[data-i]').forEach(input => {
+    input.addEventListener('input', e => {
+      const i = parseInt(e.target.dataset.i, 10);
+      const field = e.target.dataset.field;
+      if (Number.isNaN(i) || !engineState[i]) return;
+      if (field === 'models') engineState[i].models = csvParse(e.target.value);
+      else engineState[i][field] = e.target.value;
+    });
+  });
+  host.querySelectorAll('button[data-rm]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const i = parseInt(btn.dataset.rm, 10);
+      if (Number.isNaN(i)) return;
+      engineState.splice(i, 1);
+      renderEngineList();
+    });
+  });
 }
 
 async function openSettings() {
@@ -639,6 +713,48 @@ async function openSettings() {
       btn.textContent = 'Ingest inbox';
     }
   });
+
+  // Engines panel — dynamic OpenAI-compatible engine list. Every
+  // engine has a label, a base URL, an API key, and a comma-separated
+  // model list. The "+ Add engine" button appends an empty card; the
+  // trash icon on each card removes it. Render is reactive to
+  // ``engineState``; the form-submit handler reads ``engineState``
+  // directly rather than the input nodes.
+  engineState = Array.isArray(current.custom_engines)
+    ? current.custom_engines.map(e => ({
+        label: e.label || '',
+        base_url: e.base_url || '',
+        api_key: e.api_key || '',
+        models: Array.isArray(e.models) ? [...e.models] : [],
+      }))
+    : [];
+
+  const enginesPanel = document.createElement('div');
+  enginesPanel.className = 'mb-4 p-3 rounded-[10px] bg-black/5 dark:bg-white/[0.05] space-y-2';
+  enginesPanel.id = 'enginesPanel';
+  enginesPanel.innerHTML = `
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-[13px] font-semibold">OpenAI-compatible engines</div>
+        <div class="text-[11px] text-gray-500 dark:text-gray-400">
+          Any provider with a <code>/v1/chat/completions</code> endpoint.
+          Mistral, Together, Groq, Fireworks, llama-server, …
+        </div>
+      </div>
+      <button type="button" id="addEngineBtn"
+        class="min-h-[32px] px-3 py-1 text-[12px] font-medium bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
+        + Add engine
+      </button>
+    </div>
+    <div id="engineList" class="space-y-2"></div>
+  `;
+  form.appendChild(enginesPanel);
+  renderEngineList();
+  $('addEngineBtn').addEventListener('click', () => {
+    engineState.push({label: '', base_url: '', api_key: '', models: []});
+    renderEngineList();
+  });
+
   for (const f of SETTINGS_FIELDS) {
     const wrap = document.createElement('label');
     wrap.className = 'flex flex-col gap-1.5';
@@ -691,6 +807,17 @@ async function saveSettings(ev) {
       next[f.key] = fd.get(f.key) ?? '';
     }
   }
+  // Engines panel — read straight from the in-memory ``engineState``.
+  // Skip rows that the user left completely blank (saves the user
+  // from accidentally persisting a half-edited card).
+  next.custom_engines = engineState
+    .map(e => ({
+      label: (e.label || '').trim(),
+      base_url: (e.base_url || '').trim(),
+      api_key: e.api_key || '',
+      models: (e.models || []).map(m => (m || '').trim()).filter(Boolean),
+    }))
+    .filter(e => e.label || e.base_url || e.api_key || e.models.length);
   try {
     await apiPost('/api/settings', next);
     state.allowVlms = !!next.enable_vlms;
