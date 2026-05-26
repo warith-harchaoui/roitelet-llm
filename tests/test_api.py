@@ -1,5 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
+
 from api.main import app, require_api_token
 
 client = TestClient(app)
@@ -16,10 +17,9 @@ def auth_required():
     or leak state between tests.
     """
     async def _require(authorization: str | None = None):
-        from fastapi import Header, HTTPException
+        from fastapi import HTTPException
         # Replicate the production check with a fixed expected token.
         if authorization is None:
-            from fastapi import Request
             raise HTTPException(status_code=401, detail='Missing bearer token')
         if not authorization.startswith('Bearer '):
             raise HTTPException(status_code=401, detail='Missing bearer token')
@@ -73,7 +73,7 @@ def test_conversation_path_traversal_rejected():
 
 def test_api_settings_masks_api_keys():
     """GET /api/settings must never echo real API keys to the client."""
-    from core.schemas import SECRET_MASK, SECRET_FIELDS
+    from core.schemas import SECRET_FIELDS, SECRET_MASK
     from core.storage import storage
 
     stored = storage.load_app_settings()
@@ -205,7 +205,11 @@ def test_mcp_unsupported_method_errors():
 def _stub_pipeline_response(content: str = 'Stub synthesis answer.'):
     """Build a ChatResponse the streaming/non-streaming branches can render."""
     from core.schemas import (
-        ChatResponse, ModelResponse, ModelCandidate, RouterDecision, SynthesisResult,
+        ChatResponse,
+        ModelCandidate,
+        ModelResponse,
+        RouterDecision,
+        SynthesisResult,
     )
     return ChatResponse(
         conversation_id='conv-stub',

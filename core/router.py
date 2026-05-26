@@ -31,8 +31,6 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
-from typing import Dict, List
-
 from . import storage as _storage_mod
 from .capabilities import top_capabilities
 from .regimes import detect_regime
@@ -93,8 +91,8 @@ class RoiteletRouter:
         categories = _detect(prompt)
         regime = detect_regime(prompt, preferences, categories)
 
-        candidates: List[ModelCandidate] = []
-        reasoning: List[str] = []
+        candidates: list[ModelCandidate] = []
+        reasoning: list[str] = []
         dominant = top_capabilities(categories)
         reasoning.append(f'Detected capabilities: {", ".join(dominant)}')
         reasoning.append(f'Regime: {regime.name} — {regime.rationale}')
@@ -112,7 +110,7 @@ class RoiteletRouter:
             if regime.cost_budget_usd is not None and estimated_cost > regime.cost_budget_usd:
                 continue
 
-            capability_scores: List[ModelCapabilityScore] = []
+            capability_scores: list[ModelCapabilityScore] = []
             quality_score = 0.0
             for capability, weight in categories.items():
                 score = live_registry.capability_score(spec.model_id, capability)

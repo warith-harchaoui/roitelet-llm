@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from functools import lru_cache
-from typing import List, Sequence
 
 from . import registry as _registry_mod
 from . import storage as _storage_mod
@@ -40,7 +40,7 @@ class AllCandidatesFailedError(RuntimeError):
     from empty content.
     """
 
-    def __init__(self, responses: List[ModelResponse]) -> None:
+    def __init__(self, responses: list[ModelResponse]) -> None:
         self.responses = list(responses)
         details = ', '.join(
             f'{r.model_id}: {r.error or "empty response"}' for r in self.responses
@@ -199,7 +199,7 @@ async def run_roitelet_chat(
 
     telemetry = TelemetryRecord(
         record_id=str(uuid.uuid4()),
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         conversation_id=conversation.conversation_id,
         prompt=request.prompt,
         router_decision=decision,

@@ -18,12 +18,10 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
-import math
 import re
 from collections import defaultdict
-from typing import Dict, Iterable, List
 
-CAPABILITY_KEYWORDS: Dict[str, List[str]] = {
+CAPABILITY_KEYWORDS: dict[str, list[str]] = {
     'coding': [
         'code', 'python', 'bug', 'debug', 'api', 'sql', 'javascript', 'algorithm',
         'function', 'class', 'typescript', 'rust', 'golang', 'bash', 'shell',
@@ -71,12 +69,12 @@ CAPABILITY_KEYWORDS: Dict[str, List[str]] = {
 }
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     """Tokenize text into lowercase word-like units."""
     return re.findall(r"[a-zA-Z0-9_\-']+", text.lower())
 
 
-def detect_capabilities(prompt: str) -> Dict[str, float]:
+def detect_capabilities(prompt: str) -> dict[str, float]:
     """Infer prompt capabilities from a user request.
 
     Parameters
@@ -91,7 +89,7 @@ def detect_capabilities(prompt: str) -> Dict[str, float]:
     """
     tokens = _tokenize(prompt)
     joined = ' '.join(tokens)
-    raw_scores: Dict[str, float] = defaultdict(float)
+    raw_scores: dict[str, float] = defaultdict(float)
 
     # Start with a small prior on generic reasoning so that every prompt gets a
     # meaningful distribution even when lexical matching is sparse.
@@ -117,7 +115,7 @@ def detect_capabilities(prompt: str) -> Dict[str, float]:
     return {name: value / total for name, value in raw_scores.items() if value > 0}
 
 
-def top_capabilities(capabilities: Dict[str, float], limit: int = 3) -> List[str]:
+def top_capabilities(capabilities: dict[str, float], limit: int = 3) -> list[str]:
     """Return the dominant capabilities sorted by decreasing weight.
 
     Parameters

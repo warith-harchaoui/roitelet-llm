@@ -311,6 +311,30 @@ sequenceDiagram
 
 ---
 
+## 5.4 Alternative capability detector: `ROITELET_CAPABILITY_DETECTOR=embedding`
+
+The default capability detector is the keyword scan in
+`core/capabilities.py` — transparent and English-biased. An alternative
+detector trains a sklearn logistic regression on top of locally-served
+sentence embeddings from Ollama's `nomic-embed-text` model (or whatever
+`ROITELET_EMBED_MODEL` points at).
+
+Behaviour:
+
+- **Default**: keyword scan, identical to all previous releases.
+- **`ROITELET_CAPABILITY_DETECTOR=embedding`**: classifier path; on any
+  failure (Ollama unreachable, embedding model not pulled, classifier
+  untrained because the labelled corpus is too small) it transparently
+  falls back to the keyword scan. The router never sees an empty
+  distribution.
+
+Training corpus today is the eval dataset under
+`tests/eval/dataset.json` — its `category` field is the label. Extend
+it by adding more labelled JSON entries and calling
+`core.capability_classifier.refresh_classifier()`.
+
+---
+
 ## 5.5 Alternative router: `ROITELET_ROUTER=mf`
 
 A second router lives in `core/router_mf.py`: a learned matrix-factorisation
@@ -375,4 +399,7 @@ half-formed mix.
 | `core/providers/openai_compatible.py` | ~120 | The contract every remote provider must satisfy |
 | `api/main.py` | ~490 | All four API surfaces (native, multimodal, OpenAI-compat, MCP) in one file |
 | `tests/eval/bench_pareto.py` | ~250 | Cost-quality Pareto: fusion vs single-best baseline |
+| `core/capability_classifier.py` | ~260 | Embedding-based capability detector (opt-in) |
+| `core/image_pipeline.py` | ~160 | K=1 image-generation pipeline |
+| `core/providers/openai_images.py` | ~200 | OpenAI-compatible image-generation client |
 | `tests/test_pipeline.py` | ~470 | Worked example of running the pipeline end-to-end with stubs |

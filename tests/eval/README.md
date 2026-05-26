@@ -11,7 +11,7 @@ The 61 unit tests in `tests/test_core.py`, `tests/test_api.py`, and
 storage atomicity, schema validation, fallback paths. None of them
 verify *answer quality*.
 
-The Elo loop in `core/core/registry.py` is the only quality signal in
+The Elo loop in `core/registry.py` is the only quality signal in
 production, and it's self-referential — the judge crowns winners, those
 winners gain Elo, and the next turn's judge sees them again. If judging
 quality degrades, Elo can't tell you.

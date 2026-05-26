@@ -70,6 +70,20 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+# FastAPI's idiomatic dependency-injection pattern uses ``Depends(...)``
+# and ``Header(default=...)`` as parameter defaults; ruff's B008 flags
+# any function-call default. Whitelist the FastAPI/Pydantic helpers we
+# rely on so the project's API surface stays idiomatic.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Query",
+    "pydantic.Field",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

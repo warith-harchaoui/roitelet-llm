@@ -15,15 +15,16 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import get_settings
 from .schemas import AppSettingsPayload, Conversation, ConversationMessage, TelemetryRecord
@@ -90,10 +91,8 @@ class StorageManager:
                 fh.write(content)
             os.replace(tmp, path)
         except Exception:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(tmp)
-            except OSError:
-                pass
             raise
 
     def create_conversation(self, title: str = 'New flight') -> Conversation:
@@ -112,7 +111,7 @@ class StorageManager:
         conversation = Conversation(
             conversation_id=str(uuid.uuid4()),
             title=title,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             messages=[],
         )
         self.save_conversation(conversation)
@@ -133,7 +132,7 @@ class StorageManager:
         path = self.conversation_path(conversation.conversation_id)
         self._write_json(path, conversation.model_dump())
 
-    def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
         """Load a conversation if it exists."""
         try:
             path = self.conversation_path(conversation_id)
@@ -142,7 +141,7 @@ class StorageManager:
         payload = self._read_json(path, None)
         return Conversation.model_validate(payload) if payload else None
 
-    def list_conversations(self) -> List[Conversation]:
+    def list_conversations(self) -> list[Conversation]:
         """List all persisted conversations sorted by newest first."""
         conversations = [
             Conversation.model_validate(self._read_json(path, {}))
@@ -165,7 +164,7 @@ class StorageManager:
         self._write_json(path, record.model_dump())
         return path
 
-    def list_telemetry(self) -> List[TelemetryRecord]:
+    def list_telemetry(self) -> list[TelemetryRecord]:
         """Load all telemetry records from disk."""
         records = [
             TelemetryRecord.model_validate(self._read_json(path, {}))
@@ -173,7 +172,7 @@ class StorageManager:
         ]
         return sorted(records, key=lambda item: item.created_at, reverse=True)
 
-    def get_cache(self, provider_name: str, payload_str: str) -> Optional[dict]:
+    def get_cache(self, provider_name: str, payload_str: str) -> dict | None:
         """Retrieve a cached provider response, honouring the configured TTL.
 
         Returns ``None`` (cache miss) when:
@@ -193,7 +192,7 @@ class StorageManager:
         if not path.exists():
             return None
         match = None
-        match_cached_at: Optional[datetime] = None
+        match_cached_at: datetime | None = None
         try:
             with path.open('r', encoding='utf-8') as f:
                 # JSONL accumulates duplicates on cache overwrite; the *last*
@@ -219,7 +218,7 @@ class StorageManager:
             return match
         if match_cached_at is None:
             return None  # legacy record without a timestamp — treat as stale
-        age = (datetime.now(timezone.utc) - match_cached_at).total_seconds()
+        age = (datetime.now(UTC) - match_cached_at).total_seconds()
         return match if age <= ttl else None
 
     def set_cache(self, provider_name: str, payload_str: str, response_data: dict) -> None:
@@ -234,7 +233,7 @@ class StorageManager:
         record = {
             'payload': payload_str,
             'response': response_data,
-            'cached_at': datetime.now(timezone.utc).isoformat(),
+            'cached_at': datetime.now(UTC).isoformat(),
         }
         try:
             with path.open('a', encoding='utf-8') as f:

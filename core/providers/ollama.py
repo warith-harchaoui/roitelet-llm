@@ -15,7 +15,7 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 import httpx
 

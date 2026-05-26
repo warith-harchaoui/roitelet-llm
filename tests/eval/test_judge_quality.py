@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import List
 
 import pytest
 
@@ -37,7 +36,6 @@ from deepeval.test_case import LLMTestCase, LLMTestCaseParams
 
 from core.pipeline import run_roitelet_chat
 from core.schemas import ChatRequest, RouterPreferences
-
 
 _DATASET = json.loads((Path(__file__).parent / 'dataset.json').read_text())
 
@@ -139,7 +137,7 @@ async def test_synthesis_is_faithful_to_candidates(case, preferences, faithfulne
     response = await run_roitelet_chat(
         ChatRequest(prompt=case['prompt'], preferences=preferences),
     )
-    candidate_texts: List[str] = [
+    candidate_texts: list[str] = [
         r.content for r in response.responses if r.content and not r.error
     ]
     if not candidate_texts:

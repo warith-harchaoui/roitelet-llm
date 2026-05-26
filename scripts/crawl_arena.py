@@ -19,7 +19,7 @@ import logging
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -37,7 +37,8 @@ EXTRACTION_PROMPT = """You are an autonomous data extraction agent for the Roite
 Your goal is to read the raw leaderboard text below and extract the Large Language Models and their Elo ratings.
 
 Rules:
-1. Extract the model identifier (e.g. "gpt-4o", "claude-3-opus", "llama-3-70b-instruct"). Try to use standard, recognizable ID formats.
+1. Extract the model identifier (e.g. "gpt-4o", "claude-3-opus", "llama-3-70b-instruct").
+   Try to use standard, recognizable ID formats.
 2. Extract the overall Elo rating (usually a number between 1000 and 1300).
 3. Ignore image generation models or irrelevant tabular data.
 4. Output EXACTLY a valid JSON array of objects, with no markdown, no backticks, and no explanation text.
@@ -60,7 +61,7 @@ class HTMLStripper(html.parser.HTMLParser):
         self.reset()
         self.strict = False
         self.convert_charrefs = True
-        self.text: List[str] = []
+        self.text: list[str] = []
 
     def handle_data(self, d: str) -> None:
         stripped = d.strip()
@@ -89,7 +90,11 @@ def fetch_content(source: str) -> str:
         return Path(source).read_text(encoding="utf-8")
 
 
-def call_local_llm(text: str, base_url: str = "http://localhost:11434", model: str = "qwen3:8b") -> List[Dict[str, Any]]:
+def call_local_llm(
+    text: str,
+    base_url: str = "http://localhost:11434",
+    model: str = "qwen3:8b",
+) -> list[dict[str, Any]]:
     """Send the text to the local Ollama instance for JSON extraction."""
     logger.info(f"Sending raw text to local LLM ({model}) for extraction...")
     
@@ -137,7 +142,7 @@ def normalize_elo(elo: float) -> float:
     return 0.5 + (fraction * (ROITELET_MAX - 0.5))
 
 
-def update_priors(extracted: List[Dict[str, Any]], source: Optional[str] = None) -> None:
+def update_priors(extracted: list[dict[str, Any]], source: str | None = None) -> None:
     """Merge normalized Elo scores into model_priors.json with provenance.
 
     Each touched entry receives a ``_meta`` block recording the raw Elo,
@@ -154,8 +159,8 @@ def update_priors(extracted: List[Dict[str, Any]], source: Optional[str] = None)
 
     update_count = 0
     # Create simple mapping of existing names to IDs for easier matching
-    provider_map = {k.split("/")[-1].lower(): k for k in priors.keys()}
-    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    provider_map = {k.split("/")[-1].lower(): k for k in priors}
+    now_iso = datetime.datetime.now(datetime.UTC).isoformat()
 
     for entry in extracted:
         model_name = str(entry.get("model", "")).lower()

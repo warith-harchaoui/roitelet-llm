@@ -12,6 +12,7 @@ import sys
 from core.pipeline import run_roitelet_chat
 from core.schemas import ChatRequest, RouterPreferences
 
+
 def print_welcome() -> None:
     """Print the welcome banner for the CLI.
     

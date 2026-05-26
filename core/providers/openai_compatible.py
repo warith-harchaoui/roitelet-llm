@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Sequence
+from collections.abc import Sequence
 
 import httpx
 
@@ -92,7 +92,6 @@ class OpenAICompatibleClient:
             message = data['choices'][0]['message']
             usage = data.get('usage', {})
             energy_kwh, carbon_g = estimate_energy_and_carbon(runtime, average_power_watts=35.0, memory_gb=1.0)
-            total_tokens = float(usage.get('total_tokens', 0) or 0)
             return ModelResponse(
                 model_id=model_id,
                 provider=self.provider_name,

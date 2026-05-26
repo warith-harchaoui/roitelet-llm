@@ -7,7 +7,8 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from typing import Protocol
 
 from ..schemas import ChatMessage, ModelResponse
 

@@ -11,13 +11,13 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
-from .schemas import ChatRequest, MCPRequest, RouterPreferences
 from .pipeline import run_roitelet_chat
+from .schemas import ChatRequest, MCPRequest, RouterPreferences
 
 
-async def handle_mcp_request(payload: MCPRequest) -> Dict[str, Any]:
+async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
     """Handle a minimal JSON-RPC MCP request.
 
     Parameters

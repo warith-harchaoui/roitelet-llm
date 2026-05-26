@@ -16,7 +16,7 @@ classes accept structural matches without explicit ``isinstance``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from .schemas import AppSettingsPayload, Conversation, ConversationMessage, TelemetryRecord
 
@@ -54,9 +54,9 @@ class Storage(Protocol):
 
     def save_conversation(self, conversation: Conversation) -> None: ...
 
-    def get_conversation(self, conversation_id: str) -> Optional[Conversation]: ...
+    def get_conversation(self, conversation_id: str) -> Conversation | None: ...
 
-    def list_conversations(self) -> List[Conversation]: ...
+    def list_conversations(self) -> list[Conversation]: ...
 
     def append_message(
         self, conversation_id: str, message: ConversationMessage
@@ -66,7 +66,7 @@ class Storage(Protocol):
 
     def save_telemetry(self, record: TelemetryRecord) -> Path: ...
 
-    def list_telemetry(self) -> List[TelemetryRecord]: ...
+    def list_telemetry(self) -> list[TelemetryRecord]: ...
 
     # App settings -------------------------------------------------------
 
@@ -76,7 +76,7 @@ class Storage(Protocol):
 
     # Provider cache -----------------------------------------------------
 
-    def get_cache(self, provider_name: str, payload_str: str) -> Optional[dict]:
+    def get_cache(self, provider_name: str, payload_str: str) -> dict | None:
         """Return a cached provider response or ``None`` on miss/expiry.
 
         Implementations must honour the TTL configured via

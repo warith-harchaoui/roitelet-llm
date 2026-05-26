@@ -7,7 +7,7 @@ The API exposes three access styles:
 
 Examples
 --------
->>> from core.main import app
+>>> from api.main import app
 >>> app.title
 'Roitelet LLM API'
 
@@ -23,9 +23,10 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,7 +101,7 @@ app.add_middleware(
 
 
 @app.get('/healthz')
-async def health() -> Dict[str, Any]:
+async def health() -> dict[str, Any]:
     """Return a lightweight health payload to indicate the server is alive.
 
     The web client is mounted at ``/`` as static files, so the health probe
@@ -115,7 +116,7 @@ async def health() -> Dict[str, Any]:
 
 
 @app.get('/api/settings', dependencies=[Depends(require_api_token)])
-async def get_app_settings(storage: StorageManager = Depends(get_storage)) -> Dict[str, Any]:
+async def get_app_settings(storage: StorageManager = Depends(get_storage)) -> dict[str, Any]:
     """Return persisted control-room settings with API keys masked.
 
     Stored credentials never leave the server — any client (even on the same
@@ -129,7 +130,7 @@ async def get_app_settings(storage: StorageManager = Depends(get_storage)) -> Di
 async def save_app_settings(
     payload: AppSettingsPayload,
     storage: StorageManager = Depends(get_storage),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Persist control-room settings edited from the web UI.
 
     Fields whose value still equals the secret mask sentinel are preserved
@@ -145,7 +146,7 @@ async def save_app_settings(
 @app.get('/api/conversations', dependencies=[Depends(require_api_token)])
 async def list_conversations(
     storage: StorageManager = Depends(get_storage),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """List all stored conversations via the local storage manager."""
     return [conversation.model_dump() for conversation in storage.list_conversations()]
 
@@ -154,7 +155,7 @@ async def list_conversations(
 async def get_conversation(
     conversation_id: str,
     storage: StorageManager = Depends(get_storage),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fetch one conversation by its unique identifier."""
     conversation = storage.get_conversation(conversation_id)
     if conversation is None:
@@ -165,12 +166,12 @@ async def get_conversation(
 @app.get('/api/telemetry', dependencies=[Depends(require_api_token)])
 async def list_telemetry(
     storage: StorageManager = Depends(get_storage),
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return all telemetry records containing performance data."""
     return [record.model_dump() for record in storage.list_telemetry()]
 
 
-def _sse(event: Dict[str, Any]) -> str:
+def _sse(event: dict[str, Any]) -> str:
     """Format one Server-Sent Events frame from a JSON-serialisable payload."""
     return f'data: {json.dumps(event)}\n\n'
 
@@ -282,7 +283,7 @@ async def roitelet_chat_multimodal(
     conversation_id: str | None = Form(None),
     top_k: int = Form(3),
     allow_vlms: bool = Form(False),
-    files: List[UploadFile] = File(default_factory=list),
+    files: list[UploadFile] = File(default_factory=list),
 ):
     """Run one chat turn with attached audio, image, or PDF files.
 
@@ -299,8 +300,8 @@ async def roitelet_chat_multimodal(
     """
     import tempfile
 
-    augmentations: List[str] = []
-    skipped: List[str] = []
+    augmentations: list[str] = []
+    skipped: list[str] = []
 
     for upload in files:
         if not upload.filename:
@@ -361,7 +362,7 @@ async def roitelet_chat_multimodal(
 
 
 @app.get('/v1/models')
-async def list_models() -> Dict[str, Any]:
+async def list_models() -> dict[str, Any]:
     """Expose the local OpenAI-compatible model inventory."""
     return {
         'object': 'list',

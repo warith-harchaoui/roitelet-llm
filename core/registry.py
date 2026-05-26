@@ -35,10 +35,10 @@ from __future__ import annotations
 import json
 import logging
 import time
-from functools import lru_cache
+from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Set
+from functools import lru_cache
+from typing import Any
 
 import httpx
 
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 # Capabilities the router recognises. Elo keys are restricted to this set plus
 # 'global' so that typos or novel capability strings cannot pollute the state file.
-KNOWN_CAPABILITIES: Set[str] = {
+KNOWN_CAPABILITIES: set[str] = {
     'coding', 'math', 'reasoning', 'writing', 'analysis',
     'vision', 'multilingual', 'long_context',
     # ``image_gen`` is reserved for the planned image-generation
@@ -60,10 +60,10 @@ KNOWN_CAPABILITIES: Set[str] = {
 }
 
 # Default capability profile for a generic chat model not in the bootstrap file.
-_DEFAULT_CAPABILITIES: Dict[str, float] = {cap: 0.65 for cap in KNOWN_CAPABILITIES}
+_DEFAULT_CAPABILITIES: dict[str, float] = {cap: 0.65 for cap in KNOWN_CAPABILITIES}
 
 # Default pricing / latency / energy for dynamically-added models.
-_OLLAMA_DEFAULTS: Dict[str, Any] = {
+_OLLAMA_DEFAULTS: dict[str, Any] = {
     'provider': 'ollama',
     'local': True,
     'vlm': False,
@@ -71,7 +71,7 @@ _OLLAMA_DEFAULTS: Dict[str, Any] = {
     'latency_s': 4.0,
     'energy_kwh': 0.0009,
 }
-_OPENROUTER_DEFAULTS: Dict[str, Any] = {
+_OPENROUTER_DEFAULTS: dict[str, Any] = {
     'provider': 'openrouter',
     'local': False,
     'vlm': False,
@@ -84,7 +84,7 @@ _OPENROUTER_DEFAULTS: Dict[str, Any] = {
 # estimate via the bootstrap file once they know the provider's
 # published rate. Defaults skew toward "moderately priced cloud LLM"
 # so the cost-budget regime can still gate it sanely.
-_OPENAI_COMPATIBLE_DEFAULTS: Dict[str, Any] = {
+_OPENAI_COMPATIBLE_DEFAULTS: dict[str, Any] = {
     'provider': 'openai-compatible',
     'local': False,
     'vlm': False,
@@ -113,7 +113,7 @@ class _OllamaModelCache:
     """
 
     def __init__(self) -> None:
-        self._models: List[str] = []
+        self._models: list[str] = []
         self._fetched_at: float = 0.0
         self._base_url: str = ''
 
@@ -121,7 +121,7 @@ class _OllamaModelCache:
         """Set the Ollama base URL (must be called before first read)."""
         self._base_url = base_url.rstrip('/')
 
-    def _fetch(self) -> List[str]:
+    def _fetch(self) -> list[str]:
         """Synchronously fetch the live model list from Ollama."""
         if not self._base_url:
             return []
@@ -145,7 +145,7 @@ class _OllamaModelCache:
             self._fetched_at = time.monotonic()
 
     @property
-    def models(self) -> List[str]:
+    def models(self) -> list[str]:
         """Return cached model names, refreshing lazily if stale."""
         self.refresh()
         return list(self._models)
@@ -184,8 +184,8 @@ class ModelSpec:
 
     model_id: str
     provider: str
-    capabilities: Dict[str, float]
-    pricing: Dict[str, float]
+    capabilities: dict[str, float]
+    pricing: dict[str, float]
     latency_s: float
     energy_kwh: float
     local: bool
@@ -211,7 +211,7 @@ class ModelRegistry:
         Parameters
         ----------
         app_settings:
-            Optional :class:`~app.schemas.AppSettingsPayload` pre-loaded from
+            Optional :class:`~core.schemas.AppSettingsPayload` pre-loaded from
             disk. When ``None`` the registry loads it lazily from storage.
         """
         settings = get_settings()
@@ -220,7 +220,7 @@ class ModelRegistry:
         if not self.bootstrap_path.exists():
             raise FileNotFoundError(f'Bootstrap priors not found: {self.bootstrap_path}')
         payload = json.loads(self.bootstrap_path.read_text(encoding='utf-8'))
-        self.models: Dict[str, ModelSpec] = {
+        self.models: dict[str, ModelSpec] = {
             model_id: ModelSpec(
                 model_id=model_id,
                 provider=model_payload['provider'],
@@ -390,7 +390,7 @@ class ModelRegistry:
     # Elo state helpers
     # ------------------------------------------------------------------
 
-    def _load_elo_state(self) -> Dict[str, Dict[str, float]]:
+    def _load_elo_state(self) -> dict[str, dict[str, float]]:
         """Load rolling Elo adjustments from disk."""
         if not self.elo_path.exists():
             state = {model_id: {'global': 0.0} for model_id in self.models}
@@ -398,7 +398,7 @@ class ModelRegistry:
             return state
         return json.loads(self.elo_path.read_text(encoding='utf-8'))
 
-    def _save_elo_state(self, state: Dict[str, Dict[str, float]]) -> None:
+    def _save_elo_state(self, state: dict[str, dict[str, float]]) -> None:
         """Persist Elo adjustments to disk."""
         self.elo_path.parent.mkdir(parents=True, exist_ok=True)
         self.elo_path.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
@@ -407,7 +407,7 @@ class ModelRegistry:
     # Public interface
     # ------------------------------------------------------------------
 
-    def list_models(self) -> List[ModelSpec]:
+    def list_models(self) -> list[ModelSpec]:
         """Return all registered model specs."""
         return list(self.models.values())
 
@@ -443,7 +443,7 @@ class ModelRegistry:
         self,
         winners: Iterable[str],
         losers: Iterable[str],
-        capabilities: Dict[str, float],
+        capabilities: dict[str, float],
         k_factor: float = 0.04,
     ) -> None:
         """Apply a simple rolling Elo-style update.

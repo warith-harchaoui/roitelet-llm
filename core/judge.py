@@ -21,12 +21,10 @@ from __future__ import annotations
 
 import re
 import secrets
-from typing import Dict, List, Set, Tuple
 
 from . import storage as _storage_mod
 from .providers.factory import get_provider_client
 from .schemas import ChatMessage, ModelResponse, SynthesisResult
-
 
 # Sentinel chosen to be visually distinct from anything a typical answer
 # might produce. Triple-equals on a line of its own does not appear in
@@ -65,8 +63,8 @@ def _new_handle() -> str:
 
 def build_judge_messages(
     prompt: str,
-    responses: List[ModelResponse],
-) -> Tuple[List[ChatMessage], Dict[str, str]]:
+    responses: list[ModelResponse],
+) -> tuple[list[ChatMessage], dict[str, str]]:
     """Build the judge messages with shuffled, anonymized candidates.
 
     Returns
@@ -82,8 +80,8 @@ def build_judge_messages(
     indices = list(range(len(responses)))
     secrets.SystemRandom().shuffle(indices)
 
-    handle_to_model: Dict[str, str] = {}
-    blocks: List[str] = []
+    handle_to_model: dict[str, str] = {}
+    blocks: list[str] = []
     for i in indices:
         response = responses[i]
         handle = _new_handle()
@@ -114,7 +112,7 @@ def build_judge_messages(
 _TOKEN_RE = re.compile(r'[0-9a-fA-F]{4,}')
 
 
-def parse_winners(text: str, valid_handles: Set[str]) -> List[str]:
+def parse_winners(text: str, valid_handles: set[str]) -> list[str]:
     """Extract winner handles from judge output, fail-closed on garbage.
 
     Parameters
@@ -152,8 +150,8 @@ def parse_winners(text: str, valid_handles: Set[str]) -> List[str]:
     else:
         block = match.group(1)
 
-    seen: Set[str] = set()
-    ordered: List[str] = []
+    seen: set[str] = set()
+    ordered: list[str] = []
     for token in _TOKEN_RE.findall(block):
         normalized = token.lower()
         if normalized in valid_handles and normalized not in seen:
@@ -171,7 +169,7 @@ def _strip_winners_block(text: str) -> str:
     return text[:idx].rstrip()
 
 
-async def judge_and_synthesize(prompt: str, responses: List[ModelResponse]) -> SynthesisResult:
+async def judge_and_synthesize(prompt: str, responses: list[ModelResponse]) -> SynthesisResult:
     """Judge and fuse candidate answers using a local synthesis model.
 
     Behavior contract:

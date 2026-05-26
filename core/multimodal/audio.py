@@ -26,7 +26,7 @@ import os
 import tempfile
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -104,7 +104,7 @@ def _load_audio(path: Path) -> np.ndarray:
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _whisper_segments(samples: np.ndarray, language: str | None = None) -> List[Tuple[float, float, str]]:
+def _whisper_segments(samples: np.ndarray, language: str | None = None) -> list[tuple[float, float, str]]:
     """Transcribe with timestamps. Returns ``[(start_s, end_s, text), ...]``."""
     model = _whisper_model()
     params: dict[str, Any] = {
@@ -131,7 +131,7 @@ def _whisper_segments(samples: np.ndarray, language: str | None = None) -> List[
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _diarize(path: Path, audio: np.ndarray) -> List[dict]:
+def _diarize(path: Path, audio: np.ndarray) -> list[dict]:
     """Return list of ``{"speaker", "start", "end"}`` for the whole file.
 
     Long files (> ``_NEMO_CHUNK_S``) are split to avoid GPU/MPS OOM. Each
@@ -144,7 +144,7 @@ def _diarize(path: Path, audio: np.ndarray) -> List[dict]:
     model = _nemo_model()
     total = len(audio)
     chunk = int(_NEMO_CHUNK_S * _TARGET_SR)
-    segments: List[dict] = []
+    segments: list[dict] = []
 
     # Fast path: file fits in one chunk → diarize directly from disk.
     if total <= chunk:
@@ -179,7 +179,7 @@ def _normalize_speaker(raw: str) -> str:
     return raw
 
 
-def _parse_nemo_output(predicted: Any, time_offset: float) -> List[dict]:
+def _parse_nemo_output(predicted: Any, time_offset: float) -> list[dict]:
     """Normalize NeMo's varying return shapes into ``{speaker,start,end}`` dicts.
 
     NeMo's ``diarize()`` returns RTTM strings, dicts keyed by filename, lists
@@ -190,7 +190,7 @@ def _parse_nemo_output(predicted: Any, time_offset: float) -> List[dict]:
     if not predicted:
         return []
     if isinstance(predicted, dict):
-        out: List[dict] = []
+        out: list[dict] = []
         for value in predicted.values():
             if isinstance(value, (list, tuple)):
                 out.extend(_parse_items(value, time_offset))
@@ -204,9 +204,9 @@ def _parse_nemo_output(predicted: Any, time_offset: float) -> List[dict]:
     return _parse_items(items, time_offset)
 
 
-def _parse_items(items: Any, time_offset: float) -> List[dict]:
+def _parse_items(items: Any, time_offset: float) -> list[dict]:
     """Parse one flat batch of NeMo diarization items."""
-    out: List[dict] = []
+    out: list[dict] = []
     for item in items:
         if isinstance(item, str):
             parts = item.strip().split()
@@ -247,7 +247,7 @@ def _parse_items(items: Any, time_offset: float) -> List[dict]:
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _dominant_speaker(start: float, end: float, diar: List[dict]) -> str:
+def _dominant_speaker(start: float, end: float, diar: list[dict]) -> str:
     """Pick the speaker with the most cumulative overlap on ``[start, end]``."""
     if not diar:
         return 'SPEAKER_00'
@@ -262,13 +262,13 @@ def _dominant_speaker(start: float, end: float, diar: List[dict]) -> str:
 
 
 def _format_transcript(
-    whisper_segs: List[Tuple[float, float, str]],
-    diar_segs: List[dict],
+    whisper_segs: list[tuple[float, float, str]],
+    diar_segs: list[dict],
 ) -> str:
     """Join transcript lines, collapsing consecutive turns by same speaker."""
     if not whisper_segs:
         return ''
-    lines: List[Tuple[str, List[str]]] = []
+    lines: list[tuple[str, list[str]]] = []
     for start, end, text in whisper_segs:
         speaker = _dominant_speaker(start, end, diar_segs)
         if lines and lines[-1][0] == speaker:

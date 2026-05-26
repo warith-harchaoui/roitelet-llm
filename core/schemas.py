@@ -14,10 +14,9 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 Role = Literal['system', 'user', 'assistant']
 
@@ -72,7 +71,7 @@ class ModelCandidate(BaseModel):
     score: float
     estimated_cost_usd: float = 0.0
     estimated_latency_s: float = 0.0
-    capability_scores: List[ModelCapabilityScore] = Field(default_factory=list)
+    capability_scores: list[ModelCapabilityScore] = Field(default_factory=list)
 
 
 class RouterPreferences(BaseModel):
@@ -102,7 +101,7 @@ class RouterPreferences(BaseModel):
     frugality: float = 0.3
     independence: bool = False
     allow_vlms: bool = False
-    max_cost_usd: Optional[float] = None
+    max_cost_usd: float | None = None
 
 
 class RouterDecision(BaseModel):
@@ -123,10 +122,10 @@ class RouterDecision(BaseModel):
     """
 
     prompt: str
-    categories: Dict[str, float]
-    candidates: List[ModelCandidate]
-    selected_model_ids: List[str]
-    reasoning: List[str]
+    categories: dict[str, float]
+    candidates: list[ModelCandidate]
+    selected_model_ids: list[str]
+    reasoning: list[str]
 
 
 class ModelResponse(BaseModel):
@@ -158,11 +157,11 @@ class ModelResponse(BaseModel):
     provider: str
     content: str
     latency_s: float
-    usage: Dict[str, float] = Field(default_factory=dict)
+    usage: dict[str, float] = Field(default_factory=dict)
     energy_kwh: float = 0.0
     carbon_g: float = 0.0
     cost_usd: float = 0.0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class SynthesisResult(BaseModel):
@@ -172,7 +171,7 @@ class SynthesisResult(BaseModel):
     provider: str
     content: str
     judge_summary: str
-    winning_model_ids: List[str]
+    winning_model_ids: list[str]
 
 
 class TelemetryRecord(BaseModel):
@@ -183,11 +182,11 @@ class TelemetryRecord(BaseModel):
     conversation_id: str
     prompt: str
     router_decision: RouterDecision
-    model_responses: List[ModelResponse]
+    model_responses: list[ModelResponse]
     synthesis: SynthesisResult
-    reward_model_ids: List[str]
-    shadow_reference_model_ids: List[str]
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    reward_model_ids: list[str]
+    shadow_reference_model_ids: list[str]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ConversationMessage(BaseModel):
@@ -195,7 +194,7 @@ class ConversationMessage(BaseModel):
 
     role: Literal['user', 'assistant']
     content: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class Conversation(BaseModel):
@@ -204,7 +203,7 @@ class Conversation(BaseModel):
     conversation_id: str
     title: str
     created_at: datetime
-    messages: List[ConversationMessage] = Field(default_factory=list)
+    messages: list[ConversationMessage] = Field(default_factory=list)
 
 
 # Placeholder shown to the web UI in place of stored API keys. When the UI
@@ -242,8 +241,8 @@ class AppSettingsPayload(BaseModel):
     raw_power_weight: float = 0.7
     frugality_weight: float = 0.3
     independence_local_only: bool = False
-    selected_ollama_models: List[str] = Field(default_factory=list)
-    paid_openrouter_models: List[str] = Field(default_factory=list)
+    selected_ollama_models: list[str] = Field(default_factory=list)
+    paid_openrouter_models: list[str] = Field(default_factory=list)
     # Any paid LLM with an OpenAI-compatible chat-completions endpoint can
     # be added without a bootstrap edit. Pair these with
     # ``openai_compatible_base_url`` + ``openai_compatible_api_key``; each
@@ -251,9 +250,9 @@ class AppSettingsPayload(BaseModel):
     # provider. Useful for Mistral, Together, Groq, llama.cpp's
     # ``llama-server``, and any future provider that ships an
     # ``/v1/chat/completions`` interface.
-    paid_openai_compatible_models: List[str] = Field(default_factory=list)
+    paid_openai_compatible_models: list[str] = Field(default_factory=list)
 
-    def masked(self) -> 'AppSettingsPayload':
+    def masked(self) -> AppSettingsPayload:
         """Return a copy with non-empty secret fields replaced by ``SECRET_MASK``."""
         replacements = {
             field: SECRET_MASK
@@ -262,7 +261,7 @@ class AppSettingsPayload(BaseModel):
         }
         return self.model_copy(update=replacements)
 
-    def merge_unmasked(self, incoming: 'AppSettingsPayload') -> 'AppSettingsPayload':
+    def merge_unmasked(self, incoming: AppSettingsPayload) -> AppSettingsPayload:
         """Merge an incoming payload over self, preserving secrets where the
         incoming value still equals ``SECRET_MASK``.
 
@@ -281,7 +280,7 @@ class ChatRequest(BaseModel):
     """Roitelet-native chat request payload."""
 
     prompt: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     preferences: RouterPreferences = Field(default_factory=RouterPreferences)
     top_k: int = 3
     shadow_full_pool: bool = True
@@ -296,7 +295,7 @@ class ChatResponse(BaseModel):
 
     conversation_id: str
     router: RouterDecision
-    responses: List[ModelResponse]
+    responses: list[ModelResponse]
     synthesis: SynthesisResult
     telemetry_id: str
 
@@ -312,10 +311,10 @@ class OpenAIChatCompletionRequest(BaseModel):
     """Subset of the OpenAI Chat Completions API accepted by Roitelet."""
 
     model: str = 'roitelet-llm'
-    messages: List[OpenAIChatMessage]
+    messages: list[OpenAIChatMessage]
     stream: bool = False
-    temperature: Optional[float] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    temperature: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class ImageGenRequest(BaseModel):
@@ -328,7 +327,7 @@ class ImageGenRequest(BaseModel):
     """
 
     prompt: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     preferences: RouterPreferences = Field(default_factory=RouterPreferences)
     size: Literal['256x256', '512x512', '1024x1024', '1792x1024'] = '1024x1024'
     n: int = 1
@@ -340,8 +339,8 @@ class GeneratedImage(BaseModel):
     path: str  # filesystem path under data/images/, served via /data/images/<uuid>.png
     model_id: str
     provider: str
-    revised_prompt: Optional[str] = None  # some providers (e.g. DALL-E) rewrite the user prompt
-    error: Optional[str] = None
+    revised_prompt: str | None = None  # some providers (e.g. DALL-E) rewrite the user prompt
+    error: str | None = None
 
 
 class ImageGenResponse(BaseModel):
@@ -350,7 +349,7 @@ class ImageGenResponse(BaseModel):
     conversation_id: str
     model_id: str
     provider: str
-    images: List[GeneratedImage]
+    images: list[GeneratedImage]
     latency_s: float
     cost_usd: float = 0.0
 
@@ -368,6 +367,6 @@ class MCPRequest(BaseModel):
     """Minimal JSON-RPC payload used by the embedded MCP endpoint."""
 
     jsonrpc: str = '2.0'
-    id: Optional[str | int] = None
+    id: str | int | None = None
     method: str
-    params: Dict[str, Any] = Field(default_factory=dict)
+    params: dict[str, Any] = Field(default_factory=dict)

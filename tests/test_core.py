@@ -16,16 +16,15 @@ import http.server
 import json
 import threading
 import time
+from datetime import UTC
 from pathlib import Path
-from typing import List
 
 import pytest
 
-from core.config import Settings
 from core.capabilities import detect_capabilities, top_capabilities
+from core.config import Settings
 from core.judge import parse_winners
 from core.schemas import RouterPreferences
-
 
 # ---------------------------------------------------------------------------
 # Test fixtures: real HTTP server for Ollama /api/tags
@@ -64,7 +63,7 @@ def ollama_http_server():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
-    def set_models(names: List[str]) -> None:
+    def set_models(names: list[str]) -> None:
         state['models'] = list(names)
 
     try:
@@ -410,9 +409,9 @@ def _isolate_ollama_cache():
         ollama_cache._fetched_at = saved_fetched_at
 
 def _make_registry(
-    extra_ollama: List[str] = None,
-    extra_openrouter: List[str] = None,
-    extra_openai_compatible: List[str] = None,
+    extra_ollama: list[str] = None,
+    extra_openrouter: list[str] = None,
+    extra_openai_compatible: list[str] = None,
 ):
     """Build a registry backed by the real bootstrap file.
 
@@ -515,7 +514,7 @@ class TestModelRegistry:
         assert 0.0 <= score <= 1.5
 
     def test_elo_update_bounded(self):
-        from core.registry import ModelRegistry, KNOWN_CAPABILITIES
+        from core.registry import ModelRegistry
         registry = ModelRegistry()
         registry.update_elo(
             winners=["ollama/qwen2.5:14b-instruct"],
@@ -697,7 +696,7 @@ class TestStorageManager:
             m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
             import core.storage as st_mod
             mgr = st_mod.StorageManager()
-            c1 = mgr.create_conversation(title="First")
+            mgr.create_conversation(title="First")
             c2 = mgr.create_conversation(title="Second")
             listed = mgr.list_conversations()
             # Newest is created last, so c2 should be first in the list.
@@ -726,9 +725,8 @@ class TestStorageManager:
             assert mgr.get_cache('demo', 'k') == {'r': 1}
             # Backdate the on-disk record to 1 hour ago to simulate staleness.
             path = tmp_path / 'cache' / 'demo.jsonl'
-            from datetime import timedelta
-            from datetime import datetime, timezone
-            stale = datetime.now(timezone.utc) - timedelta(hours=1)
+            from datetime import datetime, timedelta
+            stale = datetime.now(UTC) - timedelta(hours=1)
             lines = path.read_text().splitlines()
             import json as _json
             record = _json.loads(lines[-1])
