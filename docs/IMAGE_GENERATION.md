@@ -146,5 +146,5 @@ periodic `find data/images/ -mtime +30 -delete` is the right shape.
   pattern used for paid text LLMs.
 - [`docs/ADDING_LOCAL_LLM.md`](ADDING_LOCAL_LLM.md) — bring your own
   GGUF (text), via Ollama or `llama-server`.
-- [`.private/IMAGEGEN.md`](../.private/IMAGEGEN.md) — full design
-  study, K=1-vs-K=N rationale, effort estimate.
+- [`MECHANISM.md`](../MECHANISM.md) — architectural walk-through covering
+  the image-gen pipeline alongside the text routing pipeline.

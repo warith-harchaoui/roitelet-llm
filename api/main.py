@@ -449,7 +449,7 @@ async def list_models() -> dict[str, Any]:
             {
                 'id': 'roitelet-llm',
                 'object': 'model',
-                'owned_by': 'deraison.ai',
+                'owned_by': 'roitelet-llm',
             }
         ],
     }

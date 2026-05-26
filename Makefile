@@ -15,7 +15,7 @@ help:
 	@echo "  install-multimodal Add whisper.cpp + NeMo + kreuzberg extras"
 	@echo "  test               Run the fast default unit-test suite"
 	@echo "  eval               Run answer-quality tests against local Ollama"
-	@echo "                     (writes a JSON summary under .private/eval_runs/)"
+	@echo "                     (writes a JSON summary to an ignored working directory)"
 	@echo "  lint               Run ruff in check mode"
 	@echo "  vendor             Re-download Tailwind + marked into web/vendor/"
 	@echo "  clean              Remove .pytest_cache and __pycache__ trees"
@@ -34,9 +34,10 @@ test:
 	python -m pytest -q
 
 # Answer-quality eval. Slow, needs Ollama running, network-dependent.
-# Output goes to .private/eval_runs/<UTC-timestamp>.json so we can diff
-# regressions across commits without polluting tracked state. Failure of
-# any case is non-fatal at the make level — the JSON is the artefact.
+# Output goes to an ignored working directory (see .gitignore) so we
+# can diff regressions across commits without polluting tracked state.
+# Failure of any case is non-fatal at the make level — the JSON is the
+# artefact.
 EVAL_DIR := .private/eval_runs
 EVAL_FILE := $(EVAL_DIR)/$(shell date -u +%Y%m%dT%H%M%SZ).json
 eval:

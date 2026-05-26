@@ -16,8 +16,8 @@ Roitelet's equivalent: for each prompt in ``dataset.json`` it captures
 * the per-call cost in USD for each path,
 * the wall-clock latency.
 
-The output is a JSON report under ``.private/eval_runs/`` that lets us
-look at the trade-off directly:
+The output is a JSON report (gitignored) that lets us look at the
+trade-off directly:
 
     average correctness per dollar  — fusion vs. best-single vs. random-single
 
@@ -63,8 +63,10 @@ from core.schemas import ChatRequest, RouterPreferences
 
 _DATASET = json.loads((Path(__file__).parent / 'dataset.json').read_text())
 
-# Persist the report under .private/ so it doesn't pollute tracked state
-# but is still inspectable + diffable across runs.
+# Persist the report under an ignored working directory so it doesn't
+# pollute tracked state but is still inspectable + diffable across runs.
+# The default location is honoured by ``.gitignore`` so reports stay
+# out of git without any extra setup.
 _REPORT_DIR = Path(__file__).resolve().parent.parent.parent / '.private' / 'eval_runs'
 
 
@@ -121,7 +123,7 @@ def _candidate_cost(response, spec) -> float:
 
 @pytest.mark.eval
 def test_emit_pareto_report(correctness_metric):
-    """One test, full run. Emits a JSON report under .private/eval_runs/.
+    """One test, full run. Emits a JSON report to an ignored directory.
 
     Asserts only that *something* was produced for each case. Per-prompt
     pass/fail is in the regular DeepEval suite; the Pareto report is a

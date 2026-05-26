@@ -51,11 +51,9 @@ logger = logging.getLogger(__name__)
 KNOWN_CAPABILITIES: set[str] = {
     'coding', 'math', 'reasoning', 'writing', 'analysis',
     'vision', 'multilingual', 'long_context',
-    # ``image_gen`` is reserved for the planned image-generation
-    # extension (see ``.private/IMAGEGEN.md``). Today no model in the
-    # bootstrap exposes a non-zero score on it; the keyword detector
-    # surfaces image-y prompts so future bootstrap entries can route
-    # them without touching this allowlist again.
+    # ``image_gen`` gates the image-generation pipeline. A bootstrap
+    # entry with ``image_gen > 0`` becomes routable by the K=1 image
+    # pipeline in ``core.image_pipeline``.
     'image_gen',
 }
 

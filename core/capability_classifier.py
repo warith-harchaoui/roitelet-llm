@@ -2,10 +2,8 @@
 
 The default :func:`core.capabilities.detect_capabilities` is a keyword
 scan — fast, deterministic, debuggable, and English-biased. This module
-is the alternative documented in
-``.private/COMPARISON_ROUTELLM.md`` §6 Phase C: a sklearn classifier
-sitting on top of locally-served sentence embeddings, fitted on a small
-labelled corpus.
+is the alternative: a sklearn classifier sitting on top of
+locally-served sentence embeddings, fitted on a small labelled corpus.
 
 Why
 ---

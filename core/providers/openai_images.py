@@ -14,8 +14,8 @@ Compatible providers tested by shape:
 - AUTOMATIC1111 ``sd-webui-openai-compatible-api`` extension.
 
 For Stability AI's native ``/v2beta/`` endpoint or ComfyUI's
-JSON-RPC graph, a dedicated client lives next to this one (not yet
-implemented — see ``.private/IMAGEGEN.md`` §3 for sequencing).
+JSON-RPC graph, a dedicated client would live next to this one (not
+yet implemented).
 
 Notes
 -----

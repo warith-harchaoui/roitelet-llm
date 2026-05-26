@@ -4,7 +4,8 @@ Where the default :class:`core.router.RoiteletRouter` blends curated
 priors with rolling Elo, this one blends curated priors with a **learned
 quality score** trained on the project's own telemetry.
 
-Design constraints (set by ``.private/COMPARISON_ROUTELLM.md`` §6 Phase B)
+Design constraints
+------------------
 
 1. **No new heavy dependencies.** TF-IDF + truncated SVD is everything
    the prototype needs, and both ship in scikit-learn (already a

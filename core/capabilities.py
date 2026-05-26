@@ -49,12 +49,10 @@ CAPABILITY_KEYWORDS: dict[str, list[str]] = {
         'breakdown', 'compare', 'metrics', 'benchmark', 'evaluate',
     ],
     'vision': ['image', 'photo', 'diagram', 'screenshot', 'chart', 'figure', 'picture', 'visual'],
-    # Reserved for the planned image-generation extension. Today no
-    # model in the bootstrap exposes a non-zero prior on this
-    # capability, so the router's existing scoring still ranks text
-    # candidates first — the keywords just make image-y prompts
-    # legible in telemetry so we can measure demand. See
-    # ``.private/IMAGEGEN.md``.
+    # Image-generation capability. The router uses this signal to
+    # surface image-gen-capable models when the prompt is image-y. The
+    # actual generation runs through ``core.image_pipeline`` against
+    # any model whose bootstrap prior sets ``image_gen > 0``.
     'image_gen': [
         'generate image', 'generate an image', 'draw', 'paint',
         'illustration', 'picture of', 'image of', 'render',

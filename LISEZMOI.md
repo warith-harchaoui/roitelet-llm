@@ -172,4 +172,11 @@ correspond à ce que vous voulez faire.
   image-gen.
 
 ---
-© 2025 deraison.ai | `warithmetics@deraison.ai`
+
+## Licence
+
+Distribué sous **licence BSD 3-Clause** — voir [LICENSE](LICENSE).
+
+## Auteur
+
+[Warith HARCHAOUI](https://www.linkedin.com/in/warith-harchaoui/)

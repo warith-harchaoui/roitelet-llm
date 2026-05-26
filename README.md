@@ -167,4 +167,11 @@ you're trying to do.
   routers, the two capability detectors, image-gen pipeline.
 
 ---
-© 2025 deraison.ai | `warithmetics@deraison.ai`
+
+## License
+
+Released under the **BSD 3-Clause License** — see [LICENSE](LICENSE).
+
+## Author
+
+[Warith HARCHAOUI](https://www.linkedin.com/in/warith-harchaoui/)
