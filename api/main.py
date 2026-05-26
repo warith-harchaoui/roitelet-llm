@@ -33,14 +33,17 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.config import get_settings
+from core.image_pipeline import NoImageProviderError, run_roitelet_image_chat
 from core.mcp import handle_mcp_request
 from core.pipeline import AllCandidatesFailedError, run_roitelet_chat
 from core.registry import warm_ollama_cache
 from core.schemas import (
     AppSettingsPayload,
     ChatRequest,
+    ImageGenRequest,
     MCPRequest,
     OpenAIChatCompletionRequest,
+    OpenAIImagesRequest,
     RouterPreferences,
 )
 from core.storage import StorageManager, get_storage
@@ -451,6 +454,51 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
     }
 
 
+@app.post('/api/images', dependencies=[Depends(require_api_token)])
+async def roitelet_images(payload: ImageGenRequest):
+    """Run one image-generation turn.
+
+    K=1 by design — image fusion isn't a well-defined operation, so the
+    pipeline picks the strongest single ``image_gen``-capable
+    candidate and returns its output. Bytes land under
+    ``data/images/<uuid>.png`` and the response references them by
+    path.
+    """
+    try:
+        result = await run_roitelet_image_chat(payload)
+    except NoImageProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return result.model_dump()
+
+
+@app.post('/v1/images/generations', dependencies=[Depends(require_api_token)])
+async def openai_images(payload: OpenAIImagesRequest):
+    """OpenAI-compatible images endpoint.
+
+    Subset of the OpenAI ``/v1/images/generations`` shape — clients
+    that already speak that protocol can hit Roitelet with their
+    existing code path.
+    """
+    try:
+        result = await run_roitelet_image_chat(
+            ImageGenRequest(
+                prompt=payload.prompt,
+                size=payload.size,
+                n=payload.n,
+            )
+        )
+    except NoImageProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        'created': int(time.time()),
+        'data': [
+            {'b64_json': None, 'url': None, 'roitelet_path': img.path, 'roitelet_error': img.error}
+            for img in result.images
+        ],
+        'roitelet_metadata': result.model_dump(),
+    }
+
+
 @app.post('/mcp')
 async def mcp_endpoint(payload: MCPRequest):
     """Handle MCP-like JSON-RPC requests over plain HTTP.
@@ -482,6 +530,13 @@ async def mcp_endpoint(payload: MCPRequest):
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / 'assets'
 if _ASSETS_DIR.is_dir():
     app.mount('/assets', StaticFiles(directory=_ASSETS_DIR), name='assets')
+
+# Serve generated images straight from disk. ``data/images/`` is
+# populated by the image pipeline; mounting it lets the UI display
+# them with a plain ``<img src="/data/images/<uuid>.png">``.
+_IMAGES_DIR = settings.data_dir / 'images'
+_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+app.mount('/data/images', StaticFiles(directory=_IMAGES_DIR), name='generated_images')
 
 _WEB_DIR = Path(__file__).resolve().parent.parent / 'web'
 if _WEB_DIR.is_dir():

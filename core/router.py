@@ -34,10 +34,25 @@ from __future__ import annotations
 from typing import Dict, List
 
 from . import storage as _storage_mod
-from .capabilities import detect_capabilities, top_capabilities
+from .capabilities import top_capabilities
 from .regimes import detect_regime
 from .registry import ModelRegistry
 from .schemas import ModelCandidate, ModelCapabilityScore, RouterDecision, RouterPreferences
+
+
+def _detect(prompt: str) -> dict[str, float]:
+    """Pick the active capability detector — keyword (default) or embedding.
+
+    Late import on the embedding classifier so the dependency on sklearn
+    + httpx for embedding stays inside the opt-in path. The default
+    behaviour (keyword detector) is unchanged.
+    """
+    import os
+    if os.environ.get('ROITELET_CAPABILITY_DETECTOR', 'keyword').lower().strip() == 'embedding':
+        from .capability_classifier import detect_capabilities_active
+        return detect_capabilities_active(prompt)
+    from .capabilities import detect_capabilities
+    return detect_capabilities(prompt)
 
 
 # How much weight to put on the global Elo term when the prompt is
@@ -75,7 +90,7 @@ class RoiteletRouter:
         app_settings = _storage_mod.get_storage().load_app_settings()
         live_registry = ModelRegistry(app_settings=app_settings)
 
-        categories = detect_capabilities(prompt)
+        categories = _detect(prompt)
         regime = detect_regime(prompt, preferences, categories)
 
         candidates: List[ModelCandidate] = []
