@@ -8,8 +8,8 @@ on). The output is **K=1** by design — image fusion is not a
 well-defined operation, so the strongest single candidate's output is
 the answer.
 
-This guide walks through wiring up an image generator. The full design
-study lives in `.private/IMAGEGEN.md`.
+This guide walks through wiring up an image generator. The architectural
+walk-through lives in [MECHANISM.md](../MECHANISM.md).
 
 ---
 
@@ -109,7 +109,7 @@ etc.) use `provider: "openai-compatible"` and add the model name to
 | OpenRouter image relay | OpenAI shape | First-class |
 | Together / Fireworks images | OpenAI shape | First-class (set `OPENAI_COMPATIBLE_BASE_URL`) |
 | AUTOMATIC1111 + `sd-webui-openai-compatible-api` | OpenAI shape | First-class |
-| Stability AI native (`/v2beta/`) | Stability custom | Not yet — needs a dedicated client. See `.private/IMAGEGEN.md` §3. |
+| Stability AI native (`/v2beta/`) | Stability custom | Not yet — needs a dedicated client. |
 | ComfyUI JSON-RPC graphs | ComfyUI custom | Not yet — same reason. |
 
 ---

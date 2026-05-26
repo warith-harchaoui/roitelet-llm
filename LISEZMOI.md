@@ -170,9 +170,6 @@ correspond à ce que vous voulez faire.
   avec diagrammes Mermaid. Maths de routage, régimes, boucle Elo,
   les deux routeurs, les deux détecteurs de capacité, pipeline
   image-gen.
-- **`.private/`** (gitignored) — études de design et audits.
-  Non publié, mais utile si vous avez cloné le repo et voulez voir
-  comment les décisions ont été prises.
 
 ---
 © 2025 deraison.ai | `warithmetics@deraison.ai`

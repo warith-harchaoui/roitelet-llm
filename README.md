@@ -165,9 +165,6 @@ you're trying to do.
 - **[MECHANISM.md](MECHANISM.md)** — full architectural walk-through
   with Mermaid diagrams. Routing math, regimes, Elo loop, the two
   routers, the two capability detectors, image-gen pipeline.
-- **`.private/`** (gitignored) — design studies and audits. Not
-  shipped, but useful if you've cloned the repo and want to see how
-  decisions were made.
 
 ---
 © 2025 deraison.ai | `warithmetics@deraison.ai`
