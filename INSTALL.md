@@ -61,7 +61,7 @@ pip install -r requirements.txt
 
 ### Optional extras
 
-`pyproject.toml` exposes three opt-in feature sets so the OSS quick-start
+`pyproject.toml` exposes four opt-in feature sets so the OSS quick-start
 stays light:
 
 | Extra | Pulls in | Use when |
@@ -69,6 +69,7 @@ stays light:
 | `dev` | pytest, pytest-asyncio, ruff | Running the test suite or linting |
 | `eval` | deepeval | Running the `@pytest.mark.eval` answer-quality suite |
 | `multimodal` | pywhispercpp, NeMo (~2 GB), soundfile, kreuzberg | Uploading audio / PDF attachments through the web UI |
+| `personal` | turbovec | Compressed ANN search for the personal-mode RAG index — fast at thousands of wiki chunks. The base install ships a numpy fallback. |
 
 Install one or several:
 
@@ -77,6 +78,7 @@ Install one or several:
 pip install -e '.[dev]'
 pip install -e '.[multimodal]'    # audio + PDF extractors; image captioning is server-side via Ollama VLM
 pip install -e '.[eval]'          # DeepEval-graded answer-quality suite
+pip install -e '.[personal]'      # turbovec ANN for the personal-mode RAG index
 ```
 
 ---
@@ -166,8 +168,15 @@ This launches a single uvicorn process on `http://localhost:8000` which serves b
 ### Manual
 
 ```bash
-python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+# Localhost-only (recommended for laptops / single-user dev).
+python -m uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+> ⚠️ Use `--host 0.0.0.0` **only** if you intend to expose the API on
+> your LAN, and set `ROITELET_API_TOKEN` first. The default install has
+> no auth — binding to 0.0.0.0 without a token makes every model on
+> the box callable from any device on the network. See the **Security
+> note** section in [README.md](README.md).
 
 ---
 

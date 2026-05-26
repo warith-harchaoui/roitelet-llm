@@ -32,7 +32,8 @@ For a given prompt, Roitelet:
    registered model (local + optional remote) on curated capability
    priors, rolling Elo, and a small set of regime-aware filters
    (cost budget, trivial-prompt, long-context, …), then takes the
-   top-K (default K=3).
+   top-K (default K=2 — the empirical sweet spot from
+   [docs/EVALUATION.md §4.3](docs/EVALUATION.md); override per turn).
 2. **Lets them fly in parallel.** The K candidates answer
    concurrently via `asyncio.gather`; one slow provider doesn't block
    the others.
@@ -85,7 +86,9 @@ A few caveats worth knowing up front:
   adjustments (cost budget, trivial-prompt, long-context, ambiguous,
   capability-dominant). Optional learned matrix-factorisation router
   behind `ROITELET_ROUTER=mf`.
-- **Parallel top-K fan-out.** Default K=3, configurable per turn.
+- **Parallel top-K fan-out.** Default K=2 (the §4.3 sweet spot),
+  configurable per turn via `ROITELET_DEFAULT_TOP_K` or the
+  `top_k` request field.
   Wall-clock time is bounded by the slowest selected candidate
   (see [latency + cost tradeoffs](#latency-and-cost-tradeoffs) below).
 - **Local synthesis pass.** Candidate answers are anonymized,

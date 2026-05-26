@@ -316,7 +316,7 @@ class LearnedMFRouter:
         self,
         prompt: str,
         preferences: RouterPreferences,
-        top_k: int = 3,
+        top_k: int = 2,
     ) -> RouterDecision:
         """Pick top-K with the learned-quality term blended into scoring."""
         model = _get_quality_model()

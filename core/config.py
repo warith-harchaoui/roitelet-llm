@@ -83,7 +83,12 @@ class Settings(BaseSettings):
 
     env_name: str = Field(default='development', alias='ROITELET_ENV')
     data_dir: Path = Field(default=Path('./data'), alias='ROITELET_DATA_DIR')
-    default_top_k: int = Field(default=3, alias='ROITELET_DEFAULT_TOP_K')
+    # K=2 is the empirically validated sweet spot on local OSS pools
+    # under the Qwen 3 8B judge — see docs/EVALUATION.md §4.3 (K-sweep
+    # rerun, 2026-05-26). K=3 doubled wall-clock for +1 pp correctness;
+    # K=1 left measurable quality on the table. Override via
+    # ``ROITELET_DEFAULT_TOP_K`` or per-request ``top_k``.
+    default_top_k: int = Field(default=2, alias='ROITELET_DEFAULT_TOP_K')
     candidate_pool_size: int = Field(default=8, alias='ROITELET_CANDIDATE_POOL_SIZE')
     app_host: str = Field(default='0.0.0.0', alias='ROITELET_APP_HOST')
     app_port: int = Field(default=8000, alias='ROITELET_APP_PORT')

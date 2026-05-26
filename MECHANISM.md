@@ -88,10 +88,10 @@ sequenceDiagram
     participant S as storage
     participant R as RoiteletRouter
     participant Reg as registry (singleton)
-    participant Prov as Providers (3×)
+    participant Prov as Providers (K×)
     participant J as judge.judge_and_synthesize
 
-    U->>P: ChatRequest(prompt, preferences, top_k=3)
+    U->>P: ChatRequest(prompt, preferences, top_k=2)
     P->>S: get_or_create_conversation
     P->>S: append user message
     P->>R: route(prompt, preferences, top_k)

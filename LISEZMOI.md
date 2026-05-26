@@ -34,7 +34,9 @@ Pour un prompt donné, Roitelet :
    modèle enregistré (local + distant optionnel) selon des a priori
    de capacité curés, l'Elo glissant et un petit jeu d'ajustements
    régime-conscients (budget coût, prompt trivial, long contexte,
-   …), puis garde les top-K (K=3 par défaut).
+   …), puis garde les top-K (K=2 par défaut — point d'équilibre
+   empirique du [docs/EVALUATION.md §4.3](docs/EVALUATION.md) ;
+   surchargé par tour).
 2. **Les laisse voler en parallèle.** Les K candidats répondent en
    concurrence via `asyncio.gather` ; un fournisseur lent ne bloque
    pas les autres.
@@ -89,7 +91,9 @@ Quelques mises en garde utiles à connaître d'emblée :
   ajustements régime-conscients (budget coût, prompt trivial, long
   contexte, ambigu, capacité dominante). Routeur appris optionnel par
   factorisation matricielle (`ROITELET_ROUTER=mf`).
-- **Fan-out parallèle top-K.** K=3 par défaut, configurable par tour.
+- **Fan-out parallèle top-K.** K=2 par défaut (le point d'équilibre
+  du §4.3), configurable par tour via `ROITELET_DEFAULT_TOP_K` ou
+  le champ `top_k` de la requête.
   Le temps mur est borné par le candidat le plus lent (voir la
   section [latence et coût](#latence-et-coût) ci-dessous).
 - **Passe de synthèse locale.** Les réponses candidates sont

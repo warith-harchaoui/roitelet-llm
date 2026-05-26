@@ -61,7 +61,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
         response = await run_roitelet_chat(
             ChatRequest(
                 prompt=arguments['prompt'],
-                top_k=int(arguments.get('top_k', 3)),
+                top_k=int(arguments.get('top_k', 2)),
                 preferences=RouterPreferences(
                     raw_power=float(arguments.get('raw_power', 0.7)),
                     frugality=float(arguments.get('frugality', 0.3)),

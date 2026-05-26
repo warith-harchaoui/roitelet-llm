@@ -170,13 +170,13 @@ class TestRunRoiteletChat:
         # --- ChatResponse shape ---
         assert response.conversation_id
         assert response.telemetry_id
-        assert len(response.responses) == 3, 'Default top_k=3 selects three models'
+        assert len(response.responses) == 2, 'Default top_k=2 selects two models'
         assert response.synthesis.content.startswith('Synthesized:')
 
         # --- Routing reflects the prompt ---
         dominant = max(response.router.categories.items(), key=lambda kv: kv[1])[0]
         assert dominant == 'coding', f'Coding prompt should dominate, got {dominant}'
-        assert len(response.router.selected_model_ids) == 3
+        assert len(response.router.selected_model_ids) == 2
 
         # --- Conversation persisted with user + assistant messages ---
         storage = isolated_state['storage']
@@ -191,7 +191,7 @@ class TestRunRoiteletChat:
         # the GUI can render the user-perceived latency.
         meta = convo.messages[1].metadata
         assert {'router', 'responses', 'synthesis', 'total_latency_s'} <= set(meta.keys())
-        assert len(meta['responses']) == 3
+        assert len(meta['responses']) == 2
         assert isinstance(meta['total_latency_s'], (int, float))
         assert meta['total_latency_s'] >= 0.0
 
@@ -202,9 +202,10 @@ class TestRunRoiteletChat:
         assert record.record_id == response.telemetry_id
         assert record.conversation_id == response.conversation_id
         assert record.prompt == prompt
-        assert len(record.model_responses) == 3
-        # Shadow pool is at least top_k.
-        assert len(record.shadow_reference_model_ids) >= 3
+        assert len(record.model_responses) == 2
+        # Shadow pool is at least max(top_k, 5) — pipeline records the
+        # wider pool so post-hoc analysis can replay the road not taken.
+        assert len(record.shadow_reference_model_ids) >= 2
 
     async def test_elo_winner_global_score_increases(
         self, isolated_state, monkeypatch
@@ -344,8 +345,12 @@ class TestRunRoiteletChat:
 
         from core.pipeline import run_roitelet_chat
 
+        # Pin top_k=3 so the test still exercises a 3-way fan-out
+        # (one failure + two survivors); the default is K=2 for
+        # production but a wider fan-out keeps the assertion below
+        # meaningful.
         response = await run_roitelet_chat(
-            ChatRequest(prompt=prompt, preferences=RouterPreferences())
+            ChatRequest(prompt=prompt, preferences=RouterPreferences(), top_k=3)
         )
 
         # All three model responses are recorded in the final payload
@@ -390,7 +395,7 @@ class TestRunRoiteletChat:
 
         with pytest.raises(AllCandidatesFailedError) as info:
             await run_roitelet_chat(
-                ChatRequest(prompt=prompt, preferences=RouterPreferences())
+                ChatRequest(prompt=prompt, preferences=RouterPreferences(), top_k=3)
             )
 
         assert judge_calls['count'] == 0

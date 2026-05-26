@@ -361,7 +361,8 @@ class ChatRequest(BaseModel):
     prompt: str
     conversation_id: str | None = None
     preferences: RouterPreferences = Field(default_factory=RouterPreferences)
-    top_k: int = 3
+    # K=2 — see docs/EVALUATION.md §4.3 for the ablation that picked it.
+    top_k: int = 2
     shadow_full_pool: bool = True
     # When true, ``/api/chat`` returns a ``text/event-stream`` NDJSON-style
     # progressive response so clients can render the synthesis as it lands

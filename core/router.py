@@ -59,7 +59,7 @@ _AMBIGUOUS_GLOBAL_BOOST = 0.25
 class RoiteletRouter:
     """Rank candidate models and choose the best flight formation."""
 
-    def route(self, prompt: str, preferences: RouterPreferences, top_k: int = 3) -> RouterDecision:
+    def route(self, prompt: str, preferences: RouterPreferences, top_k: int = 2) -> RouterDecision:
         """Route one prompt to a small set of models.
 
         Parameters

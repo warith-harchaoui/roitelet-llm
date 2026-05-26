@@ -369,7 +369,7 @@ def _modality_of(upload: UploadFile) -> str | None:
 async def roitelet_chat_multimodal(
     prompt: str = Form(''),
     conversation_id: str | None = Form(None),
-    top_k: int = Form(3),
+    top_k: int = Form(2),
     allow_vlms: bool = Form(False),
     files: list[UploadFile] = File(default_factory=list),
 ):
