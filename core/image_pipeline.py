@@ -24,7 +24,7 @@ Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from . import storage as _storage_mod
 from .capabilities import detect_capabilities, top_capabilities
@@ -32,7 +32,6 @@ from .providers.openai_images import get_image_client
 from .registry import ModelRegistry
 from .schemas import (
     ConversationMessage,
-    GeneratedImage,
     ImageGenRequest,
     ImageGenResponse,
     RouterPreferences,
@@ -155,7 +154,7 @@ async def run_roitelet_image_chat(request: ImageGenRequest) -> ImageGenResponse:
                 'model_id': spec.model_id,
                 'provider': spec.provider,
                 'rationale': rationale,
-                'created_at': datetime.now(timezone.utc).isoformat(),
+                'created_at': datetime.now(UTC).isoformat(),
                 'turn_id': str(uuid.uuid4()),
             },
         ),

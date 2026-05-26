@@ -74,8 +74,8 @@ class TestEmbeddingClassifier:
         _reset_classifier()
 
     def test_env_selector_default_is_keyword(self):
-        from core.capability_classifier import detect_capabilities_active
         from core.capabilities import detect_capabilities
+        from core.capability_classifier import detect_capabilities_active
 
         with pytest.MonkeyPatch().context() as m:
             m.delenv('ROITELET_CAPABILITY_DETECTOR', raising=False)
