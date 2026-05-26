@@ -318,6 +318,52 @@ class OpenAIChatCompletionRequest(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class ImageGenRequest(BaseModel):
+    """Roitelet-native image-generation request.
+
+    Mirrors the shape of :class:`ChatRequest` so the same router can be
+    consulted (with ``image_gen`` as the dominant capability). Fan-out
+    is K=1 by design — there's no useful fusion operation over images,
+    so the strongest single candidate's output *is* the answer.
+    """
+
+    prompt: str
+    conversation_id: Optional[str] = None
+    preferences: RouterPreferences = Field(default_factory=RouterPreferences)
+    size: Literal['256x256', '512x512', '1024x1024', '1792x1024'] = '1024x1024'
+    n: int = 1
+
+
+class GeneratedImage(BaseModel):
+    """One image produced by an image-generation provider."""
+
+    path: str  # filesystem path under data/images/, served via /data/images/<uuid>.png
+    model_id: str
+    provider: str
+    revised_prompt: Optional[str] = None  # some providers (e.g. DALL-E) rewrite the user prompt
+    error: Optional[str] = None
+
+
+class ImageGenResponse(BaseModel):
+    """Roitelet-native image-generation response."""
+
+    conversation_id: str
+    model_id: str
+    provider: str
+    images: List[GeneratedImage]
+    latency_s: float
+    cost_usd: float = 0.0
+
+
+class OpenAIImagesRequest(BaseModel):
+    """OpenAI-compatible ``/v1/images/generations`` payload subset."""
+
+    prompt: str
+    model: str = 'roitelet-image'
+    n: int = 1
+    size: Literal['256x256', '512x512', '1024x1024', '1792x1024'] = '1024x1024'
+
+
 class MCPRequest(BaseModel):
     """Minimal JSON-RPC payload used by the embedded MCP endpoint."""
 
