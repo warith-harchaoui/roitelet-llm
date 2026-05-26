@@ -37,12 +37,13 @@ De votre point de vue, vous recevez une réponse unique comme si vous interrogie
 - 🌍 **Intégrations Natives :** Support d'OpenRouter, des points de terminaison compatibles OpenAI, Anthropic, Gemini, Perplexity, etc.
 - 🖼️ **Pièces jointes multimodales :** Glissez images, PDF ou audio dans le chat — extraits localement (légende VLM Ollama, texte PDF par kreuzberg, transcription whisper.cpp + diarisation NeMo) avant la pipeline textuelle.
 - 🎨 **Génération d'image :** Routage des prompts visuels vers le meilleur modèle image-gen enregistré. K=1 — la fusion d'images n'est pas définie. Compatible OpenAI Images, relais OpenRouter, ou Stable Diffusion local via l'API OpenAI-compatible. Voir [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md).
+- 🗂️ **Mode personnel (RAG + wiki Karpathy) :** Déposez vos propres fichiers dans `data/personal/inbox/`, ingestion en un clic — audio transcrit, images légendées, PDF extraits. Les petits corpus s'injectent en long-context (style LLM-wiki Karpathy) ; les gros basculent vers la recherche par similarité. Inclut une projection PCA 2-D pour *voir* votre base de connaissances. Voir [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
 - 🔬 **Deux routeurs, une pipeline.** Heuristique par défaut + `ROITELET_ROUTER=mf` optionnel (factorisation matricielle apprise sur la télémétrie). Régimes hybrides (`trivial`, `budget_constrained`, `ambiguous`, …) qui ajustent les maths par tour.
 - 🌐 **Deux détecteurs de capacité.** Scan par mots-clés par défaut + `ROITELET_CAPABILITY_DETECTOR=embedding` optionnel — classifieur entraîné sur embeddings Ollama (`nomic-embed-text`). Repli transparent hors ligne.
 - 📊 **Monitoring Coût / Énergie :** Dashboard intégré pour suivre la consommation de tokens, évaluer l'énergie (kWh) et l'empreinte carbone (gCO₂e).
 - 🔄 **Apprentissage Continu :** Un système de mises à jour basées sur un score d'évaluation Elo roule en permanence pour prioriser les modèles les plus pertinents au fil du temps.
 - 🔌 **API Standard :** Expose une route `/v1/chat/completions` (OpenAI-compatible), un point de terminaison natif FastAPI, ainsi qu'un serveur JSON-RPC (MCP). Génération d'images via `/api/images` (et `/v1/images/generations` OpenAI-compatible).
-- 💬 **Commandes slash :** `/image`, `/speech`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — surcharges par tour analysées au début du prompt. Voir [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- 💬 **Commandes slash :** `/image`, `/speech`, `/personal`, `/local`, `/cheap <usd>`, `/k <n>`, `/help` — surcharges par tour analysées au début du prompt. Voir [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
 - 🔐 **Gate Bearer-Token optionnel :** Définissez `ROITELET_API_TOKEN` pour verrouiller chat, settings, conversations et télémétrie. Désactivé par défaut pour l'usage local mono-utilisateur.
 
 ---
@@ -162,8 +163,11 @@ correspond à ce que vous voulez faire.
   votre propre GGUF via Ollama ou `llama-server`.
 - **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — activer
   la génération d'images (DALL-E, Stable Diffusion local, …).
+- **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — déposer des
+  fichiers, ingestion, interroger votre base personnelle. Inclut la
+  projection 2-D des embeddings (style Karpathy).
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
-  `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
+  `/personal`, `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
 
 ### Niveau 3 — Contributeurs (vous voulez *modifier* Roitelet)
 - **[MECHANISM.md](MECHANISM.md)** — visite architecturale complète

@@ -5,10 +5,6 @@ Examples
 >>> from core.device import detect_best_accelerator
 >>> detect_best_accelerator() in {'mps', 'cuda', 'cpu'}
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

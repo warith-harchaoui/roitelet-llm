@@ -15,10 +15,6 @@ The interesting properties to lock down:
 These tests are intentionally hermetic: they build a tmp data dir,
 seed it with bootstrap priors + synthetic telemetry, point
 ``ROITELET_DATA_DIR`` at it, and clear the singleton caches.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

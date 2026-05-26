@@ -37,10 +37,6 @@ Running
 The runner is marker-gated like the rest of ``tests/eval/`` — it skips
 in the default ``pytest`` run. ``-s`` is helpful because the runner
 prints a one-line summary per prompt so a long run shows liveness.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

@@ -24,10 +24,6 @@ Examples
 >>> registry = ModelRegistry()
 >>> len(registry.list_models()) >= 1
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

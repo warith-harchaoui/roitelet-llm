@@ -9,10 +9,6 @@ stubbed. The tests lock down:
    keyword detector (byte-identical output).
 3. ``ROITELET_CAPABILITY_DETECTOR=embedding`` flips the selector;
    anything else uses keywords.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

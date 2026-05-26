@@ -5,10 +5,6 @@ Each branch maps a registered provider string (the prefix of a
 new paid provider with an OpenAI-compatible HTTP API takes three lines
 here plus a bootstrap entry — see :class:`OpenAICompatibleClient` for
 the contract every remote provider must satisfy.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

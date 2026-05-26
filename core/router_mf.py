@@ -48,10 +48,6 @@ We don't have a benchmark showing it beats the heuristic. The
 companion runner in :mod:`tests.eval.bench_pareto` is the seam for
 proving (or disproving) the win. Until that lands a measured
 improvement on the dataset, this router stays opt-in.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

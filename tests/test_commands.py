@@ -4,10 +4,6 @@ The parser is pure, so most of the surface is unit-tested directly.
 The API-layer integration is verified through ``test_api.py`` patterns
 — start a FastAPI test client, stub the pipeline, hit ``/api/chat``
 with a slash-command prefix, assert the right behaviour.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

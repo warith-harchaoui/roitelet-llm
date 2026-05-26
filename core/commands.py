@@ -35,10 +35,6 @@ Examples
 'image'
 >>> parse_command("/local /cheap 0.001 refactor").stripped_prompt
 'refactor'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

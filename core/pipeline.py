@@ -9,10 +9,6 @@ Examples
 >>> from core.pipeline import build_title
 >>> build_title('How do I optimize this Python function?')
 'How do I optimize this Python function?'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

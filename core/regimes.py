@@ -27,10 +27,6 @@ Examples
 >>> regime = detect_regime('hi', RouterPreferences(), {'reasoning': 1.0})
 >>> regime.name
 'trivial'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

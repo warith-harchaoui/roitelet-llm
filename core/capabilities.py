@@ -10,10 +10,6 @@ Examples
 >>> scores = detect_capabilities("Write Python code for a fast API")
 >>> scores['coding'] > 0
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

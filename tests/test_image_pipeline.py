@@ -11,10 +11,6 @@ so the surface we have to lock down is small:
 
 The OpenAI Images client is stubbed via monkeypatch so no network call
 is made and no Ollama dependency is required.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

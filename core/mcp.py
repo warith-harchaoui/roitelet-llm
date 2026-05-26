@@ -3,10 +3,6 @@
 The implementation is intentionally compact and HTTP-friendly. It exposes one
 main tool, `roitelet.chat`, allowing MCP-capable clients to call the router and
 receive structured metadata about the selected models and final fused answer.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

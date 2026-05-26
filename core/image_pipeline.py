@@ -15,10 +15,6 @@ is:
   models when the prompt is image-y,
 - a `K=1` selection that ignores ``ChatRequest.top_k``,
 - skipping the judge (no fusion).
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

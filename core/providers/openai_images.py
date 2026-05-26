@@ -16,10 +16,6 @@ Compatible providers tested by shape:
 For Stability AI's native ``/v2beta/`` endpoint or ComfyUI's
 JSON-RPC graph, a dedicated client would live next to this one (not
 yet implemented).
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

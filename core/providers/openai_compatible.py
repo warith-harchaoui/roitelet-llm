@@ -10,10 +10,6 @@ Examples
 >>> client = OpenAICompatibleClient(base_url='https://example.invalid', api_key='x', provider_name='demo')
 >>> client.provider_name
 'demo'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

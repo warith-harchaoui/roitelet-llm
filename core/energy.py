@@ -5,10 +5,6 @@ Examples
 >>> from core.energy import estimate_energy_and_carbon
 >>> estimate_energy_and_carbon(runtime_seconds=10.0, average_power_watts=50.0)[0] > 0
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

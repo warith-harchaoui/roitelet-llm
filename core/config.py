@@ -9,10 +9,6 @@ Examples
 >>> settings = get_settings()
 >>> settings.default_top_k >= 1
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

@@ -6,10 +6,6 @@ Examples
 >>> client = OllamaClient(base_url='http://localhost:11434')
 >>> client.base_url.startswith('http')
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

@@ -7,10 +7,6 @@ Examples
 >>> convo = storage.create_conversation(title="Demo")
 >>> convo.title
 'Demo'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

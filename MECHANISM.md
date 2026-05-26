@@ -362,6 +362,51 @@ gate can be flipped to "default learned with `=heuristic` opt-out."
 
 ---
 
+## 5.6 Personal mode
+
+A separate pipeline branch (`core/personal.py`) implements two
+related patterns over one corpus:
+
+```mermaid
+flowchart LR
+    INBOX[("data/personal/inbox/<br/>raw files (audio/image/pdf/md)")]
+    INBOX --> EX[Multimodal extractors:<br/>whisper · Ollama VLM · kreuzberg]
+    EX --> WIKI[("data/personal/wiki/<br/>.md files w/ provenance header")]
+    HAND[Hand-written .md] --> WIKI
+
+    Q[User prompt with /personal]
+    WIKI --> SIZE{Total chars ≤ 32k?}
+    SIZE -- yes --> CAT[Concatenate full wiki<br/>(Karpathy LLM-wiki)]
+    SIZE -- no --> RAG[Chunk · embed via nomic-embed-text<br/>top-K cosine retrieval]
+    CAT --> CTX[Personal-context block]
+    RAG --> CTX
+    CTX --> PIPE[Standard top-K fan-out + fusion]
+    Q --> PIPE
+    Q -. drives retrieval .-> RAG
+```
+
+The **wiki mode** (small corpora, ≤ 32 k chars ≈ 8 k tokens)
+concatenates every wiki file and injects the whole thing as long
+context. This is the Karpathy LLM-wiki pattern: the model sees your
+entire notebook on every turn.
+
+The **RAG mode** (large corpora) chunks each wiki file at
+1 200 chars with 200-char overlap, embeds via local
+`nomic-embed-text`, and retrieves the top-5 cosine-nearest chunks.
+On any embedding failure the personal-context injection silently
+skips — the turn runs as a normal chat (the assistant will say "I
+don't have that in your notes").
+
+**Embedding visualisation** (Karpathy-style scatter): the same
+embeddings drive a 2-D PCA projection rendered as an SVG in the web
+control room (settings sheet → *Visualize*) and as a standalone HTML
+file from `python -m cli personal viz --output personal-viz.html`.
+Each dot is one chunk; colour is the source file. The projection
+runs in memory on every request and skips when the embedding model
+is unreachable.
+
+---
+
 ## 6. On-disk layout
 
 Roitelet deliberately avoids a database. Everything is JSON, atomically
@@ -375,6 +420,8 @@ flowchart TD
     DD --> TEL["telemetry/<br/>&lt;uuid&gt;.json<br/>(one file per turn)"]
     DD --> RUN["runtime/<br/>elo_state.json — rolling Elo<br/>settings.json — UI-edited config<br/>app_settings.json"]
     DD --> CACHE["cache/<br/>&lt;provider&gt;.jsonl — request cache"]
+    DD --> IMG["images/<br/>&lt;uuid&gt;.png<br/>(generated images, served via /data/images)"]
+    DD --> PERSON["personal/<br/>├─ inbox/  raw user drops<br/>├─ wiki/   converted + hand-written .md<br/>└─ index.json  ingestion manifest"]
 ```
 
 Writes go through `StorageManager._write_json` which uses the
@@ -402,4 +449,6 @@ half-formed mix.
 | `core/capability_classifier.py` | ~260 | Embedding-based capability detector (opt-in) |
 | `core/image_pipeline.py` | ~160 | K=1 image-generation pipeline |
 | `core/providers/openai_images.py` | ~200 | OpenAI-compatible image-generation client |
+| `core/personal.py` | ~380 | Inbox → wiki ingestion + size-dependent context strategy + PCA viz |
+| `core/commands.py` | ~210 | Slash-command parser (`/image`, `/personal`, `/local`, …) |
 | `tests/test_pipeline.py` | ~470 | Worked example of running the pipeline end-to-end with stubs |

@@ -11,10 +11,6 @@ Examples
 >>> from core.judge import parse_winners
 >>> parse_winners('Some prose.\n===WINNERS===\nab3c, 9e2f', {'ab3c', '9e2f'})
 ['ab3c', '9e2f']
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

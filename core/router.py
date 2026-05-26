@@ -23,10 +23,6 @@ Examples
 >>> decision = router.route("Write a Python function", RouterPreferences())
 >>> len(decision.selected_model_ids) >= 1
 True
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

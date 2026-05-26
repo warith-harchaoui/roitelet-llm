@@ -5,10 +5,6 @@ Examples
 >>> from core.schemas import ChatMessage
 >>> ChatMessage(role="user", content="Bonjour")
 ChatMessage(role='user', content='Bonjour')
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

@@ -38,10 +38,6 @@ Examples
 'wiki'
 >>> inbox_dir().name
 'inbox'
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

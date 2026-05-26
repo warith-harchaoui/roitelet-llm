@@ -39,10 +39,6 @@ The eval dataset under ``tests/eval/dataset.json`` already carries
 ``category`` labels (``coding`` / ``math`` / ``reasoning`` / ...). We
 fit on those by default. A larger labelled corpus would slot in by
 overriding :data:`_TRAINING_PROMPTS_PATH`.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

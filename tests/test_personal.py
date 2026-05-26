@@ -4,10 +4,6 @@ The multimodal extractors (whisper / NeMo / kreuzberg / Ollama VLM)
 are heavyweight, so we stub them with monkeypatch and only exercise
 the parts of ``core.personal`` that don't require them: text files in
 the inbox + wiki rendering + size-dependent mode switching.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

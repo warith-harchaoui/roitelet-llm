@@ -8,10 +8,6 @@ Examples
 --------
 >>> # Run a single-shot question:
 >>> #   python -m cli ask "Explain quicksort"
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

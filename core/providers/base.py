@@ -1,8 +1,4 @@
 """Base protocol for model providers.
-
-Notes
------
-Author: vibe coding of Warith Harchaoui on top of Andrej Karpathy.
 """
 
 from __future__ import annotations

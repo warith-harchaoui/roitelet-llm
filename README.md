@@ -159,8 +159,11 @@ you're trying to do.
   your own GGUF via Ollama or `llama-server`.
 - **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — set up
   image generation (DALL-E, local Stable Diffusion, …).
+- **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — drop files,
+  ingest, query your personal knowledge base. Includes the
+  Karpathy-style 2-D embedding scatter.
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
-  `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
+  `/personal`, `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
 
 ### Tier 3 — Contributors (you want to *modify* Roitelet)
 - **[MECHANISM.md](MECHANISM.md)** — full architectural walk-through
