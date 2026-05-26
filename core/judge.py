@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import time
 
 from . import storage as _storage_mod
 from .providers.factory import get_provider_client
@@ -198,7 +199,11 @@ async def judge_and_synthesize(prompt: str, responses: list[ModelResponse]) -> S
     valid_handles = set(handle_to_model.keys())
 
     client = get_provider_client(provider_key)
+    # Time the judge call end-to-end so per-turn latency reporting can
+    # add this to the candidate fan-out's wall-clock max.
+    judge_started = time.perf_counter()
     judge_response = await client.generate(model_id=model_id, messages=messages)
+    judge_latency_s = time.perf_counter() - judge_started
     judge_text = judge_response.content or ''
 
     if not judge_text.strip():
@@ -214,6 +219,7 @@ async def judge_and_synthesize(prompt: str, responses: list[ModelResponse]) -> S
                 f'Returning the first candidate verbatim; no winners recorded.'
             ),
             winning_model_ids=[],
+            latency_s=judge_latency_s,
         )
 
     winner_handles = parse_winners(judge_text, valid_handles)
@@ -235,6 +241,7 @@ async def judge_and_synthesize(prompt: str, responses: list[ModelResponse]) -> S
             content=final_content,
             judge_summary=summary,
             winning_model_ids=[],
+            latency_s=judge_latency_s,
         )
 
     return SynthesisResult(
@@ -243,4 +250,5 @@ async def judge_and_synthesize(prompt: str, responses: list[ModelResponse]) -> S
         content=final_content,
         judge_summary=judge_text,
         winning_model_ids=winning_model_ids,
+        latency_s=judge_latency_s,
     )

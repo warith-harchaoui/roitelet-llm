@@ -14,6 +14,7 @@ Examples
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -148,6 +149,12 @@ async def run_roitelet_chat(
     ChatResponse
         Routed, executed, judged, and persisted turn result.
     """
+    # Wall-clock start: the canonical user-perceived latency reported
+    # on the returned ChatResponse. Includes router decision, candidate
+    # fan-out (bounded by the slowest candidate), judge synthesis, Elo
+    # update and telemetry persistence — every step the user waits on.
+    turn_started = time.perf_counter()
+
     storage = _storage_mod.get_storage()
     registry = _registry_mod.get_registry()
     if router is None:
@@ -211,10 +218,12 @@ async def run_roitelet_chat(
     storage.save_telemetry(telemetry)
 
 
+    total_latency_s = time.perf_counter() - turn_started
     return ChatResponse(
         conversation_id=conversation.conversation_id,
         router=decision,
         responses=list(selected_responses),
         synthesis=synthesis,
         telemetry_id=telemetry.record_id,
+        total_latency_s=total_latency_s,
     )

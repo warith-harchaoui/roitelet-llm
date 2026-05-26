@@ -161,13 +161,36 @@ class ModelResponse(BaseModel):
 
 
 class SynthesisResult(BaseModel):
-    """Final fused answer produced by the local synthesis model."""
+    """Final fused answer produced by the local synthesis model.
+
+    Attributes
+    ----------
+    model_id : str
+        Judge model identifier (e.g. ``ollama/qwen3:8b``).
+    provider : str
+        Judge provider key.
+    content : str
+        The fused, user-facing answer.
+    judge_summary : str
+        Raw judge transcript including the winners block (or its
+        absence). Useful for debugging fusion failures.
+    winning_model_ids : list of str
+        Candidate model ids the judge credited in the fused answer.
+        Empty when the judge failed to emit a valid winners block — in
+        that case the Elo loop receives no reward signal.
+    latency_s : float
+        Wall-clock seconds spent inside the judge call (network + judge
+        generation). Reported alongside candidate latencies so the
+        total user-perceived latency
+        ``max(candidate_latencies) + latency_s`` is reconstructable.
+    """
 
     model_id: str
     provider: str
     content: str
     judge_summary: str
     winning_model_ids: list[str]
+    latency_s: float = 0.0
 
 
 class TelemetryRecord(BaseModel):
@@ -289,13 +312,34 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """Roitelet-native chat response payload."""
+    """Roitelet-native chat response payload.
+
+    Attributes
+    ----------
+    conversation_id : str
+        UUID of the conversation the turn belongs to.
+    router : RouterDecision
+        Full routing decision (candidates, scores, regime, reasoning).
+    responses : list of ModelResponse
+        One entry per candidate the router selected, including failed
+        ones (the ``error`` field is populated on failure).
+    synthesis : SynthesisResult
+        Fused answer + judge metadata + judge latency.
+    telemetry_id : str
+        UUID of the persisted telemetry record on disk.
+    total_latency_s : float
+        Wall-clock seconds of the full pipeline turn: router decision +
+        candidate fan-out (bounded by the slowest candidate) + judge
+        synthesis + telemetry persist. This is the user-perceived
+        latency and the canonical number for ablations.
+    """
 
     conversation_id: str
     router: RouterDecision
     responses: list[ModelResponse]
     synthesis: SynthesisResult
     telemetry_id: str
+    total_latency_s: float = 0.0
 
 
 class OpenAIChatMessage(BaseModel):

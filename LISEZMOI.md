@@ -290,6 +290,11 @@ correspond à ce que vous voulez faire.
   projection 2-D des embeddings (style Karpathy).
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
   `/personal`, `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
+- **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
+  ce qui est stocké sur disque, ce qui part sur le réseau.
+- **[docs/EVALUATION.md](docs/EVALUATION.md)** — feuille de route
+  permanente des ablations : quelles configurations comparer,
+  quelles métriques, ce qui a été exécuté, ce qui reste planifié.
 
 ### Niveau 3 — Contributeurs (vous voulez *modifier* Roitelet)
 - **[MECHANISM.md](MECHANISM.md)** — visite architecturale complète
