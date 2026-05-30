@@ -454,39 +454,150 @@ async def roitelet_chat_multimodal(
 
 @app.get('/v1/models')
 async def list_models() -> dict[str, Any]:
-    """Expose the local OpenAI-compatible model inventory."""
-    return {
-        'object': 'list',
-        'data': [
-            {
-                'id': 'roitelet-llm',
+    """Expose the local OpenAI-compatible model inventory.
+
+    Returns the meta-model id ``roitelet-llm`` (the entry point that
+    routes + fuses), plus every concrete model id the registry knows
+    about (local Ollama + any configured remote candidate). OpenAI
+    clients that filter by id can pick a concrete one, or stick with
+    ``roitelet-llm`` and let the router decide.
+    """
+    data: list[dict[str, Any]] = [
+        {
+            'id': 'roitelet-llm',
+            'object': 'model',
+            'owned_by': 'roitelet-llm',
+            'description': 'Roitelet router — fans out across registered models, fuses with a local judge.',
+        }
+    ]
+    try:
+        from core.registry import get_registry
+        registry = get_registry()
+        # ``list_models()`` on the registry returns ModelSpec; we only
+        # need ids here, plus a short owner derived from the prefix.
+        for spec in registry.list_models():
+            data.append({
+                'id': spec.model_id,
                 'object': 'model',
-                'owned_by': 'roitelet-llm',
-            }
-        ],
-    }
+                'owned_by': spec.provider,
+            })
+    except Exception:
+        # Registry unavailable (bootstrap priors missing in a fresh
+        # data dir). Still return the meta-model so clients can ping.
+        pass
+    return {'object': 'list', 'data': data}
+
+
+def _flatten_openai_messages(messages: list) -> str:
+    """Compose a single Roitelet prompt from an OpenAI message thread.
+
+    The OpenAI shape is a list of ``{role, content}`` records — every
+    role matters: a ``system`` message frames the assistant, a series
+    of ``user`` / ``assistant`` turns is the conversation history, and
+    the last ``user`` message is the new question.
+
+    Roitelet's native pipeline takes one prompt string. We linearise
+    the thread with explicit role markers so the candidate models can
+    tell history apart from the question. The convention matches what
+    OpenAI's own tools do when downgrading a chat thread to a
+    completion-style prompt.
+    """
+    parts: list[str] = []
+    for message in messages:
+        role = (message.role or '').lower()
+        content = (message.content or '').strip()
+        if not content:
+            continue
+        if role == 'system':
+            parts.append(f'[System]\n{content}')
+        elif role == 'assistant':
+            parts.append(f'[Assistant]\n{content}')
+        elif role == 'tool':
+            parts.append(f'[Tool result]\n{content}')
+        else:  # user or any unknown role — default to user
+            parts.append(f'[User]\n{content}')
+    return '\n\n'.join(parts)
+
+
+def _preferences_from_openai_metadata(meta: dict | None) -> tuple[RouterPreferences, int]:
+    """Read Roitelet-specific knobs from the OpenAI request's ``metadata`` field.
+
+    OpenAI's API allows arbitrary ``metadata`` on chat requests. We
+    treat ``metadata.roitelet`` as the namespace for our extras so an
+    OpenAI client can opt into pseudonymization, local-only mode, or
+    a custom top-K without dropping into the native API:
+
+    .. code-block:: jsonc
+
+       "metadata": {
+         "roitelet": {
+           "independence": true,
+           "pseudonymize": true,
+           "top_k": 3,
+           "max_cost_usd": 0.005,
+           "ecofrugality": 0.4,
+           "raw_power": 0.6
+         }
+       }
+
+    Unknown keys are silently ignored so future fields don't break
+    older clients.
+    """
+    extras = (meta or {}).get('roitelet') or {}
+    pref_updates: dict = {}
+    for key in ('independence', 'pseudonymize', 'allow_vlms'):
+        if isinstance(extras.get(key), bool):
+            pref_updates[key] = extras[key]
+    for key in ('raw_power', 'ecofrugality', 'max_cost_usd'):
+        value = extras.get(key)
+        if isinstance(value, (int, float)):
+            pref_updates[key] = float(value)
+    prefs = RouterPreferences(**pref_updates) if pref_updates else RouterPreferences()
+    top_k = extras.get('top_k')
+    top_k_int = int(top_k) if isinstance(top_k, (int, float)) and 1 <= int(top_k) <= 8 else 2
+    return prefs, top_k_int
 
 
 @app.post('/v1/chat/completions', dependencies=[Depends(require_api_token)])
 async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint.
 
+    Drop-in target for any client that already speaks the OpenAI
+    Chat Completions wire format: the official ``openai`` SDK,
+    LiteLLM, Continue.dev, Cline, etc. Just point them at
+    ``http://localhost:8000/v1`` and set ``model: "roitelet-llm"``.
+
+    Roitelet-specific knobs (pseudonymization, local-only mode,
+    top-K, cost budget, …) ride on ``metadata.roitelet`` — see
+    :func:`_preferences_from_openai_metadata` for the full schema.
+    The native ``/api/chat`` endpoint stays the canonical surface
+    when you control both ends; this one exists so external tooling
+    can use Roitelet without learning its native shape.
+
     Parameters
     ----------
     payload : OpenAIChatCompletionRequest
-        Data strictly adhering to the standard OpenAI `/v1/chat/completions` spec.
+        Standard OpenAI ``/v1/chat/completions`` request. Roitelet
+        ignores ``temperature`` / ``top_p`` / ``stop`` etc. — those
+        are honoured by individual candidate models, not by the
+        router or judge.
 
     Returns
     -------
     Union[Dict[str, Any], StreamingResponse]
-        Standard static completions response dict, or a Server-Sent Events stream.
+        Standard chat-completion dict, or an SSE stream when
+        ``stream`` is True. ``roitelet_metadata`` carries the
+        router decision, candidate responses, synthesis and the
+        pseudonymization audit (when active) for clients that want
+        them.
     """
-    prompt = '\n'.join(message.content for message in payload.messages if message.role == 'user')
-    response = await run_roitelet_chat(
-        ChatRequest(
-            prompt=prompt,
-            preferences=RouterPreferences(),
-        )
+    prompt = _flatten_openai_messages(payload.messages)
+    if not prompt:
+        raise HTTPException(status_code=400, detail='No content in messages.')
+
+    preferences, top_k = _preferences_from_openai_metadata(payload.metadata)
+    response = await _run_chat_or_502(
+        ChatRequest(prompt=prompt, preferences=preferences, top_k=top_k)
     )
 
     if payload.stream:

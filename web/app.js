@@ -521,8 +521,8 @@ async function refreshPersonalSummary() {
   const s = await fetchPersonalStatus();
   const el = document.getElementById('personalSummary');
   if (!el) return;
-  if (!s) { el.textContent = 'Could not reach /api/personal.'; return; }
-  el.textContent = `${s.wiki} wiki file(s) · ${s.inbox} inbox file(s) · mode=${s.mode}`;
+  if (!s) { el.textContent = '—'; return; }
+  el.textContent = t('personal.subtitle.summary', {wiki: s.wiki, inbox: s.inbox, mode: s.mode});
 }
 
 // ─── Personal embedding viz (Karpathy-style) ─────────────────────────────────
@@ -565,10 +565,10 @@ function renderVizModal(points) {
       <div class="bg-white dark:bg-[#1c1c1e] w-[95vw] h-[90vh] flex flex-col overflow-hidden rounded-[10px] shadow-2xl">
         <div class="px-5 py-3 border-b border-gray-200 dark:border-white/[0.08] flex items-center justify-between">
           <div>
-            <div class="text-[14px] font-semibold">Personal wiki — embedding projection</div>
+            <div class="text-[14px] font-semibold">${escapeHtml(t('personal.viz.title'))}</div>
             <div class="text-[11px] text-gray-500 dark:text-gray-400" id="vizMeta"></div>
           </div>
-          <button id="vizClose" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" aria-label="Close">
+          <button id="vizClose" class="w-9 h-9 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10" aria-label="${escapeHtml(t('personal.viz.close'))}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -592,7 +592,7 @@ function renderVizModal(points) {
     return fileToColor.get(p);
   };
   const sources = Array.from(new Set(points.map(p => p.path)));
-  meta.textContent = `${points.length} chunks across ${sources.length} file(s) — hover a dot for the excerpt.`;
+  meta.textContent = t('personal.viz.meta', {points: points.length, sources: sources.length});
 
   const draw = () => {
     const rect = svg.getBoundingClientRect();
@@ -649,7 +649,7 @@ async function send() {
     if (imageMatch && !files.length) {
       // `/image <prompt>` → image-gen pipeline. K=1, no fusion.
       const cleanPrompt = prompt.slice(imageMatch[0].length).trim();
-      if (!cleanPrompt) throw new Error('`/image` needs a prompt after the command');
+      if (!cleanPrompt) throw new Error(t('toast.imageNeedsPrompt'));
       const payload = {
         prompt: cleanPrompt,
         conversation_id: state.conversationId,
@@ -660,12 +660,12 @@ async function send() {
       state.conversationId = imgRes.conversation_id;
       state.messages.push({
         role: 'assistant',
-        content: `Generated **${imgRes.images?.length || 0}** image(s) with \`${imgRes.model_id}\`.`,
+        content: t('toast.imageGenerated', {n: imgRes.images?.length || 0, model: imgRes.model_id}),
         metadata: {imagegen: imgRes},
       });
     } else if (speechMatch && !files.length) {
       // `/speech` without an attachment is meaningless — explain.
-      throw new Error('`/speech` requires an audio attachment. Click the paperclip first.');
+      throw new Error(t('toast.speechNeedsAudio'));
     } else if (files.length) {
       const fd = new FormData();
       // Strip the leading slash command before forwarding to the
@@ -809,30 +809,30 @@ function onFilesPicked(fileList) {
 //      they have curated bootstrap priors keyed on their provider
 //      prefix (``openai/...``, ``openrouter/...``); rebuilding them
 //      as custom engines would lose those priors.
+// Settings catalogue. `labelKey` is an i18n key fed to ``t()`` at render
+// time so the language toggle updates labels without reloading. The
+// ``section`` field drives the progressive-disclosure layout: 'basics'
+// renders inline, 'advanced' goes under a collapsed <details>.
 const SETTINGS_FIELDS = [
-  // Local stack
-  {key: 'ollama_base_url',                  label: 'Ollama base URL',                  type: 'text',     placeholder: 'http://localhost:11434'},
-  {key: 'local_synthesis_model',            label: 'Local synthesis model',            type: 'text',     placeholder: 'qwen3:8b'},
-  {key: 'local_vlm_model',                  label: 'Local VLM (image captioning)',     type: 'text',     placeholder: 'qwen2.5vl:7b'},
-  {key: 'selected_ollama_models',           label: 'Extra Ollama models (comma-sep)',  type: 'csv-list', placeholder: 'phi4-mini:3.8b, gemma3:4b'},
+  // Basics — what a non-tech user is most likely to touch.
+  {key: 'ollama_base_url',                  labelKey: 'field.ollama_base_url',         type: 'text',     placeholder: 'http://localhost:11434',  section: 'basics'},
+  {key: 'local_synthesis_model',            labelKey: 'field.local_synthesis_model',   type: 'text',     placeholder: 'qwen3:8b',                section: 'basics'},
+  {key: 'enable_pseudonymization',          labelKey: 'field.enable_pseudonymization', type: 'checkbox',                                          section: 'basics'},
+  {key: 'independence_local_only',          labelKey: 'field.independence_local_only', type: 'checkbox',                                          section: 'basics'},
+  {key: 'enable_vlms',                      labelKey: 'field.enable_vlms',             type: 'checkbox',                                          section: 'basics'},
 
-  // Pre-built integrations (have bootstrap priors keyed on the prefix)
-  {key: 'openrouter_api_key',               label: 'OpenRouter API key',               type: 'password'},
-  {key: 'paid_openrouter_models',           label: 'OpenRouter models (comma-sep)',    type: 'csv-list', placeholder: 'anthropic/claude-3.7-sonnet'},
-  {key: 'openai_api_key',                   label: 'OpenAI API key',                   type: 'password'},
-  {key: 'anthropic_api_key',                label: 'Anthropic API key',                type: 'password'},
-  {key: 'gemini_api_key',                   label: 'Gemini API key',                   type: 'password'},
-  {key: 'perplexity_api_key',               label: 'Perplexity API key',               type: 'password'},
-
-  // Routing knobs
-  {key: 'raw_power_weight',                 label: 'Raw power weight',                 type: 'number', step: '0.05', min: 0, max: 1},
-  {key: 'ecofrugality_weight',              label: 'Ecofrugality weight (cost + energy)', type: 'number', step: '0.05', min: 0, max: 1},
-  {key: 'independence_local_only',          label: 'Local models only',                type: 'checkbox'},
-  {key: 'enable_vlms',                      label: 'Allow vision-language',            type: 'checkbox'},
-  // Pseudonymization. The toggle persists; per-turn slash overrides
-  // (``/pseudo``, ``/nopseudo``) win over the persisted default.
-  {key: 'enable_pseudonymization',          label: 'Pseudonymize remote calls (PII swap)', type: 'checkbox'},
-  {key: 'pseudo_model_id',                  label: 'Pseudonymizer model (blank → judge model)', type: 'text', placeholder: 'qwen3:8b'},
+  // Advanced — power-user knobs. Hidden behind a <details> in openSettings.
+  {key: 'local_vlm_model',                  labelKey: 'field.local_vlm_model',         type: 'text',     placeholder: 'qwen2.5vl:7b',            section: 'advanced'},
+  {key: 'selected_ollama_models',           labelKey: 'field.selected_ollama_models',  type: 'csv-list', placeholder: 'phi4-mini:3.8b, gemma3:4b', section: 'advanced'},
+  {key: 'pseudo_model_id',                  labelKey: 'field.pseudo_model_id',         type: 'text',     placeholder: 'qwen3:8b',                section: 'advanced'},
+  {key: 'openrouter_api_key',               labelKey: 'field.openrouter_api_key',      type: 'password',                                          section: 'advanced'},
+  {key: 'paid_openrouter_models',           labelKey: 'field.paid_openrouter_models',  type: 'csv-list', placeholder: 'anthropic/claude-3.7-sonnet', section: 'advanced'},
+  {key: 'openai_api_key',                   labelKey: 'field.openai_api_key',          type: 'password',                                          section: 'advanced'},
+  {key: 'anthropic_api_key',                labelKey: 'field.anthropic_api_key',       type: 'password',                                          section: 'advanced'},
+  {key: 'gemini_api_key',                   labelKey: 'field.gemini_api_key',          type: 'password',                                          section: 'advanced'},
+  {key: 'perplexity_api_key',               labelKey: 'field.perplexity_api_key',      type: 'password',                                          section: 'advanced'},
+  {key: 'raw_power_weight',                 labelKey: 'field.raw_power_weight',        type: 'number',  step: '0.05', min: 0, max: 1,            section: 'advanced'},
+  {key: 'ecofrugality_weight',              labelKey: 'field.ecofrugality_weight',     type: 'number',  step: '0.05', min: 0, max: 1,            section: 'advanced'},
 ];
 
 // Live state of the engines panel between open/save. Each entry has
@@ -862,11 +862,8 @@ function renderEngineList() {
   const host = document.getElementById('engineList');
   if (!host) return;
   if (!engineState.length) {
-    host.innerHTML = `
-      <p class="text-[11px] text-gray-500 dark:text-gray-400 italic">
-        No engines yet. Click <strong>+ Add engine</strong>. Common presets:
-        ${ENGINE_PRESETS.map(p => `<code>${p.label}</code> (${p.base_url})`).join(', ')}.
-      </p>`;
+    const presets = ENGINE_PRESETS.map(p => `<code>${p.label}</code> (${p.base_url})`).join(', ');
+    host.innerHTML = `<p class="text-[11px] text-gray-500 dark:text-gray-400 italic">${t('engines.empty', {presets})}</p>`;
     return;
   }
   host.innerHTML = '';
@@ -875,17 +872,17 @@ function renderEngineList() {
     card.className = 'p-2 rounded-[10px] bg-white/60 dark:bg-white/[0.04] space-y-1.5 border border-gray-200 dark:border-white/[0.08]';
     card.innerHTML = `
       <div class="flex items-center justify-between gap-2">
-        <input type="text" data-i="${idx}" data-field="label" value="${escapeHtml(engine.label)}" placeholder="label (e.g. mistral)"
+        <input type="text" data-i="${idx}" data-field="label" value="${escapeHtml(engine.label)}" placeholder="${escapeHtml(t('engines.label.placeholder'))}"
           class="flex-1 px-2 py-1 text-[12px] font-medium border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
-        <button type="button" data-rm="${idx}" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10" title="Remove engine">
+        <button type="button" data-rm="${idx}" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10" title="${escapeHtml(t('engines.remove'))}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
         </button>
       </div>
-      <input type="text" data-i="${idx}" data-field="base_url" value="${escapeHtml(engine.base_url)}" placeholder="https://api.example.com/v1"
+      <input type="text" data-i="${idx}" data-field="base_url" value="${escapeHtml(engine.base_url)}" placeholder="${escapeHtml(t('engines.baseUrl.placeholder'))}"
         class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
-      <input type="password" data-i="${idx}" data-field="api_key" value="${escapeHtml(engine.api_key)}" placeholder="api key"
+      <input type="password" data-i="${idx}" data-field="api_key" value="${escapeHtml(engine.api_key)}" placeholder="${escapeHtml(t('engines.apiKey.placeholder'))}"
         class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
-      <input type="text" data-i="${idx}" data-field="models" value="${escapeHtml(csvFormat(engine.models))}" placeholder="models (comma-sep)"
+      <input type="text" data-i="${idx}" data-field="models" value="${escapeHtml(csvFormat(engine.models))}" placeholder="${escapeHtml(t('engines.models.placeholder'))}"
         class="w-full px-2 py-1 text-[12px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20">
     `;
     host.appendChild(card);
@@ -929,26 +926,21 @@ async function openSettings() {
   personalPanel.innerHTML = `
     <div class="flex items-center justify-between">
       <div>
-        <div class="text-[13px] font-semibold">Personal knowledge base</div>
-        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="personalSummary">Loading…</div>
+        <div class="text-[13px] font-semibold">${escapeHtml(t('personal.title'))}</div>
+        <div class="text-[11px] text-gray-500 dark:text-gray-400" id="personalSummary">${escapeHtml(t('personal.subtitle.loading'))}</div>
       </div>
       <div class="flex items-center gap-1.5">
         <button type="button" id="personalVizBtn"
           class="min-h-[32px] px-3 py-1 text-[12px] font-medium border border-gray-300 dark:border-white/[0.12] hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
-          Visualize
+          ${escapeHtml(t('personal.visualize'))}
         </button>
         <button type="button" id="personalIngestBtn"
           class="min-h-[32px] px-3 py-1 text-[12px] font-medium bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
-          Ingest inbox
+          ${escapeHtml(t('personal.ingest'))}
         </button>
       </div>
     </div>
-    <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-      Drop audio, image, PDF, or Markdown files into <code>data/personal/inbox/</code>. Click <em>Ingest inbox</em>
-      to convert them via whisper.cpp / Ollama VLM / kreuzberg. Hand-edited <code>.md</code> files in
-      <code>data/personal/wiki/</code> are picked up automatically. Use <code>/personal &lt;question&gt;</code>
-      in chat to query the knowledge base.
-    </p>
+    <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">${t('personal.help')}</p>
   `;
   form.appendChild(personalPanel);
   refreshPersonalSummary();
@@ -956,7 +948,7 @@ async function openSettings() {
   $('personalIngestBtn').addEventListener('click', async () => {
     const btn = $('personalIngestBtn');
     btn.disabled = true;
-    btn.textContent = 'Ingesting…';
+    btn.textContent = t('personal.ingesting');
     try {
       const res = await triggerPersonalIngest(false);
       const added = (res.results || []).filter(r => r.wiki_path && !r.error).length;
@@ -966,7 +958,7 @@ async function openSettings() {
       showToast(t('personal.ingest.failed', {message: err.message}));
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Ingest inbox';
+      btn.textContent = t('personal.ingest');
     }
   });
 
@@ -991,15 +983,12 @@ async function openSettings() {
   enginesPanel.innerHTML = `
     <div class="flex items-center justify-between">
       <div>
-        <div class="text-[13px] font-semibold">OpenAI-compatible engines</div>
-        <div class="text-[11px] text-gray-500 dark:text-gray-400">
-          Any provider with a <code>/v1/chat/completions</code> endpoint.
-          Mistral, Together, Groq, Fireworks, llama-server, …
-        </div>
+        <div class="text-[13px] font-semibold">${escapeHtml(t('engines.title'))}</div>
+        <div class="text-[11px] text-gray-500 dark:text-gray-400">${escapeHtml(t('engines.subtitle'))}</div>
       </div>
       <button type="button" id="addEngineBtn"
         class="min-h-[32px] px-3 py-1 text-[12px] font-medium bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">
-        + Add engine
+        ${escapeHtml(t('engines.addEngine'))}
       </button>
     </div>
     <div id="engineList" class="space-y-2"></div>
@@ -1011,33 +1000,60 @@ async function openSettings() {
     renderEngineList();
   });
 
-  for (const f of SETTINGS_FIELDS) {
-    const wrap = document.createElement('label');
-    wrap.className = 'flex flex-col gap-1.5';
-    const labelText = `<span class="text-[12px] font-medium text-gray-600 dark:text-gray-400">${f.label}</span>`;
-    const val = current[f.key];
-    let inputHtml;
-    if (f.type === 'checkbox') {
-      wrap.className = 'flex items-center justify-between py-1';
-      inputHtml = `<input type="checkbox" name="${f.key}" ${val ? 'checked' : ''} class="w-5 h-5 accent-sysblue">`;
-      wrap.innerHTML = `<span class="text-[13px] text-gray-700 dark:text-gray-300">${f.label}</span>${inputHtml}`;
-    } else if (f.type === 'csv-list') {
-      // Edit a List[str] as a single comma-separated input. Server-side
-      // schemas expect arrays; the form-submit step parses back.
-      const placeholder = f.placeholder || '';
-      inputHtml = `<input type="text" name="${f.key}" value="${escapeHtml(csvFormat(val))}" placeholder="${placeholder}"
-        class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all">`;
-      wrap.innerHTML = labelText + inputHtml;
-    } else {
-      const extra = f.step ? `step="${f.step}"` : '';
-      const range = f.min !== undefined ? `min="${f.min}" max="${f.max}"` : '';
-      inputHtml = `<input type="${f.type}" name="${f.key}" value="${escapeHtml(String(val ?? ''))}" placeholder="${f.placeholder || ''}" ${extra} ${range}
-        class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all">`;
-      wrap.innerHTML = labelText + inputHtml;
-    }
-    form.appendChild(wrap);
+  // Basics section — visible inline.
+  const basicsHeader = document.createElement('div');
+  basicsHeader.className = 'pt-1 text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold';
+  basicsHeader.textContent = t('settings.section.basics');
+  form.appendChild(basicsHeader);
+  for (const f of SETTINGS_FIELDS.filter(x => x.section === 'basics')) {
+    form.appendChild(renderSettingsField(f, current));
   }
+
+  // Advanced section — collapsed by default; a non-tech user can ignore.
+  const advWrap = document.createElement('details');
+  advWrap.className = 'pt-2 mt-2 border-t border-gray-100 dark:border-white/[0.06]';
+  const advSummary = document.createElement('summary');
+  advSummary.className = 'cursor-pointer select-none text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold flex items-center gap-1';
+  advSummary.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg><span>${escapeHtml(t('settings.section.advanced'))}</span>`;
+  advWrap.appendChild(advSummary);
+  const advHint = document.createElement('p');
+  advHint.className = 'text-[11px] text-gray-500 dark:text-gray-400 mt-1 mb-2 leading-relaxed';
+  advHint.textContent = t('settings.section.advanced.hint');
+  advWrap.appendChild(advHint);
+  for (const f of SETTINGS_FIELDS.filter(x => x.section === 'advanced')) {
+    advWrap.appendChild(renderSettingsField(f, current));
+  }
+  form.appendChild(advWrap);
   $('settingsSheet').classList.remove('hidden');
+}
+
+// Settings field renderer extracted so Basics and Advanced sections
+// share the same look. Returns a fully-built <label> element.
+function renderSettingsField(f, current) {
+  const labelText = t(f.labelKey);
+  const wrap = document.createElement('label');
+  wrap.className = 'flex flex-col gap-1.5';
+  const val = current[f.key];
+  let inputHtml;
+  if (f.type === 'checkbox') {
+    wrap.className = 'flex items-center justify-between py-1 gap-2';
+    inputHtml = `<input type="checkbox" name="${f.key}" ${val ? 'checked' : ''} class="w-5 h-5 accent-sysblue shrink-0">`;
+    wrap.innerHTML = `<span class="text-[13px] text-gray-700 dark:text-gray-300">${escapeHtml(labelText)}</span>${inputHtml}`;
+    return wrap;
+  }
+  const labelHtml = `<span class="text-[12px] font-medium text-gray-600 dark:text-gray-400">${escapeHtml(labelText)}</span>`;
+  if (f.type === 'csv-list') {
+    const placeholder = f.placeholder || '';
+    inputHtml = `<input type="text" name="${f.key}" value="${escapeHtml(csvFormat(val))}" placeholder="${escapeHtml(placeholder)}"
+      class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all">`;
+  } else {
+    const extra = f.step ? `step="${f.step}"` : '';
+    const range = f.min !== undefined ? `min="${f.min}" max="${f.max}"` : '';
+    inputHtml = `<input type="${f.type}" name="${f.key}" value="${escapeHtml(String(val ?? ''))}" placeholder="${escapeHtml(f.placeholder || '')}" ${extra} ${range}
+      class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all">`;
+  }
+  wrap.innerHTML = labelHtml + inputHtml;
+  return wrap;
 }
 
 function closeSettings() {
@@ -1109,6 +1125,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') { e.preventDefault(); newChat(); }
     if (e.key === 'Escape') closeSettings();
+  });
+
+  // Apply initial translations to every annotated element, then wire
+  // the EN/FR toggle. Re-rendering on toggle re-translates the messages
+  // list too, so a chat in flight switches language mid-conversation.
+  window.RoiteletI18n.applyStaticTranslations();
+  $('langToggle')?.addEventListener('click', () => {
+    const next = window.RoiteletI18n.currentLang() === 'fr' ? 'en' : 'fr';
+    window.RoiteletI18n.setLang(next);
+    // Re-render the dynamic surfaces too: status pill, messages list,
+    // and the conversation list (titles are server-provided so they
+    // don't move, but the "Untitled" fallback flips language).
+    renderStatusPill();
+    renderMessages();
+    renderConversationList();
   });
 
   wirePrefsPopover();
