@@ -24,9 +24,22 @@ from . import registry as _registry_mod
 from . import storage as _storage_mod
 from .judge import judge_and_synthesize
 from .providers.factory import get_provider_client
+from .pseudo import (
+    PseudonymizationError,
+    pseudonymize_prompt,
+    restore_text,
+)
 from .router import RoiteletRouter
 from .router_protocol import Router
-from .schemas import ChatMessage, ChatRequest, ChatResponse, ConversationMessage, ModelResponse, TelemetryRecord
+from .schemas import (
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    ConversationMessage,
+    ModelResponse,
+    PseudonymizationAudit,
+    TelemetryRecord,
+)
 
 
 class AllCandidatesFailedError(RuntimeError):
