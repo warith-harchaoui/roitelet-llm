@@ -513,6 +513,11 @@ class ChatResponse(BaseModel):
     synthesis: SynthesisResult
     telemetry_id: str
     total_latency_s: float = 0.0
+    # Populated only when ``preferences.pseudonymize`` was True on the
+    # request. Carries the rewritten prompt that actually went to the
+    # remote candidates and the substitution table, so any UI surface
+    # can render a verifiable audit of what left the box.
+    pseudonymization: PseudonymizationAudit | None = None
 
 
 class OpenAIChatMessage(BaseModel):

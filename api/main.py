@@ -267,6 +267,8 @@ def _apply_command_overrides(payload: ChatRequest) -> tuple[ChatRequest, str | N
         pref_updates['independence'] = parsed.independence_override
     if parsed.max_cost_usd_override is not None:
         pref_updates['max_cost_usd'] = parsed.max_cost_usd_override
+    if parsed.pseudonymize_override is not None:
+        pref_updates['pseudonymize'] = parsed.pseudonymize_override
     if pref_updates:
         overrides['preferences'] = payload.preferences.model_copy(update=pref_updates)
     if parsed.top_k_override is not None:

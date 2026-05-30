@@ -176,14 +176,34 @@ async def run_roitelet_chat(
     conversation = storage.get_conversation(request.conversation_id) if request.conversation_id else None
     if conversation is None:
         conversation = storage.create_conversation(title=build_title(request.prompt))
+
+    # Pseudonymization forward pass — happens *before* persisting the
+    # user turn so that, on failure, we surface an error without ever
+    # writing the prompt to disk pseudonymized. The conversation log
+    # always stores the **original** prompt the user typed; the
+    # pseudonymized variant lives only in the audit metadata so the
+    # user's chat history reads naturally to them.
+    audit: PseudonymizationAudit | None = None
+    pipeline_prompt = request.prompt
+    if request.preferences.pseudonymize:
+        try:
+            audit = await pseudonymize_prompt(request.prompt)
+        except PseudonymizationError:
+            # Fail closed: never silently send the unredacted prompt.
+            raise
+        pipeline_prompt = audit.pseudonymized_prompt
+
+    user_metadata: dict = {}
+    if audit is not None:
+        user_metadata['pseudonymization'] = audit.model_dump()
     storage.append_message(
         conversation.conversation_id,
-        ConversationMessage(role='user', content=request.prompt),
+        ConversationMessage(role='user', content=request.prompt, metadata=user_metadata),
     )
 
-    decision = router.route(request.prompt, request.preferences, top_k=request.top_k)
+    decision = router.route(pipeline_prompt, request.preferences, top_k=request.top_k)
     shadow_reference = [candidate.model_id for candidate in decision.candidates[:max(request.top_k, 5)]]
-    messages = [ChatMessage(role='user', content=request.prompt)]
+    messages = [ChatMessage(role='user', content=pipeline_prompt)]
 
     selected_responses = await asyncio.gather(
         *[_query_one(model_id, messages) for model_id in decision.selected_model_ids]
@@ -197,7 +217,19 @@ async def run_roitelet_chat(
         # would be dishonest. Surface a real error to the API layer.
         raise AllCandidatesFailedError(selected_responses)
 
-    synthesis = await judge_and_synthesize(request.prompt, valid_responses)
+    synthesis = await judge_and_synthesize(pipeline_prompt, valid_responses)
+
+    # Reverse pass — restore the original PII in the fused answer. The
+    # restore is best-effort: literal-pass first, optional LLM repair
+    # only when the literal pass leaves orphans. We never abort the
+    # turn on a restore failure; the user keeps the literal-restored
+    # answer with the audit telling them what happened.
+    if audit is not None:
+        restored, repair_used = await restore_text(synthesis.content, audit.mappings)
+        synthesis = synthesis.model_copy(update={'content': restored})
+        # Mutate the audit (still a fresh local object) so the
+        # downstream metadata payload carries the reverse timing too.
+        audit.repair_used = repair_used
 
     winners = synthesis.winning_model_ids
     losers = [response.model_id for response in selected_responses if response.model_id not in winners]
@@ -216,6 +248,8 @@ async def run_roitelet_chat(
         'synthesis': synthesis.model_dump(),
         'total_latency_s': total_latency_s,
     }
+    if audit is not None:
+        assistant_payload['pseudonymization'] = audit.model_dump()
     storage.append_message(
         conversation.conversation_id,
         ConversationMessage(role='assistant', content=synthesis.content, metadata=assistant_payload),
@@ -246,5 +280,6 @@ async def run_roitelet_chat(
         synthesis=synthesis,
         telemetry_id=telemetry.record_id,
         total_latency_s=total_latency_s,
+        pseudonymization=audit,
     )
 
