@@ -151,6 +151,18 @@ For installer deep-dives (Docker, model bundles, profile comparison):
 
 ```mermaid
 flowchart LR
+    %% ── Multimodal attachments — extracted locally before the pipeline runs ──
+    AUD[🎙️ Audio<br>whisper.cpp<br>+ NeMo diarisation]
+    IMG[🖼️ Image<br>Ollama VLM caption]
+    PDF[📄 PDF<br>kreuzberg<br>+ OCR fallback]
+    WEB[🌐 Website URL<br>Firecrawl scrape<br>± recursive crawl]
+    AUD --> ATTACH
+    IMG --> ATTACH
+    PDF --> ATTACH
+    WEB --> ATTACH
+    ATTACH[[Local text extraction<br>splice into prompt]] --> U
+
+    %% ── Main turn ──
     U[User prompt] --> P{Pseudonymize?<br>(opt-in)}
     P -- yes --> PFW[Local LLM<br>strips PII] --> R
     P -- no --> R
@@ -167,6 +179,15 @@ flowchart LR
     A[Fused answer] --> USER[User]
     J -.winners.-> ELO[(Per-capability<br>rolling Elo)]
     ELO -.next turn.-> R
+
+    %% Colour code: yellow = optional PII-aware steps, green = multimodal
+    %% extractors that run **locally** before anything leaves the box,
+    %% blue = the synthesis judge, purple = persistent learned state.
+    style AUD fill:#dcfce7,stroke:#16a34a
+    style IMG fill:#dcfce7,stroke:#16a34a
+    style PDF fill:#dcfce7,stroke:#16a34a
+    style WEB fill:#dcfce7,stroke:#16a34a
+    style ATTACH fill:#dcfce7,stroke:#16a34a
     style P fill:#fef3c7,stroke:#f59e0b
     style REV fill:#fef3c7,stroke:#f59e0b
     style PFW fill:#fef3c7,stroke:#f59e0b
@@ -244,7 +265,7 @@ don't lose anything by using the OpenAI shape.
 
 ---
 
-## What works today (feature list)
+## What works today 
 
 - **Hybrid routing** — capability priors + rolling Elo + regimes
   (cost budget, trivial-prompt, long-context, ambiguous,

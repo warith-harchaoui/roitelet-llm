@@ -154,6 +154,18 @@ comparaison de profils) : [INSTALLER.md](INSTALLER.md) (français),
 
 ```mermaid
 flowchart LR
+    %% ── Pièces jointes multimodales — extraites localement avant la pipeline ──
+    AUD[🎙️ Audio<br>whisper.cpp<br>+ diarisation NeMo]
+    IMG[🖼️ Image<br>légende par VLM Ollama]
+    PDF[📄 PDF<br>kreuzberg<br>+ OCR fallback]
+    WEB[🌐 URL de site<br>scrape Firecrawl<br>± crawl récursif]
+    AUD --> ATTACH
+    IMG --> ATTACH
+    PDF --> ATTACH
+    WEB --> ATTACH
+    ATTACH[[Extraction texte locale<br>insertion dans le prompt]] --> U
+
+    %% ── Tour principal ──
     U[Prompt utilisateur] --> P{Pseudonymiser ?<br>(opt-in)}
     P -- oui --> PFW[LLM local<br>retire les PII] --> R
     P -- non --> R
@@ -170,6 +182,16 @@ flowchart LR
     A[Réponse fusionnée] --> USER[Utilisateur]
     J -.gagnants.-> ELO[(Elo glissant<br>par capacité)]
     ELO -.tour suivant.-> R
+
+    %% Code couleur : jaune = étapes PII opt-in, vert = extracteurs
+    %% multimodaux qui tournent **en local** avant que quoi que ce soit
+    %% ne quitte la machine, bleu = juge de synthèse, violet = état
+    %% appris persisté.
+    style AUD fill:#dcfce7,stroke:#16a34a
+    style IMG fill:#dcfce7,stroke:#16a34a
+    style PDF fill:#dcfce7,stroke:#16a34a
+    style WEB fill:#dcfce7,stroke:#16a34a
+    style ATTACH fill:#dcfce7,stroke:#16a34a
     style P fill:#fef3c7,stroke:#f59e0b
     style REV fill:#fef3c7,stroke:#f59e0b
     style PFW fill:#fef3c7,stroke:#f59e0b
