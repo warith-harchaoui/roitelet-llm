@@ -55,6 +55,8 @@ HELP_LINES: tuple[tuple[str, str], ...] = (
     ('/local <prompt>', 'Force independence mode (local OSS models only) for this turn.'),
     ('/cheap <usd> <prompt>', 'Set max_cost_usd for this turn. Filters paid candidates above the budget.'),
     ('/k <n> <prompt>', 'Override the top-K fan-out (1–8) for this turn.'),
+    ('/pseudo <prompt>', 'Force pseudonymization ON for this turn (swap PII before remote calls, restore on return).'),
+    ('/nopseudo <prompt>', 'Force pseudonymization OFF for this turn even if the persisted setting has it on.'),
     ('/help', 'Show this catalogue.'),
 )
 
@@ -93,6 +95,10 @@ class ParsedCommand:
     max_cost_usd_override: float | None = None
     top_k_override: int | None = None
     personal_override: bool = False
+    # ``True`` after ``/pseudo``, ``False`` after ``/nopseudo``,
+    # ``None`` when neither fired so the caller's existing preference
+    # (or the persisted ``enable_pseudonymization`` default) stands.
+    pseudonymize_override: bool | None = None
     matched_commands: list[str] = field(default_factory=list)
 
 
@@ -165,6 +171,18 @@ def parse_command(prompt: str) -> ParsedCommand:
         if name == 'personal':
             result.personal_override = True
             result.matched_commands.append('/personal')
+            remaining = rest
+            continue
+
+        if name == 'pseudo':
+            result.pseudonymize_override = True
+            result.matched_commands.append('/pseudo')
+            remaining = rest
+            continue
+
+        if name == 'nopseudo':
+            result.pseudonymize_override = False
+            result.matched_commands.append('/nopseudo')
             remaining = rest
             continue
 

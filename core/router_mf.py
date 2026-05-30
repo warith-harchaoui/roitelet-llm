@@ -38,7 +38,7 @@ way and scored against each model centre via cosine similarity —
 yielding a learned quality estimate per candidate.
 
 That score is then **blended** with the heuristic's quality score
-(50/50 by default) before the standard frugality / cost / regime layer
+(50/50 by default) before the standard ecofrugality / cost / regime layer
 runs. Blending preserves the heuristic's transparency while letting
 the learned signal pull the ranking when it's confident.
 
@@ -379,7 +379,7 @@ class LearnedMFRouter:
                 + self._blend * learned_rescaled
             )
 
-            frugality_bonus = 1.0 / (
+            ecofrugality_bonus = 1.0 / (
                 1.0
                 + spec.pricing['output_per_1k'] * 100.0
                 + spec.energy_kwh * 1000.0
@@ -388,7 +388,7 @@ class LearnedMFRouter:
             local_bonus = 0.15 if spec.local else 0.0
             final_score = (
                 preferences.raw_power * quality_score
-                + preferences.frugality * frugality_bonus
+                + preferences.ecofrugality * ecofrugality_bonus
                 + (1.0 if preferences.independence else 0.0) * local_bonus
             )
             candidates.append(

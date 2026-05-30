@@ -191,13 +191,13 @@ class TestRouterPreferences:
     def test_defaults(self):
         prefs = RouterPreferences()
         assert prefs.raw_power == 0.7
-        assert prefs.frugality == 0.3
+        assert prefs.ecofrugality == 0.3
         assert prefs.independence is False
         assert prefs.allow_vlms is False
         assert prefs.max_cost_usd is None
 
     def test_custom(self):
-        prefs = RouterPreferences(raw_power=1.0, frugality=0.0, independence=True)
+        prefs = RouterPreferences(raw_power=1.0, ecofrugality=0.0, independence=True)
         assert prefs.independence is True
 
     def test_max_cost_round_trip(self):
@@ -206,7 +206,7 @@ class TestRouterPreferences:
         assert loaded.max_cost_usd == 0.005
 
     def test_serialise_round_trip(self):
-        prefs = RouterPreferences(raw_power=0.5, frugality=0.5, allow_vlms=True)
+        prefs = RouterPreferences(raw_power=0.5, ecofrugality=0.5, allow_vlms=True)
         dumped = prefs.model_dump()
         loaded = RouterPreferences.model_validate(dumped)
         assert loaded == prefs

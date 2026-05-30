@@ -246,7 +246,7 @@ pas une note de bas de page. Voir
 
 Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur `/`) offrant une vue transparente sur votre flotte d'IA :
 
-* **Configuration :** Sauvegardez vos clés API, calibrez le choix du modèle local, et modifiez vos paramètres de routage (Puissance Pure, Frugalité, Indépendance).
+* **Configuration :** Sauvegardez vos clés API, calibrez le choix du modèle local, et modifiez vos paramètres de routage (Puissance Pure, Écofrugalité, Indépendance).
 * **Usage & Dashboard :** Surveillez l'utilisation de vos modèles et vérifiez vos estimations de consommation énergétique.
 * **Découverte Automatique :** Branchez le système sur votre instance locale Ollama. Roitelet scannera en direct pour ingérer tout nouveau modèle (ex: `ollama pull llama3.3:70b-instruct`) et l'ajoutera automatiquement au processus de routage en 60 secondes.
 

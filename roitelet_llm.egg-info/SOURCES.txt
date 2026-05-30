@@ -4,6 +4,7 @@ pyproject.toml
 api/__init__.py
 api/main.py
 cli/__init__.py
+cli/__main__.py
 cli/main.py
 core/__init__.py
 core/capabilities.py
@@ -38,6 +39,7 @@ core/providers/openai_images.py
 roitelet_llm.egg-info/PKG-INFO
 roitelet_llm.egg-info/SOURCES.txt
 roitelet_llm.egg-info/dependency_links.txt
+roitelet_llm.egg-info/entry_points.txt
 roitelet_llm.egg-info/requires.txt
 roitelet_llm.egg-info/top_level.txt
 tests/test_api.py

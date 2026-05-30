@@ -451,7 +451,7 @@ async function send() {
       const stripped = speechMatch ? prompt.slice(speechMatch[0].length).trim() : prompt;
       fd.append('prompt', stripped);
       if (state.conversationId) fd.append('conversation_id', state.conversationId);
-      fd.append('top_k', '3');
+      fd.append('top_k', '2');
       fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
       for (const f of files) fd.append('files', f);
       res = await apiPostMultipart('/api/chat/multimodal', fd);
@@ -460,8 +460,8 @@ async function send() {
       const payload = {
         prompt,
         conversation_id: state.conversationId,
-        preferences: {raw_power: 0.7, frugality: 0.3, independence: false, allow_vlms: state.allowVlms},
-        top_k: 3,
+        preferences: {raw_power: 0.7, ecofrugality: 0.3, independence: false, allow_vlms: state.allowVlms},
+        top_k: 2,
       };
       res = await apiPost('/api/chat', payload);
       finalizeChatResponse(res);
@@ -574,7 +574,7 @@ const SETTINGS_FIELDS = [
 
   // Routing knobs
   {key: 'raw_power_weight',                 label: 'Raw power weight',                 type: 'number', step: '0.05', min: 0, max: 1},
-  {key: 'frugality_weight',                 label: 'Frugality weight',                 type: 'number', step: '0.05', min: 0, max: 1},
+  {key: 'ecofrugality_weight',              label: 'Ecofrugality weight (cost + energy)', type: 'number', step: '0.05', min: 0, max: 1},
   {key: 'independence_local_only',          label: 'Local models only',                type: 'checkbox'},
   {key: 'enable_vlms',                      label: 'Allow vision-language',            type: 'checkbox'},
 ];

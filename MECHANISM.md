@@ -139,7 +139,7 @@ A few details worth pinning down:
 
 `RoiteletRouter.route` is pure Python — no model calls. It scores every
 registered candidate on a blend of *quality* (Elo-adjusted priors weighted by
-detected capabilities) and *frugality* (cost + energy + latency), modulated by
+detected capabilities) and *ecofrugality* (cost + energy + latency), modulated by
 user preferences.
 
 ```mermaid
@@ -155,8 +155,8 @@ flowchart TD
     CW --> Q
     KEEP --> Q
     Q["quality = Σ weight_c · capability_score(model, c)"]
-    Q --> F["frugality_bonus =<br/>1 / (1 + output_price·100<br/>+ energy_kwh·1000 + latency_s)"]
-    F --> FIN["final_score =<br/>raw_power · quality<br/>+ frugality · frugality_bonus<br/>+ indep · local_bonus (0.15)"]
+    Q --> F["ecofrugality_bonus =<br/>1 / (1 + output_price·100<br/>+ energy_kwh·1000 + latency_s)"]
+    F --> FIN["final_score =<br/>raw_power · quality<br/>+ ecofrugality · ecofrugality_bonus<br/>+ indep · local_bonus (0.15)"]
     FIN --> SORT[Sort candidates by final_score]
     SORT --> TOPK[Take top-K → selected_model_ids]
 ```

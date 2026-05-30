@@ -31,6 +31,8 @@ Requires-Dist: nemo-toolkit[asr]>=2.1; extra == "multimodal"
 Requires-Dist: soundfile>=0.12; extra == "multimodal"
 Requires-Dist: audio-helper>=0.1; extra == "multimodal"
 Requires-Dist: kreuzberg>=3.0; extra == "multimodal"
+Provides-Extra: personal
+Requires-Dist: turbovec>=0.5; extra == "personal"
 Dynamic: license-file
 
 # Roitelet LLM
@@ -39,20 +41,6 @@ Dynamic: license-file
 > prompts across local and remote language models, compares their
 > answers, synthesizes a final response locally, and learns routing
 > preferences over time from its own judge signal.
-
-> ⚠️ **Security — read before exposing this on a network.**
-> Roitelet defaults to **`ROITELET_APP_HOST=0.0.0.0`** (binds every
-> interface) and **`ROITELET_API_TOKEN=""`** (no auth). Together,
-> those defaults are convenient for `http://localhost:8000` on a
-> single-user laptop, **and dangerous everywhere else.** If the
-> machine is on a LAN, behind a public IP, in a VM with a port
-> forward, or inside a corporate network, anyone who can reach the
-> port can read your conversations, your telemetry (which contains
-> the raw prompts + provider responses), and your API keys
-> indirectly via routed requests. **Set `ROITELET_API_TOKEN` to a
-> non-empty value before exposing the service**, and consider
-> binding to `127.0.0.1` if you don't need remote access. See
-> [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ![Roitelet](assets/roitelet.jpg)
 
@@ -81,7 +69,8 @@ For a given prompt, Roitelet:
    registered model (local + optional remote) on curated capability
    priors, rolling Elo, and a small set of regime-aware filters
    (cost budget, trivial-prompt, long-context, …), then takes the
-   top-K (default K=3).
+   top-K (default K=2 — the empirical sweet spot from
+   [docs/EVALUATION.md §4.3](docs/EVALUATION.md); override per turn).
 2. **Lets them fly in parallel.** The K candidates answer
    concurrently via `asyncio.gather`; one slow provider doesn't block
    the others.
@@ -134,7 +123,9 @@ A few caveats worth knowing up front:
   adjustments (cost budget, trivial-prompt, long-context, ambiguous,
   capability-dominant). Optional learned matrix-factorisation router
   behind `ROITELET_ROUTER=mf`.
-- **Parallel top-K fan-out.** Default K=3, configurable per turn.
+- **Parallel top-K fan-out.** Default K=2 (the §4.3 sweet spot),
+  configurable per turn via `ROITELET_DEFAULT_TOP_K` or the
+  `top_k` request field.
   Wall-clock time is bounded by the slowest selected candidate
   (see [latency + cost tradeoffs](#latency-and-cost-tradeoffs) below).
 - **Local synthesis pass.** Candidate answers are anonymized,
@@ -214,32 +205,69 @@ is curation, not invention.
 
 ### Does it actually help? (2026-05-26 K-sweep)
 
-A first multi-prompt, end-to-end run on a 25-prompt mixed-task
-dataset, local-only (3 small OSS candidates, `qwen3:8b` judge),
-graded with DeepEval `GEval(correctness, threshold=0.6)`:
+End-to-end run on the full 25-prompt mixed-task dataset,
+local-only (3 small OSS candidates — `llama3.2:3b`, `qwen2.5:3b`,
+`gemma3:4b`; `qwen3:8b` synthesis judge), graded by DeepEval
+`GEval(correctness, threshold=0.6)`. Real K=3 (every K=3 turn
+fanned out to all three candidates including Gemma; see the
+[`fan_out=2` investigation](docs/EVALUATION.md) for why the first
+attempt didn't):
 
 | K | mean correctness | pass (≥0.6) | total latency | judge share |
 |---|---|---|---|---|
-| 1 | 0.78 | 21 / 25 | 27.7 s | 90 % |
-| 2 | **0.90** | 23 / 25 | 37.8 s | 82 % |
-| 3 | (0.87 — see caveat) | 23 / 25 | 43.2 s | 82 % |
+| 1 | 0.87 | 23 / 25 | 32.1 s | 70 % |
+| 2 | **0.95** | **25 / 25** | 55.9 s | 74 % |
+| 3 | 0.96 | **25 / 25** | 112.1 s | 73 % |
 
-K=1 → K=2 is a real **+12 pp** mean-correctness uplift for **+10 s**
-of wall-clock on a laptop, broadly distributed across coding, math,
-reasoning, multilingual and long-context categories. The K=3 row is
-**not** a real K=3 test: one of the three "small local" models I
-picked for the pool, `gemma3:4b`, is registered as a VLM in the
-bootstrap, and the router's `allow_vlms=False` filter correctly
-excluded it on every non-vision prompt. That left the router with
-two text candidates regardless of `top_k`, so the K=3 row is
-identical to the K=2 row in candidate set. A real K=3 needs a
-third text-only candidate in the pool (re-run tracked in
-[docs/EVALUATION.md §5 #0](docs/EVALUATION.md)). Full numbers,
-per-category breakdown, persistent failures and reproducibility
-notes live in
-[docs/EVALUATION.md §4.2](docs/EVALUATION.md). The artefact
-(per-turn JSON, every fused answer, every grade) is preserved in the
-ignored `eval_runs/` directory.
+**Headline:** K=1 → K=2 is **+8 pp mean correctness** (0.87 → 0.95)
+and **+2 prompts cleared the threshold** (every K=2 case passes),
+for **+24 s** of wall-clock. K=2 → K=3 hits a quality ceiling on
+this dataset (+1 pp, still 25/25 passing) but **doubles wall-clock**
+to 112 s. **K=2 is the sweet spot** on this judge / pool; K=3 is
+not worth the cost. Multilingual is the category fusion helps most
+(0.33 → 0.93 → 1.00); long-context regresses at K=3 (judge
+over-curates and drops concrete examples).
+
+Full numbers, per-category breakdown, the two DeepEval grader
+errors at K=1 to be honest about, the caveats, and the K=2 →
+investigate-the-judge follow-up live in
+[docs/EVALUATION.md §4.3](docs/EVALUATION.md). Raw JSON reports
+(`ksweep-20260526T*Z.json`, two of them — the first attempt that
+exposed the VLM-filter interaction, and the rerun that fixed it)
+are preserved in the ignored `eval_runs/` directory.
+
+### And the judge matters — a lot (2026-05-26 judge-swap at K=2)
+
+Holding the dataset, router, candidates and K fixed at the §4.3
+sweet spot, only the synthesis judge is rotated across three sizes
+(`qwen3:8b`, `gemma3:4b`, `llama3.2:3b`). Same `qwen3:8b` grader for
+all three runs:
+
+| Judge | mean correctness | pass (≥0.6) | mean judge latency |
+|---|---|---|---|
+| **qwen3:8b** (8B)   | **0.93** | 24 / 25 | 38.9 s |
+| **gemma3:4b** (4B)  | 0.88     | 23 / 25 | 18.4 s |
+| **llama3.2:3b** (3B) | 0.72    | 19 / 25 | 20.3 s |
+
+**Headline:** the 8B judge beats the 3B judge by **+22 pp mean
+correctness** on the same prompts with the same candidates — most of
+the wall-clock you spend on Roitelet *is* the judge, and downsizing
+it gives back substantial quality, not just speed. The 4B judge is
+the Pareto sweet spot for latency-bound regimes (−5 pp for half the
+judge wall-clock). All 25/25 prompts show winner-set disagreement
+between judges; 8/25 show outright PASS/FAIL splits — strong
+evidence that **Roitelet learns judge-conditioned preferences, not
+universal ones**, exactly as the §1.1 mechanism section warned.
+
+Per-category, the smaller judges' weak spots are **writing** (0.40
+under llama3.2:3b vs 0.95–1.00 under the larger judges) and
+**multilingual** (0.47 under gemma3:4b vs 0.97 under qwen3:8b). The
+naive worry "judges prefer their own family" only shows up weakly
+here; the stronger pattern is **anti-terse-candidate bias on smaller
+judges** (gemma3:4b picks the terse `llama3.2:3b` candidate only
+1/25 times). Full per-prompt breakdown and caveats:
+[docs/EVALUATION.md §4.4](docs/EVALUATION.md). Raw JSON:
+`judgeswap-20260526T123130Z.json`.
 
 **But this is not free magic.** The judge is not an objective oracle:
 
@@ -318,6 +346,43 @@ Roitelet ships with a web-based control room (vanilla JS, served by the API at `
 * **Configuration:** Inject your API keys, tune local model selection, and set routing parameters (Raw Power vs. Frugality vs. Independence).
 * **Usage & Monitoring:** Monitor how models are routing and verify energy estimations and carbon intensity.
 * **Auto-Discovery:** Plug in your local Ollama instance, and Roitelet will automatically live-discover all models you have pulled (e.g. `ollama pull llama3.3:70b-instruct`) and inject them into the routing pool within 60 seconds.
+
+![Roitelet web UI — one user prompt, three local OSS candidates fanned out in parallel, the local synthesis judge fuses their answers and surfaces which ones it actually used.](assets/screenshot.png)
+
+---
+
+## Security note
+
+Roitelet ships with **safe-by-default** networking: `start.sh` (and
+the bare-metal `Settings.app_host` default) binds `127.0.0.1`, and
+`ROITELET_API_TOKEN` is empty. Localhost-only with no auth is fine
+for a single-user laptop.
+
+The Docker image is the one exception — the in-container uvicorn
+binds `0.0.0.0` because container port-forwarding requires it.
+Actual external exposure is then governed by your
+`docker-compose.yml` port map and your host firewall, not by the
+container's bind address.
+
+If you want to expose the API on a LAN, a public IP, a VM with a
+port forward, ngrok, Tailscale, or anywhere else reachable from
+another machine, do **two things first**:
+
+1. Set `ROITELET_API_TOKEN` to a non-empty value (gates
+   `/api/chat`, `/api/settings`, `/api/conversations`,
+   `/api/telemetry`, `/api/personal*`, `/api/images`, and
+   `/v1/chat/completions`).
+2. Either keep the service behind a reverse proxy that handles
+   auth, OR accept that the token is your only line of defence.
+   If you flip `ROITELET_APP_HOST=0.0.0.0` for a bare-metal
+   `./start.sh` run, the LAN can see you the instant uvicorn
+   binds.
+
+Without those, anyone who can reach the port can read your
+conversations, your raw telemetry (which contains prompts and
+provider responses), and trigger paid provider calls against your
+API keys. Full threat-model breakdown:
+[docs/PRIVACY.md](docs/PRIVACY.md).
 
 ---
 
@@ -436,7 +501,8 @@ you're trying to do.
   image generation (DALL-E, local Stable Diffusion, …).
 - **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — drop files,
   ingest, query your personal knowledge base. Includes the
-  Karpathy-style 2-D embedding scatter.
+  Karpathy-style 2-D embedding scatter and the turbovec-backed
+  persistent RAG index (`pip install -e .[personal]`).
 - **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
   `/personal`, `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,

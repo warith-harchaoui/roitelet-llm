@@ -25,3 +25,6 @@ nemo-toolkit[asr]>=2.1
 soundfile>=0.12
 audio-helper>=0.1
 kreuzberg>=3.0
+
+[personal]
+turbovec>=0.5

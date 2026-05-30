@@ -306,7 +306,7 @@ how those tradeoffs play out in your data.
 
 Roitelet ships with a web-based control room (vanilla JS, served by the API at `/`) that provides a transparent view into your LLM fleet:
 
-* **Configuration:** Inject your API keys, tune local model selection, and set routing parameters (Raw Power vs. Frugality vs. Independence).
+* **Configuration:** Inject your API keys, tune local model selection, and set routing parameters (Raw Power vs. Ecofrugality vs. Independence).
 * **Usage & Monitoring:** Monitor how models are routing and verify energy estimations and carbon intensity.
 * **Auto-Discovery:** Plug in your local Ollama instance, and Roitelet will automatically live-discover all models you have pulled (e.g. `ollama pull llama3.3:70b-instruct`) and inject them into the routing pool within 60 seconds.
 

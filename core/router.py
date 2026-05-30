@@ -4,7 +4,7 @@ This router scores each candidate model with a blend of:
 
 - benchmark-inspired capability priors,
 - capability-conditioned rolling Elo adjustments,
-- user preferences for raw power, frugality, and independence,
+- user preferences for raw power, ecofrugality, and independence,
 - prompt modality constraints such as VLM authorization,
 - regime-aware adjustments (cost-budget filtering, generalist bias on
   ambiguous prompts, top-K reduction on trivial prompts).
@@ -127,7 +127,7 @@ class RoiteletRouter:
                 global_elo = live_registry.elo_state.get(spec.model_id, {}).get('global', 0.0)
                 quality_score += _AMBIGUOUS_GLOBAL_BOOST * global_elo
 
-            frugality_bonus = 1.0 / (
+            ecofrugality_bonus = 1.0 / (
                 1.0
                 + spec.pricing['output_per_1k'] * 100.0
                 + spec.energy_kwh * 1000.0
@@ -136,7 +136,7 @@ class RoiteletRouter:
             local_bonus = 0.15 if spec.local else 0.0
             final_score = (
                 preferences.raw_power * quality_score
-                + preferences.frugality * frugality_bonus
+                + preferences.ecofrugality * ecofrugality_bonus
                 + (1.0 if preferences.independence else 0.0) * local_bonus
             )
             candidates.append(

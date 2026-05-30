@@ -1,7 +1,7 @@
 """Regime detection for hybrid routing math.
 
 Different (prompt, preferences) combinations call for different routing
-math. A single linear blend of quality + frugality is the right answer
+math. A single linear blend of quality + ecofrugality is the right answer
 *most* of the time, but it's the wrong answer in well-defined regimes:
 
 * a trivial 5-word factual question doesn't need top-3 fan-out + fusion
@@ -188,7 +188,7 @@ def detect_regime(
             )
 
     # 6. Default: nothing special detected. The standard linear blend
-    #    (quality + frugality + independence bonus) is the right math.
+    #    (quality + ecofrugality + independence bonus) is the right math.
     return Regime(
         name='default',
         rationale='no special regime detected — standard linear blend applies.',

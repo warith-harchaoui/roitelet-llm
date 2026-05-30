@@ -28,6 +28,22 @@ from .schemas import AppSettingsPayload, Conversation, ConversationMessage, Tele
 logger = logging.getLogger(__name__)
 
 
+def _utc_key(value: datetime) -> datetime:
+    """Return a tz-aware UTC datetime suitable as a ``sorted()`` key.
+
+    Older records on disk were written with ``datetime.utcnow()`` (naive)
+    before the migration to ``datetime.now(UTC)`` (tz-aware). Comparing a
+    naive against a tz-aware datetime raises ``TypeError``, which kept
+    surfacing as a 500 on ``/api/conversations`` and ``/api/telemetry`` the
+    moment one legacy file sat next to a new one. Treat naive timestamps
+    as UTC — that's what they were written as in practice — so sorting
+    composes both vintages without a one-shot data migration.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
 class StorageManager:
     """Small JSON-backed persistence layer.
 
@@ -143,7 +159,7 @@ class StorageManager:
             Conversation.model_validate(self._read_json(path, {}))
             for path in sorted(self.conversations_dir.glob('*.json'), reverse=True)
         ]
-        return sorted(conversations, key=lambda item: item.created_at, reverse=True)
+        return sorted(conversations, key=lambda item: _utc_key(item.created_at), reverse=True)
 
     def append_message(self, conversation_id: str, message: ConversationMessage) -> Conversation:
         """Append a message to a conversation and return the updated object."""
@@ -166,7 +182,7 @@ class StorageManager:
             TelemetryRecord.model_validate(self._read_json(path, {}))
             for path in sorted(self.telemetry_dir.glob('*.json'), reverse=True)
         ]
-        return sorted(records, key=lambda item: item.created_at, reverse=True)
+        return sorted(records, key=lambda item: _utc_key(item.created_at), reverse=True)
 
     def get_cache(self, provider_name: str, payload_str: str) -> dict | None:
         """Retrieve a cached provider response, honouring the configured TTL.

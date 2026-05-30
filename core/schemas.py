@@ -77,8 +77,11 @@ class RouterPreferences(BaseModel):
     ----------
     raw_power:
         Weight given to pure quality and benchmark strength.
-    frugality:
-        Weight given to low cost and low energy usage.
+    ecofrugality:
+        Weight given to the combination of low cost (USD) and low energy
+        consumption (kWh). Replaces the legacy ``frugality`` knob, which
+        only spoke of "cost + energy" abstractly; the new name keeps the
+        meaning honest — money **and** energy, jointly.
     independence:
         If true, remote models are filtered out and only local models are used.
     allow_vlms:
@@ -94,10 +97,20 @@ class RouterPreferences(BaseModel):
     """
 
     raw_power: float = 0.7
-    frugality: float = 0.3
+    ecofrugality: float = 0.3
     independence: bool = False
     allow_vlms: bool = False
     max_cost_usd: float | None = None
+    # When True, a local LLM rewrites the prompt before fan-out, swapping
+    # personally-identifying information (names, addresses, contact
+    # details, financial / national / medical IDs, IPs, …) for
+    # plausible same-locale substitutes; the inverse swap is applied
+    # to the fused answer before it returns to the user. See
+    # :mod:`core.pseudo` for the taxonomy, the structured-output prompt,
+    # and the fail-closed validation. Opt-in because (a) it adds one
+    # local model hop, and (b) it can degrade answer quality on
+    # named-entity-bound prompts ("What did Napoleon do in 1812?").
+    pseudonymize: bool = False
 
 
 class RouterDecision(BaseModel):
@@ -208,6 +221,100 @@ class TelemetryRecord(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+PIIKind = Literal[
+    # Personal identity
+    'person_name',          # any name (first, last, full, nickname); honorific kept as-is
+    'username',             # standalone handle / login when not in a URL
+    'date_of_birth',        # DOB or other identity-bound date
+    # Geography
+    'place_name',           # city, region, country, neighborhood, landmark
+    'street_address',       # full postal address (street + number, optional postcode)
+    'coordinates',          # GPS latitude/longitude pair
+    # Organisation
+    'organization',         # company, school, government body, NGO, hospital
+    'job_title',            # role tied to a specific named person ("CEO of Acme")
+    # Contact
+    'email',                # full RFC-shaped email address
+    'phone',                # phone number with optional country code
+    'url_handle',           # social-media URL whose path contains a personal handle
+    # Network
+    'ip_address',           # IPv4 or IPv6 literal
+    # Government / financial / medical / vehicular identifiers
+    'national_id',          # SSN, INSEE, NIR, NHS, passport, driver's license
+    'financial_id',         # credit card, IBAN, BIC, bank account number
+    'medical_id',           # MRN, patient number
+    'employee_id',          # workplace identifier
+    'account_id',           # customer / ticket number that personally identifies a user
+    'vehicle_id',           # license plate, VIN
+    # Catch-all
+    'other_identifier',     # any free-form identifier the model judges PII-class
+]
+
+
+class PIIMapping(BaseModel):
+    """One ``original → substitute`` PII swap performed during pseudonymization.
+
+    Attributes
+    ----------
+    original : str
+        The PII string as it appeared in the user's prompt. The forward
+        pass guarantees this substring exists in the input prompt.
+    substitute : str
+        The plausible same-origin replacement the local LLM produced.
+        The forward pass guarantees this substring exists in the
+        rewritten prompt sent to remote candidates.
+    kind : PIIKind
+        Coarse taxonomy slot — used by the UI's audit diff to colour
+        and group entries, and by the eval suite to measure
+        category-specific recall.
+    """
+
+    original: str
+    substitute: str
+    kind: PIIKind
+
+
+class PseudonymizationAudit(BaseModel):
+    """Audit record of one pseudonymization turn.
+
+    Attached to ``ConversationMessage.metadata['pseudonymization']`` on
+    the user turn so the GUI / CLI can render the diff, and to the
+    assistant turn's metadata so reverse-pass diagnostics survive a
+    page reload.
+
+    Attributes
+    ----------
+    mappings : list of PIIMapping
+        Every PII swap the forward pass produced. May be empty when the
+        prompt contained no PII the model could identify — that's a
+        legitimate outcome, not a failure.
+    pseudonymized_prompt : str
+        The exact text sent to the router and remote candidates. Stored
+        so a privacy-conscious user can verify, after the fact,
+        what *actually* left the box.
+    model_id : str
+        Which local model performed both the forward and reverse
+        passes. Recorded so version-to-version quality drift is
+        auditable.
+    forward_latency_s : float
+        Wall-clock cost of the forward (pseudonymize) pass.
+    reverse_latency_s : float
+        Wall-clock cost of the reverse (restore) pass.
+    repair_used : bool
+        ``True`` when the literal-pass reverse left orphan substitutes
+        in the synthesis and the LLM repair pass was invoked. Useful
+        for telemetry: a high repair rate signals the synthesis judge
+        is paraphrasing substitutes more than expected.
+    """
+
+    mappings: list[PIIMapping] = Field(default_factory=list)
+    pseudonymized_prompt: str
+    model_id: str
+    forward_latency_s: float = 0.0
+    reverse_latency_s: float = 0.0
+    repair_used: bool = False
+
+
 class ConversationMessage(BaseModel):
     """A stored conversation message for the simple prompt interface."""
 
@@ -285,8 +392,20 @@ class AppSettingsPayload(BaseModel):
     local_vlm_model: str = 'qwen2.5vl:7b'
     enable_vlms: bool = False
     raw_power_weight: float = 0.7
-    frugality_weight: float = 0.3
+    ecofrugality_weight: float = 0.3
     independence_local_only: bool = False
+    # Default state of the per-turn ``preferences.pseudonymize`` flag.
+    # The GUI's checkbox mirrors this value on open; the CLI's
+    # ``--pseudonymize`` / ``--no-pseudonymize`` overrides win for one
+    # turn but don't write back. See PSEUDO.md for the user-facing
+    # docs and core/pseudo.py for the implementation.
+    enable_pseudonymization: bool = False
+    # Local Ollama model used for both the forward (pseudonymize) and
+    # reverse (restore) passes. Empty string falls back to
+    # ``local_synthesis_model`` — the same judge model — so the local
+    # footprint stays at one model unless the user explicitly wants a
+    # cheaper / smaller redactor.
+    pseudo_model_id: str = ''
     selected_ollama_models: list[str] = Field(default_factory=list)
     paid_openrouter_models: list[str] = Field(default_factory=list)
     # Universal extension: any number of OpenAI-compatible engines,

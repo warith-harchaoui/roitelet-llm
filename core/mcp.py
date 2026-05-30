@@ -44,7 +44,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                             'prompt': {'type': 'string'},
                             'top_k': {'type': 'integer', 'default': 3},
                             'raw_power': {'type': 'number', 'default': 0.7},
-                            'frugality': {'type': 'number', 'default': 0.3},
+                            'ecofrugality': {'type': 'number', 'default': 0.3},
                             'independence': {'type': 'boolean', 'default': False},
                             'allow_vlms': {'type': 'boolean', 'default': False},
                         },
@@ -64,7 +64,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                 top_k=int(arguments.get('top_k', 2)),
                 preferences=RouterPreferences(
                     raw_power=float(arguments.get('raw_power', 0.7)),
-                    frugality=float(arguments.get('frugality', 0.3)),
+                    ecofrugality=float(arguments.get('ecofrugality', 0.3)),
                     independence=bool(arguments.get('independence', False)),
                     allow_vlms=bool(arguments.get('allow_vlms', False)),
                 ),

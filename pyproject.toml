@@ -73,6 +73,12 @@ personal = [
     "turbovec>=0.5",
 ]
 
+[project.scripts]
+# Console-script shim so `pip install -e .` exposes a `roitelet` binary that
+# matches the docs and the test harness (`argv = ['roitelet', ...]`). Without
+# this, only the fallback `python -m cli` form works.
+roitelet = "cli.main:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["core*", "api*", "cli*"]
