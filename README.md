@@ -1,8 +1,29 @@
 # Roitelet LLM
 
-> **A local-first LLM routing and fusion workbench.** Several models
-> answer the same prompt; a local model fuses the best parts of each
-> answer; the user sees one response.
+> **A local-first LLM router with online preference learning,
+> optional PII pseudonymization, and a local fused-answer judge.**
+> Every routing decision, candidate response, judge transcript,
+> energy estimate, and rolling-Elo update is inspectable as plain
+> JSON.
+
+A few primitives Roitelet packages together that I don't see
+combined elsewhere:
+
+- **Per-capability rolling Elo updated from the judge's own
+  signal** — a calibrated, online preference loop, not a fixed
+  scorecard or an offline-trained classifier.
+- **Ecofrugality as a first-class router input** — cost (USD) +
+  energy (kWh) + latency in one bonus term.
+- **LLM-based pseudonymization with a 19-category taxonomy and a
+  literal+LLM repair reverse pass**, fail-closed if any invariant
+  breaks. Not a regex/NER proxy.
+- **Regime-aware hybrid routing** — the linear blend composes with
+  per-prompt regimes (trivial, budget-constrained, long-context,
+  ambiguous, capability-dominant).
+
+What it isn't: a new model architecture, a calibrated
+`P(strong wins)` cost-router (that's RouteLLM), a hosted gateway
+(LiteLLM), or a peer-reviewed result.
 
 ![Roitelet](assets/roitelet.jpg)
 
@@ -292,9 +313,9 @@ Three tiers — pick by intent:
   roadmap with results.
 
 ### Extend it
-- [docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md) — bring your
+- [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) — bring your
   own GGUF.
-- [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md) — wire any
+- [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) — wire any
   OpenAI-compatible paid provider.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — internals
   deep-dive (Mermaid diagrams, routing math, Elo loop, regimes,

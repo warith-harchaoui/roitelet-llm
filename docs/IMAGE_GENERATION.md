@@ -144,9 +144,9 @@ periodic `find data/images/ -mtime +30 -delete` is the right shape.
 
 ## See also
 
-- [`docs/ADDING_PAID_LLM.md`](ADDING_PAID_LLM.md) — same OpenAI-compat
+- [`docs/ADDING_MODELS.md`](ADDING_MODELS.md) — same OpenAI-compat
   pattern used for paid text LLMs.
-- [`docs/ADDING_LOCAL_LLM.md`](ADDING_LOCAL_LLM.md) — bring your own
+- [`docs/ADDING_MODELS.md`](ADDING_MODELS.md) — bring your own
   GGUF (text), via Ollama or `llama-server`.
 - [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — architectural walk-through covering
   the image-gen pipeline alongside the text routing pipeline.

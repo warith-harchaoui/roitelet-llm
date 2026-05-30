@@ -265,7 +265,7 @@ roitelet-llm/
 ├── api/                # FastAPI (natif + OpenAI-compatible + MCP + multimodal)
 ├── web/                # Client web statique servi sur `/` par l'API
 ├── cli/                # Interface en ligne de commande (REPL)
-├── docs/               # Guides ciblés (ex. ADDING_PAID_LLM.md)
+├── docs/               # Guides ciblés (ex. ADDING_MODELS.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # scores a priori inspirés des benchmarks
 ├── tests/              # Suite pytest — core, api, pipeline, cli, scripts, eval

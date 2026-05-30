@@ -337,12 +337,12 @@ servis par `llama-server` (`llama.cpp`).
 - **N'importe quel LLM payant (ChatGPT, Mistral, Together, Groq, …)** —
   configurez le endpoint + la clé, listez les noms de modèles. Voilà.
   Walkthrough complet dans
-  [docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md).
+  [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
 - **N'importe quel fichier GGUF local** — soit via un `Modelfile`
   Ollama (recommandé, aucune édition des réglages), soit en le servant
   avec `llama-server` et en le traitant comme un endpoint
   OpenAI-compatible. Détaillé dans
-  [docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md).
+  [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
 - **OpenAI direct** — cas particulier du premier : définissez
   `OPENAI_API_KEY` puis redémarrez ; `openai/gpt-4.1`, `openai/gpt-4o`
   et `openai/gpt-4o-mini` figurent déjà dans
@@ -365,7 +365,7 @@ roitelet-llm/
 ├── api/                # FastAPI (natif + OpenAI-compatible + MCP + multimodal)
 ├── web/                # Interface web (JS vanilla, servie sur `/` par l'API)
 ├── cli/                # Interface en ligne de commande (REPL terminal)
-├── docs/               # Guides ciblés (ex. ADDING_PAID_LLM.md)
+├── docs/               # Guides ciblés (ex. ADDING_MODELS.md)
 ├── data/
 │   └── bootstrap/model_priors.json   # Base d'informations avec scores Elo
 ├── scripts/            # Crawler, vendor JS, pull_defaults.sh
@@ -396,9 +396,9 @@ correspond à ce que vous voulez faire.
   guide d'installation complet (conda, venv, Docker).
 
 ### Niveau 2 — Tech (vous voulez *utiliser* les fonctionnalités)
-- **[docs/ADDING_PAID_LLM.md](docs/ADDING_PAID_LLM.md)** — brancher
+- **[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)** — brancher
   n'importe quel LLM payant compatible OpenAI (ChatGPT, Mistral, …).
-- **[docs/ADDING_LOCAL_LLM.md](docs/ADDING_LOCAL_LLM.md)** — apporter
+- **[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)** — apporter
   votre propre GGUF via Ollama ou `llama-server`.
 - **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — activer
   la génération d'images (DALL-E, Stable Diffusion local, …).

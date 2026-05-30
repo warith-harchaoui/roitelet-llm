@@ -231,8 +231,8 @@ its own ``label / base_url / api_key / models`` quartet, so two
 engines that serve the same model name don't collide; specs register
 under ``openai-compatible/<label>/<model>`` and the factory dispatches
 to each engine's own credentials at request time. Walked through in
-[`docs/ADDING_PAID_LLM.md`](docs/ADDING_PAID_LLM.md) and
-[`docs/ADDING_LOCAL_LLM.md`](docs/ADDING_LOCAL_LLM.md).
+[`docs/ADDING_MODELS.md`](docs/ADDING_MODELS.md) and
+[`docs/ADDING_MODELS.md`](docs/ADDING_MODELS.md).
 
 ### Refreshing the bootstrap priors
 

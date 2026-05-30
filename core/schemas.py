@@ -42,7 +42,7 @@ class ModelCapabilityScore(BaseModel):
 
 class ModelCandidate(BaseModel):
     """A candidate model and the router metadata attached to it.
-    
+
     Attributes
     ----------
     model_id : str
@@ -52,7 +52,18 @@ class ModelCandidate(BaseModel):
     selected : bool, default=False
         Whether the routing algorithm picked this candidate for query dispatch.
     score : float
-        The computed score evaluating its suitability.
+        The computed score evaluating its suitability — arbitrary
+        units (a weighted blend of quality + ecofrugality bonuses).
+    quality_probability : float
+        Normalised quality estimator in [0.0, 1.0]. Computed by the
+        router as ``(quality_score - min) / (max - min)`` across the
+        eligible candidate pool on this turn — so the top-quality
+        candidate is 1.0, the worst is 0.0. Comparable to
+        RouteLLM's calibrated ``P(strong wins)`` in *shape* (one
+        scalar, monotonic, threshold-able) though derived from
+        rolling Elo + capability priors, not preference labels.
+        Drives the :attr:`RouterPreferences.quality_threshold`
+        filter that traces the Pareto frontier.
     estimated_cost_usd : float
         Pessimistic cost computation assuming context bounds.
     estimated_latency_s : float
@@ -65,6 +76,7 @@ class ModelCandidate(BaseModel):
     provider: str
     selected: bool = False
     score: float
+    quality_probability: float = 0.0
     estimated_cost_usd: float = 0.0
     estimated_latency_s: float = 0.0
     capability_scores: list[ModelCapabilityScore] = Field(default_factory=list)
@@ -101,6 +113,14 @@ class RouterPreferences(BaseModel):
     independence: bool = False
     allow_vlms: bool = False
     max_cost_usd: float | None = None
+    # Calibrated quality floor in [0.0, 1.0]. Candidates whose
+    # normalised ``quality_probability`` (computed across the eligible
+    # pool on each turn) falls below this value are filtered *before*
+    # top-K selection. This is the single-knob operating point on the
+    # Roitelet cost/quality Pareto frontier: 0.0 = no filter, 1.0 =
+    # only the very best candidate. Mirrors the role of RouteLLM's
+    # threshold on its calibrated ``P(strong wins)``.
+    quality_threshold: float = 0.0
     # When True, a local LLM rewrites the prompt before fan-out, swapping
     # personally-identifying information (names, addresses, contact
     # details, financial / national / medical IDs, IPs, …) for
