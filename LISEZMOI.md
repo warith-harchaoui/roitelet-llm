@@ -80,14 +80,53 @@ dans l'en-tête de la barre latérale, icône « curseurs » à côté du
 bouton d'envoi pour les options par message, et une feuille Réglages
 derrière l'engrenage en bas de la barre latérale.
 
-Vous préférez le terminal ? Mêmes opérations, surface différente :
+Vous préférez le terminal ? Mêmes opérations, surface différente.
+Les commentaires `#` décrivent **le type de sortie** que vous verrez —
+le texte réel dépend des modèles que vous avez configurés.
 
 ```bash
 roitelet ask "Explique le tri rapide en un paragraphe."
+# → affiche un paragraphe markdown : la réponse fusionnée par le juge
+#   à partir de vos top-K modèles. Pas de métadonnées sauf si --verbose.
+
 roitelet ask --pseudonymize "Email à Marie Dupont à marie@orange.fr au sujet du Q3."
+#
+# Ce qui se passe, étape par étape :
+#
+# 1. Le pseudonymiseur local réécrit le prompt avant le fan-out — chaque
+#    nom de personne et coordonnée reçoit un substitut plausible de même
+#    origine :
+#       prompt qui sort du pseudonymiseur local →
+#       "Email à Camille Lefèvre à camille.lefevre@orange.fr au sujet du Q3."
+#
+# 2. Les modèles candidats (locaux ou distants, selon ce que le routeur
+#    a choisi) répondent à ce prompt réécrit. Ils ne voient jamais
+#    « Marie Dupont » ni l'email réel. Si un fournisseur cloud journalise
+#    la requête, c'est cela qu'il journalise.
+#
+# 3. La passe inverse locale remet les originaux dans la réponse fusionnée,
+#    donc l'utilisateur voit :
+#       Objet : Mise à jour Q3
+#       Chère Marie Dupont,
+#       J'aimerais partager les chiffres du Q3 avec vous …
+#
+# --verbose montre l'audit complet (chaque paire original → substitut,
+# le prompt exact envoyé, les latences forward + reverse).
+
 roitelet ask --url https://docs.python.org/3/library/asyncio.html "Résume."
-roitelet chat --independence     # REPL interactif, en local uniquement
-roitelet settings get            # voir ce qui est persisté
+# → Firecrawl scrape la page localement (ou via votre FIRECRAWL_API_KEY),
+#   préfixe le markdown comme bloc [Website: …], puis lance la pipeline
+#   normale. La synthèse est votre résumé fusionné.
+
+roitelet chat --independence    # REPL interactif, en local uniquement
+# → un prompt « You> » ; tapez votre question, appuyez sur Entrée,
+#   « Roitelet> » affiche la réponse fusionnée. Aucun candidat distant
+#   n'est appelé. Tapez « exit » ou Ctrl-D pour sortir.
+
+roitelet settings get           # voir ce qui est persisté
+# → affiche le AppSettingsPayload complet en JSON formaté : identifiants
+#   de modèles, URL Ollama, clés API masquées, poids écofrugalité, etc.
+#   Utilisez `roitelet settings get <key>` pour lire un seul champ.
 ```
 
 Pour les détails d'installation (Docker, bundles de modèles,
