@@ -97,8 +97,9 @@ const TRANSLATIONS = {
     // The key is the AppSettingsPayload field name; the value is the
     // visible label. Fields not in this map fall back to the raw key.
     'field.ollama_base_url': 'Local AI (Ollama) server URL',
-    'field.local_synthesis_model': 'Local model that picks the best answer',
+    'field.local_synthesis_model': 'Local Judge',
     'field.local_vlm_model': 'Local model that reads images',
+    'field.localModels.empty': 'No local models found. Install one with `ollama pull qwen3:8b` then refresh.',
     'field.selected_ollama_models': 'Other local models to use (comma-separated)',
     'field.openrouter_api_key': 'OpenRouter API key',
     'field.paid_openrouter_models': 'OpenRouter models (comma-separated)',
@@ -212,8 +213,9 @@ const TRANSLATIONS = {
     'engines.remove': 'Retirer ce fournisseur',
 
     'field.ollama_base_url': 'URL du serveur IA local (Ollama)',
-    'field.local_synthesis_model': 'Modèle local qui choisit la meilleure réponse',
+    'field.local_synthesis_model': 'Juge local',
     'field.local_vlm_model': 'Modèle local qui lit les images',
+    'field.localModels.empty': 'Aucun modèle local trouvé. Installez-en un avec `ollama pull qwen3:8b` puis rafraîchissez.',
     'field.selected_ollama_models': 'Autres modèles locaux à utiliser (séparés par des virgules)',
     'field.openrouter_api_key': 'Clé API OpenRouter',
     'field.paid_openrouter_models': 'Modèles OpenRouter (séparés par des virgules)',

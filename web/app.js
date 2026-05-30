@@ -11,7 +11,10 @@
  */
 
 const $ = (id) => document.getElementById(id);
-const t = (key, vars) => window.RoiteletI18n.t(key, vars);
+// ``t`` is provided as a global by ``web/i18n.js`` (a top-level
+// ``function t(...)`` declaration). We rely on that global directly to
+// avoid a duplicate-identifier collision at script-eval time, which
+// would silently brick every dynamic surface that uses it.
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const state = {
@@ -82,14 +85,16 @@ function renderMessages() {
   const inner = $('messagesInner');
   inner.innerHTML = '';
   if (state.messages.length === 0) {
+    // Welcome state — every visible string carries data-i18n so the
+    // language toggle re-renders correctly. We also write the current
+    // value as the initial textContent so the screen reads correctly
+    // even before applyStaticTranslations() fires.
     inner.innerHTML = `
       <div id="welcome" class="text-center py-24">
         <img src="/assets/roitelet.png" alt="Roitelet" width="72" height="72" class="mx-auto mb-5 rounded-[10px] shadow-lg">
-        <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
-        <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
-        <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-          Tip — start a message with <code>/image</code>, <code>/personal</code>, or <code>/help</code> to switch routes. Use the sliders icon below for per-turn preferences.
-        </p>
+        <h2 class="text-[22px] font-semibold tracking-tight" data-i18n="welcome.title">${escapeHtml(t('welcome.title'))}</h2>
+        <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed" data-i18n="welcome.subtitle">${escapeHtml(t('welcome.subtitle'))}</p>
+        <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed" data-i18n-html="welcome.tip">${t('welcome.tip')}</p>
       </div>`;
     return;
   }
@@ -815,16 +820,21 @@ function onFilesPicked(fileList) {
 // renders inline, 'advanced' goes under a collapsed <details>.
 const SETTINGS_FIELDS = [
   // Basics — what a non-tech user is most likely to touch.
-  {key: 'ollama_base_url',                  labelKey: 'field.ollama_base_url',         type: 'text',     placeholder: 'http://localhost:11434',  section: 'basics'},
-  {key: 'local_synthesis_model',            labelKey: 'field.local_synthesis_model',   type: 'text',     placeholder: 'qwen3:8b',                section: 'basics'},
-  {key: 'enable_pseudonymization',          labelKey: 'field.enable_pseudonymization', type: 'checkbox',                                          section: 'basics'},
-  {key: 'independence_local_only',          labelKey: 'field.independence_local_only', type: 'checkbox',                                          section: 'basics'},
-  {key: 'enable_vlms',                      labelKey: 'field.enable_vlms',             type: 'checkbox',                                          section: 'basics'},
+  {key: 'ollama_base_url',                  labelKey: 'field.ollama_base_url',         type: 'text',           placeholder: 'http://localhost:11434',  section: 'basics'},
+  // ``select-local-model`` becomes a <select> whose options are the
+  // local Ollama models the registry reports. Far less error-prone
+  // than a free-text input for a non-tech user who has to match the
+  // exact tag (`qwen3:8b`, not `qwen3` or `Qwen3:8B`).
+  {key: 'local_synthesis_model',            labelKey: 'field.local_synthesis_model',   type: 'select-local-model',                                      section: 'basics'},
+  {key: 'enable_pseudonymization',          labelKey: 'field.enable_pseudonymization', type: 'checkbox',                                                 section: 'basics'},
+  {key: 'independence_local_only',          labelKey: 'field.independence_local_only', type: 'checkbox',                                                 section: 'basics'},
+  {key: 'enable_vlms',                      labelKey: 'field.enable_vlms',             type: 'checkbox',                                                 section: 'basics'},
 
   // Advanced — power-user knobs. Hidden behind a <details> in openSettings.
-  {key: 'local_vlm_model',                  labelKey: 'field.local_vlm_model',         type: 'text',     placeholder: 'qwen2.5vl:7b',            section: 'advanced'},
-  {key: 'selected_ollama_models',           labelKey: 'field.selected_ollama_models',  type: 'csv-list', placeholder: 'phi4-mini:3.8b, gemma3:4b', section: 'advanced'},
-  {key: 'pseudo_model_id',                  labelKey: 'field.pseudo_model_id',         type: 'text',     placeholder: 'qwen3:8b',                section: 'advanced'},
+  {key: 'local_vlm_model',                  labelKey: 'field.local_vlm_model',         type: 'select-local-model',                                      section: 'advanced'},
+  {key: 'selected_ollama_models',           labelKey: 'field.selected_ollama_models',  type: 'csv-list',       placeholder: 'phi4-mini:3.8b, gemma3:4b', section: 'advanced'},
+  // ``allow_blank`` lets the redactor model fall back to the judge.
+  {key: 'pseudo_model_id',                  labelKey: 'field.pseudo_model_id',         type: 'select-local-model', allow_blank: true,                    section: 'advanced'},
   {key: 'openrouter_api_key',               labelKey: 'field.openrouter_api_key',      type: 'password',                                          section: 'advanced'},
   {key: 'paid_openrouter_models',           labelKey: 'field.paid_openrouter_models',  type: 'csv-list', placeholder: 'anthropic/claude-3.7-sonnet', section: 'advanced'},
   {key: 'openai_api_key',                   labelKey: 'field.openai_api_key',          type: 'password',                                          section: 'advanced'},
@@ -839,6 +849,23 @@ const SETTINGS_FIELDS = [
 // {label, base_url, api_key, models}. Kept at module scope so the
 // "+ Add engine" handler can mutate it without re-fetching settings.
 let engineState = [];
+
+// Cached list of available local model ids — populated on each
+// settings-sheet open via /v1/models. Filtered to `ollama/*` so the
+// "Local Judge" dropdown only shows things the local stack can serve.
+let localModelOptions = [];
+
+async function fetchLocalModelOptions() {
+  try {
+    const data = await apiGet('/v1/models');
+    return (data.data || [])
+      .filter(m => typeof m.id === 'string' && m.id.startsWith('ollama/'))
+      .map(m => m.id.slice('ollama/'.length))
+      .sort();
+  } catch {
+    return [];
+  }
+}
 
 // Preset URLs we'll suggest as placeholders for new engine rows.
 const ENGINE_PRESETS = [
@@ -912,6 +939,9 @@ async function openSettings() {
   let current = {};
   try { current = await apiGet('/api/settings'); }
   catch (err) { showToast(t('toast.settingsLoadFailed', {message: err.message})); return; }
+  // Refresh the local model catalogue used by the "Local Judge"
+  // dropdown. Cheap (one /v1/models GET) and always up-to-date.
+  localModelOptions = await fetchLocalModelOptions();
 
   const form = $('settingsForm');
   form.innerHTML = '';
@@ -1029,6 +1059,10 @@ async function openSettings() {
 
 // Settings field renderer extracted so Basics and Advanced sections
 // share the same look. Returns a fully-built <label> element.
+//
+// Checkboxes are wired so the ``checked`` attribute mirrors the
+// persisted value — that's the contract for "if something is set,
+// show it set". A missing value renders unchecked (the default).
 function renderSettingsField(f, current) {
   const labelText = t(f.labelKey);
   const wrap = document.createElement('label');
@@ -1037,11 +1071,42 @@ function renderSettingsField(f, current) {
   let inputHtml;
   if (f.type === 'checkbox') {
     wrap.className = 'flex items-center justify-between py-1 gap-2';
-    inputHtml = `<input type="checkbox" name="${f.key}" ${val ? 'checked' : ''} class="w-5 h-5 accent-sysblue shrink-0">`;
+    const checked = val === true ? 'checked' : '';
+    inputHtml = `<input type="checkbox" name="${f.key}" ${checked} class="w-5 h-5 accent-sysblue shrink-0">`;
     wrap.innerHTML = `<span class="text-[13px] text-gray-700 dark:text-gray-300">${escapeHtml(labelText)}</span>${inputHtml}`;
     return wrap;
   }
   const labelHtml = `<span class="text-[12px] font-medium text-gray-600 dark:text-gray-400">${escapeHtml(labelText)}</span>`;
+  if (f.type === 'select-local-model') {
+    // Dropdown of available local Ollama models. The current persisted
+    // value stays as the first option even if Ollama doesn't list it
+    // (e.g. the user wiped the model but the setting still references
+    // it), so saving doesn't silently blank the field.
+    const currentVal = (val ?? '').toString();
+    const options = new Set(localModelOptions);
+    if (currentVal) options.add(currentVal);
+    const orderedOptions = Array.from(options).sort();
+    const blankOption = f.allow_blank
+      ? `<option value="" ${currentVal === '' ? 'selected' : ''}>—</option>`
+      : '';
+    let bodyHtml;
+    if (orderedOptions.length === 0) {
+      // No models available — render a disabled select + a hint so the
+      // user sees what to do.
+      bodyHtml = `<select name="${f.key}" disabled
+        class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all opacity-60"><option>—</option></select>
+        <span class="text-[11px] text-gray-500 dark:text-gray-400 italic">${escapeHtml(t('field.localModels.empty'))}</span>`;
+    } else {
+      const optionsHtml = orderedOptions.map(id => {
+        const selected = id === currentVal ? 'selected' : '';
+        return `<option value="${escapeHtml(id)}" ${selected}>${escapeHtml(id)}</option>`;
+      }).join('');
+      bodyHtml = `<select name="${f.key}"
+        class="px-3 py-2 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 transition-all">${blankOption}${optionsHtml}</select>`;
+    }
+    wrap.innerHTML = labelHtml + bodyHtml;
+    return wrap;
+  }
   if (f.type === 'csv-list') {
     const placeholder = f.placeholder || '';
     inputHtml = `<input type="text" name="${f.key}" value="${escapeHtml(csvFormat(val))}" placeholder="${escapeHtml(placeholder)}"
