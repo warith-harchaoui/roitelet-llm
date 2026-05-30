@@ -76,6 +76,17 @@ multimodal = [
 personal = [
     "turbovec>=0.5",
 ]
+# Optional production-scale storage backend. The default JSON-per-file
+# backend (data/conversations/*.json, data/telemetry/*.json) is fine
+# for a single-user laptop. Beyond a few thousand telemetry rows,
+# switch to MongoDB via:
+#   pip install -e .[scale]
+#   ROITELET_STORAGE_BACKEND=mongodb
+#   ROITELET_MONGO_URI=mongodb://localhost:27017
+# See core/storage_mongo.py for the indexes and trade-offs.
+scale = [
+    "pymongo>=4.6",
+]
 
 [project.scripts]
 # Console-script shim so `pip install -e .` exposes a `roitelet` binary that

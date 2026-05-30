@@ -285,15 +285,35 @@ class StorageManager:
 
 
 @lru_cache(maxsize=1)
-def get_storage() -> StorageManager:
-    """Return the process-wide :class:`StorageManager` instance.
+def get_storage():
+    """Return the process-wide storage instance, JSON or MongoDB-backed.
+
+    Backend selection happens via ``ROITELET_STORAGE_BACKEND``:
+
+    * unset / ``json`` (default) — :class:`StorageManager` (JSON files
+      on disk, the documented local-first path).
+    * ``mongodb`` — :class:`core.storage_mongo.MongoStorageManager`
+      using ``ROITELET_MONGO_URI`` / ``ROITELET_MONGO_DB``. Requires
+      ``pip install -e .[scale]``.
 
     Wrapped in :func:`functools.lru_cache` so the manager is built on
-    first call (no import-time filesystem side effects) and shared
-    everywhere afterwards. Tests reset the cache with
+    first call (no import-time filesystem / network side effects) and
+    shared everywhere afterwards. Tests reset the cache with
     ``get_storage.cache_clear()`` to force a fresh instance against
     ``tmp_path``-rooted settings.
+
+    The return type is the structural :class:`~core.storage_protocol.Storage`
+    Protocol; both backends satisfy it without an explicit ``isinstance``.
     """
+    backend = os.environ.get('ROITELET_STORAGE_BACKEND', 'json').strip().lower()
+    if backend == 'mongodb':
+        from .storage_mongo import MongoStorageManager
+        return MongoStorageManager()
+    if backend not in ('', 'json'):
+        logger.warning(
+            'Unknown ROITELET_STORAGE_BACKEND=%r; falling back to the JSON backend.',
+            backend,
+        )
     return StorageManager()
 
 

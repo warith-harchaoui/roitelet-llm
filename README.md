@@ -40,8 +40,8 @@ Pick the row that matches what you came here to do.
 | 🧑 **A curious user** | Try Roitelet on your laptop, ask it a question, see it work | [Quick start](#quick-start) (below) |
 | 🧰 **A user with files** | Drop in PDFs, audio, images, or a website URL and ask about them | [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md) |
 | 🔐 **A privacy-conscious user** | Understand what stays local and how PII hiding works | [docs/PRIVACY.md](docs/PRIVACY.md) → [docs/PSEUDO.md](docs/PSEUDO.md) |
-| 🧑‍💻 **A developer with existing OpenAI tooling** | Point your `openai` SDK / LiteLLM / Continue.dev at Roitelet | [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md) |
-| 🏗️ **A developer wiring more models** | Add a local GGUF, OpenAI, Mistral, Together, etc. | [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) |
+| 🧑‍💻 **A developer with existing OpenAI compatible tooling** | Point your `openai` SDK / LiteLLM / Continue.dev at Roitelet | [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md) |
+| 🏗️ **A developer wiring local models** | Add a local GGUF, OpenAI, Mistral, Together, etc. | [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) |
 | 🎛️ **A power user** | Use slash routes (`/image`, `/personal`, …) and per-turn controls | [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) |
 | 🖥️ **A sysadmin / installer** | Install on Linux/Mac/Windows with conda, venv, or Docker | [INSTALL.md](INSTALL.md) ([Français](INSTALLER.md)) |
 | 🔬 **A researcher / honest skeptic** | See the numbers — does fusion actually help? | [docs/EVALUATION.md](docs/EVALUATION.md) |
