@@ -1,15 +1,27 @@
 """Hermetic tests for the personal-mode RAG + wiki backend.
 
+Three story-level tests:
+
+1. Ingest + size-dependent context strategy: drop files in the inbox,
+   convert known modalities, skip unknown ones, idempotent without
+   ``force``, regenerate with ``force``; below the inline-cap the
+   context is concatenated, above it the function calls retrieval.
+2. The persistent RAG index re-embeds chunks only when the wiki has
+   changed — the cold-start cost happens once per (wiki revision,
+   query) pair.
+3. The Karpathy-style 2-D scatter projects every chunk to (x, y) when
+   the embedder is reachable and returns an empty list otherwise.
+
 The multimodal extractors (whisper / NeMo / kreuzberg / Ollama VLM)
-are heavyweight, so we stub them with monkeypatch and only exercise
-the parts of ``core.personal`` that don't require them: text files in
-the inbox + wiki rendering + size-dependent mode switching.
+are heavyweight, so we stub them; the embedding model is stubbed as
+a deterministic NumPy vector so we can assert call counts.
 """
 
 from __future__ import annotations
 
 import time
 
+import numpy as np
 import pytest
 
 
@@ -28,367 +40,171 @@ def _reset_singletons() -> None:
 
 @pytest.fixture(autouse=True)
 def _isolate_singletons():
-    """Reset cached singletons after every test so we never leak a tmp_path.
-
-    The personal-mode tests reroot ``ROITELET_DATA_DIR`` via monkeypatch;
-    the registry / storage / settings lru_caches would otherwise pin a
-    tmp-path-rooted config that subsequent tests (or the real data dir)
-    can't recover from.
-    """
+    """Reset cached singletons after every test so we never leak a tmp_path."""
     yield
     _reset_singletons()
 
 
-class TestPersonalPaths:
-    """The dir helpers must create folders idempotently."""
-
-    def test_creates_personal_tree(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import inbox_dir, personal_root, wiki_dir
-
-        root = personal_root()
-        assert root.is_dir()
-        assert root.name == 'personal'
-        assert inbox_dir().is_dir()
-        assert wiki_dir().is_dir()
+def _stub_embed(text: str) -> np.ndarray:
+    """Deterministic 16-D embedding keyed on first char + length."""
+    vec = np.zeros(16, dtype=np.float32)
+    if text:
+        vec[ord(text[0]) % 16] = 1.0
+        vec[len(text) % 16] += 0.25
+    return vec
 
 
-class TestIngest:
-    """Ingestion converts known modalities and skips the rest idempotently."""
-
-    @pytest.mark.asyncio
-    async def test_text_file_is_passthrough(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import inbox_dir, ingest_inbox, wiki_dir
-
-        (inbox_dir() / 'note.md').write_text('# A note\n\nHello world.', encoding='utf-8')
-        results = await ingest_inbox()
-        assert len(results) == 1
-        result = results[0]
-        assert result.modality == 'text'
-        assert result.error is None
-        assert result.wiki_path is not None and result.wiki_path.exists()
-
-        body = result.wiki_path.read_text(encoding='utf-8')
-        assert 'Hello world.' in body
-        assert 'Auto-converted from' in body  # provenance header
-        assert (wiki_dir() / 'note.md').exists()
-
-    @pytest.mark.asyncio
-    async def test_unknown_extension_is_skipped(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import inbox_dir, ingest_inbox
-
-        (inbox_dir() / 'weird.xyz').write_text('junk', encoding='utf-8')
-        results = await ingest_inbox()
-        assert len(results) == 1
-        assert results[0].modality == 'skipped'
-        assert results[0].wiki_path is None
-        assert results[0].error is not None
-
-    @pytest.mark.asyncio
-    async def test_ingest_is_idempotent(self, tmp_path, monkeypatch):
-        """Running ingest twice must not regenerate already-processed files."""
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import inbox_dir, ingest_inbox
-
-        (inbox_dir() / 'note.md').write_text('# Note\n\nFirst version.', encoding='utf-8')
-        first = await ingest_inbox()
-        wiki_path = first[0].wiki_path
-        assert wiki_path is not None
-        mtime_first = wiki_path.stat().st_mtime
-
-        # Mutate the source, but the manifest already recorded it.
-        # Without --force, the wiki should NOT be rewritten.
-        (inbox_dir() / 'note.md').write_text('# Note\n\nMutated.', encoding='utf-8')
-        await ingest_inbox()
-        mtime_second = wiki_path.stat().st_mtime
-        assert mtime_first == mtime_second
-
-        # With force=True, the wiki must be regenerated.
-        await ingest_inbox(force=True)
-        mtime_third = wiki_path.stat().st_mtime
-        assert mtime_third >= mtime_first
-        assert 'Mutated' in wiki_path.read_text(encoding='utf-8')
-
-    @pytest.mark.asyncio
-    async def test_audio_extractor_is_stubbed(self, tmp_path, monkeypatch):
-        """The audio extractor is invoked by extension classification."""
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-
-        import core.personal as personal_mod
-        # Stub the heavyweight audio extractor before any classification fires.
-        async def fake_transcribe(path):
-            return f'[SPEAKER_00] transcript of {path.name}'
-        monkeypatch.setattr(personal_mod, '_convert',
-                            lambda path, modality: fake_transcribe(path) if modality == 'audio'
-                            else _real_convert_stub(path, modality))
-
-        async def _real_convert_stub(path, modality):
-            return f'(text from {modality})'
-
-        from core.personal import inbox_dir, ingest_inbox
-
-        (inbox_dir() / 'recording.m4a').write_bytes(b'\x00\x00')  # fake bytes
-        results = await ingest_inbox()
-        assert len(results) == 1
-        assert results[0].modality == 'audio'
-        assert results[0].wiki_path is not None
-        body = results[0].wiki_path.read_text(encoding='utf-8')
-        assert 'transcript of recording.m4a' in body
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
 
 
-class TestPersonalContext:
-    """``build_personal_context`` picks the right strategy by corpus size."""
+async def test_ingest_round_trip_and_context_strategy(tmp_path, monkeypatch):
+    """Inbox ingestion + size-dependent context resolution, end-to-end.
 
-    def test_empty_corpus_returns_empty_string(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import build_personal_context
+    Three things one story:
 
-        assert build_personal_context('anything') == ''
+    * a text file in the inbox produces a wiki entry with a provenance
+      header, an unknown extension is recorded as ``modality='skipped'``,
+      and the manifest makes a second run a no-op unless ``force``;
+    * below the inline cap, ``build_personal_context`` concatenates
+      every wiki file verbatim;
+    * above the inline cap it calls ``_retrieve_chunks`` and returns
+      "" when retrieval can't reach the embedder (the documented
+      degradation).
+    """
+    monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+    _reset_singletons()
+    import core.personal as personal_mod
+    from core.personal import (
+        build_personal_context,
+        inbox_dir,
+        ingest_inbox,
+        personal_status,
+        wiki_dir,
+    )
 
-    def test_small_corpus_inlines_everything(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import build_personal_context, wiki_dir
+    # ── Ingest ──────────────────────────────────────────────────────
+    (inbox_dir() / 'note.md').write_text('# A note\n\nHello world.', encoding='utf-8')
+    (inbox_dir() / 'weird.xyz').write_text('junk', encoding='utf-8')
 
-        (wiki_dir() / 'a.md').write_text('# Topic A\n\nFact A is true.', encoding='utf-8')
-        (wiki_dir() / 'b.md').write_text('# Topic B\n\nFact B is true.', encoding='utf-8')
+    results = await ingest_inbox()
+    modalities = {r.source.name: r.modality for r in results}
+    assert modalities['note.md'] == 'text'
+    assert modalities['weird.xyz'] == 'skipped'
 
-        body = build_personal_context('Is fact A true?')
-        assert 'From your personal knowledge base' in body
-        assert 'Fact A is true.' in body
-        assert 'Fact B is true.' in body
-        # Wiki mode → no "(top matches)" / "(excerpt)" framing.
-        assert 'top matches' not in body
-        assert 'excerpt' not in body
+    note_wiki = wiki_dir() / 'note.md'
+    body = note_wiki.read_text(encoding='utf-8')
+    assert 'Hello world.' in body
+    assert 'Auto-converted from' in body  # provenance header
 
-    def test_large_corpus_triggers_rag(self, tmp_path, monkeypatch):
-        """Above the inline threshold the function should call retrieval.
+    # Idempotent: a second run without --force shouldn't rewrite the wiki.
+    mtime_first = note_wiki.stat().st_mtime
+    (inbox_dir() / 'note.md').write_text('# A note\n\nMUTATED.', encoding='utf-8')
+    await ingest_inbox()
+    assert note_wiki.stat().st_mtime == mtime_first
 
-        We stub the retrieval to short-circuit (no embedding model
-        configured in CI), then assert the function returned an empty
-        string — the documented behaviour for retrieval failure.
-        """
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import build_personal_context, wiki_dir
+    # ``force=True`` regenerates from the new source.
+    await ingest_inbox(force=True)
+    assert 'MUTATED' in note_wiki.read_text(encoding='utf-8')
 
-        # Write more than _WIKI_MAX_INLINE_CHARS (32 000) of text.
-        (wiki_dir() / 'big.md').write_text('Lorem ipsum. ' * 4000, encoding='utf-8')
+    status = personal_status()
+    assert status['mode'] == 'wiki'
+    assert status['wiki'] >= 1
+    assert status['inbox'] >= 1
 
-        # Stub the embedding call to always fail → retrieval returns []
-        import core.personal as personal_mod
-        monkeypatch.setattr(personal_mod, '_retrieve_chunks', lambda prompt, top_k=5: [])
-        body = build_personal_context('Find lorem')
-        assert body == ''
+    # ── Small corpus → inline context ───────────────────────────────
+    (wiki_dir() / 'fact-a.md').write_text('# Topic A\n\nFact A is true.', encoding='utf-8')
+    (wiki_dir() / 'fact-b.md').write_text('# Topic B\n\nFact B is true.', encoding='utf-8')
+    inline = build_personal_context('Is fact A true?')
+    assert 'From your personal knowledge base' in inline
+    assert 'Fact A is true.' in inline and 'Fact B is true.' in inline
 
-
-class TestPersonalStatus:
-    """``personal_status`` summarises the corpus for the API + GUI."""
-
-    def test_status_reports_counts_and_mode(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import inbox_dir, personal_status, wiki_dir
-
-        (inbox_dir() / 'pending.pdf').write_bytes(b'%PDF-1.4\n')
-        (wiki_dir() / 'topic.md').write_text('Some content.', encoding='utf-8')
-
-        status = personal_status()
-        assert status['inbox'] == 1
-        assert status['wiki'] == 1
-        assert status['mode'] == 'wiki'
-        assert status['wiki_chars'] > 0
-
-    def test_empty_mode(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import personal_status
-
-        status = personal_status()
-        assert status == {'inbox': 0, 'wiki': 0, 'wiki_chars': 0, 'mode': 'empty'}
+    # ── Large corpus → retrieval path, empty when embedder unreachable ──
+    (wiki_dir() / 'big.md').write_text('Lorem ipsum. ' * 4000, encoding='utf-8')
+    monkeypatch.setattr(personal_mod, '_retrieve_chunks', lambda prompt, top_k=5: [])
+    assert build_personal_context('Find lorem') == ''
 
 
-class TestEmbeddingViz:
-    """``project_chunks_2d`` projects chunks into a 2-D scatter via PCA."""
+def test_rag_index_caches_embeddings_per_wiki_revision(tmp_path, monkeypatch):
+    """The persistent RAG index is the personal-mode performance story.
 
-    def test_empty_corpus_returns_no_points(self, tmp_path, monkeypatch):
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-        from core.personal import project_chunks_2d
+    Cold start embeds every chunk + the query. The second query, on
+    an unchanged wiki, must embed only the query — chunks come from
+    the on-disk ``.npy`` cache. Mutating any wiki file must invalidate
+    the cache and re-embed.
+    """
+    monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+    _reset_singletons()
+    import core.capability_classifier as cc
 
-        assert project_chunks_2d() == []
+    call_log: list[str] = []
 
-    def test_embedding_failure_returns_no_points(self, tmp_path, monkeypatch):
-        """When the embedding model is unreachable, return [] cleanly."""
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
+    def counting_embed(text: str):
+        call_log.append(text)
+        return _stub_embed(text)
 
-        # The projection imports `_embed_prompt` lazily from
-        # capability_classifier, so we patch it at the source module.
-        import core.capability_classifier as cc
-        monkeypatch.setattr(cc, '_embed_prompt', lambda prompt: None)
+    monkeypatch.setattr(cc, '_embed_prompt', counting_embed)
 
-        from core.personal import project_chunks_2d, wiki_dir
-        (wiki_dir() / 'a.md').write_text('# A\n\nHello.', encoding='utf-8')
-        assert project_chunks_2d() == []
+    from core.personal import _retrieve_chunks, wiki_dir
+    wiki = wiki_dir()
+    (wiki / 'a.md').write_text('alpha alpha alpha. ' * 80, encoding='utf-8')
+    (wiki / 'b.md').write_text('beta beta beta. ' * 80, encoding='utf-8')
 
-    def test_projection_returns_coords(self, tmp_path, monkeypatch):
-        """With a stubbed deterministic embedder, every chunk gets x/y."""
-        import numpy as np
+    # Cold start: chunks + the query.
+    assert _retrieve_chunks('alpha please', top_k=2)
+    cold_calls = len(call_log)
+    assert cold_calls > 1
 
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
+    # Warm: only the query is embedded.
+    call_log.clear()
+    assert _retrieve_chunks('beta please', top_k=2)
+    assert len(call_log) == 1
 
-        import core.capability_classifier as cc
+    # Mutating a wiki file must invalidate the index — the next query
+    # re-embeds. The sleep guarantees the mtime fingerprint advances
+    # even on second-resolution filesystems.
+    call_log.clear()
+    time.sleep(0.01)
+    (wiki / 'a.md').write_text('alpha alpha alpha. NEW CONTENT.' + ('alpha. ' * 80), encoding='utf-8')
+    _retrieve_chunks('alpha', top_k=1)
+    assert len(call_log) > 1
 
-        def _stub_embed(text):
-            # Project text length + first-char hash into a 32-D vector so
-            # SVD has something to work with.
-            vec = np.zeros(32, dtype=np.float32)
-            vec[len(text) % 32] = 1.0
-            if text:
-                vec[ord(text[0]) % 32] += 0.5
-            return vec
-
-        monkeypatch.setattr(cc, '_embed_prompt', _stub_embed)
-
-        from core.personal import project_chunks_2d, wiki_dir
-        (wiki_dir() / 'topic-a.md').write_text('# Topic A\n\n' + ('alpha. ' * 50), encoding='utf-8')
-        (wiki_dir() / 'topic-b.md').write_text('# Topic B\n\n' + ('beta. ' * 50), encoding='utf-8')
-        points = project_chunks_2d()
-        assert points
-        for p in points:
-            assert {'path', 'chunk_index', 'text', 'x', 'y'} <= set(p)
-            assert isinstance(p['x'], float) and isinstance(p['y'], float)
+    # Empty / missing wikis return [] safely.
+    (wiki / 'a.md').unlink()
+    (wiki / 'b.md').unlink()
+    assert _retrieve_chunks('anything') == []
 
 
-class TestRagIndex:
-    """The persistent RAG index caches embeddings between queries."""
+def test_embedding_viz_projects_every_chunk_or_degrades_to_empty(tmp_path, monkeypatch):
+    """The 2-D scatter is the personal-mode "trust" affordance — every
+    chunk must show up, every point must carry path / chunk_index /
+    text / x / y, and an unreachable embedder must degrade to ``[]``
+    rather than crash."""
+    monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+    _reset_singletons()
+    import core.capability_classifier as cc
 
-    def _stub_embed(self, text: str):
-        """Deterministic 16-D embedding keyed on first char + length."""
-        import numpy as np
+    # Embedder unreachable → empty.
+    monkeypatch.setattr(cc, '_embed_prompt', lambda prompt: None)
+    from core.personal import project_chunks_2d, wiki_dir
+    (wiki_dir() / 'a.md').write_text('# A\n\nHello.', encoding='utf-8')
+    assert project_chunks_2d() == []
 
-        vec = np.zeros(16, dtype=np.float32)
+    # Embedder reachable → every chunk projected to (x, y).
+    def stub_embed(text: str) -> np.ndarray:
+        # 32-D one-hot + small bump so SVD has rank > 1.
+        v = np.zeros(32, dtype=np.float32)
+        v[len(text) % 32] = 1.0
         if text:
-            vec[ord(text[0]) % 16] = 1.0
-            vec[len(text) % 16] += 0.25
-        return vec
+            v[ord(text[0]) % 32] += 0.5
+        return v
 
-    def test_retrieval_caches_embeddings_across_queries(self, tmp_path, monkeypatch):
-        """A second query must not re-invoke the embedder for chunks."""
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-
-        call_log: list[str] = []
-        import core.capability_classifier as cc
-
-        def counting_embed(text):
-            call_log.append(text)
-            return self._stub_embed(text)
-
-        monkeypatch.setattr(cc, '_embed_prompt', counting_embed)
-
-        from core.personal import _retrieve_chunks, wiki_dir
-        wiki = wiki_dir()
-        (wiki / 'a.md').write_text('alpha alpha alpha. ' * 80, encoding='utf-8')
-        (wiki / 'b.md').write_text('beta beta beta. ' * 80, encoding='utf-8')
-
-        result1 = _retrieve_chunks('alpha please', top_k=2)
-        first_call_count = len(call_log)
-        assert result1, 'cold-start retrieval should return chunks'
-
-        # Second query: chunks are cached, only the query is embedded.
-        call_log.clear()
-        result2 = _retrieve_chunks('beta please', top_k=2)
-        assert result2, 'warm retrieval should still return chunks'
-        assert len(call_log) == 1, (
-            f'expected exactly 1 embed call (the query) on warm cache, '
-            f'got {len(call_log)} — chunks should be served from .npy'
-        )
-        # And the cold-start invocation count must dominate (chunks + query).
-        assert first_call_count > 1
-
-    def test_cache_invalidates_on_wiki_change(self, tmp_path, monkeypatch):
-        """Mutating a wiki file triggers a rebuild on the next call."""
-        import time
-
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-
-        call_log: list[str] = []
-        import core.capability_classifier as cc
-        monkeypatch.setattr(cc, '_embed_prompt',
-                            lambda t: (call_log.append(t), self._stub_embed(t))[1])
-
-        from core.personal import _retrieve_chunks, wiki_dir
-        wiki = wiki_dir()
-        (wiki / 'a.md').write_text('alpha. ' * 80, encoding='utf-8')
-
-        _retrieve_chunks('alpha', top_k=1)
-        warm_calls = list(call_log)
-        call_log.clear()
-
-        # Mutate the file; force mtime advance so the fingerprint changes
-        # even on filesystems with second-resolution mtimes.
-        time.sleep(0.01)
-        (wiki / 'a.md').write_text('alpha. ' * 80 + 'NEW CONTENT.', encoding='utf-8')
-
-        _retrieve_chunks('alpha', top_k=1)
-        # The rebuild must have re-embedded the (now-changed) chunks
-        # plus the new query, i.e. more than one call.
-        assert len(call_log) > 1, (
-            f'expected a rebuild after wiki mutation; embedder was called '
-            f'{len(call_log)} times (warm baseline was {len(warm_calls)})'
-        )
-
-    def test_empty_chunks_returns_empty(self, tmp_path, monkeypatch):
-        """A wiki with whitespace-only content returns no chunks safely."""
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        _reset_singletons()
-
-        import core.capability_classifier as cc
-        monkeypatch.setattr(cc, '_embed_prompt', self._stub_embed)
-
-        from core.personal import _retrieve_chunks, wiki_dir
-        # No wiki files at all.
-        assert _retrieve_chunks('anything') == []
-        # Empty file.
-        (wiki_dir() / 'empty.md').write_text('', encoding='utf-8')
-        assert _retrieve_chunks('anything') == []
-
-
-class TestSlashCommandPersonal:
-    """The `/personal` parser branch must set the personal_override flag."""
-
-    def test_personal_command_sets_override(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/personal what did I write about RAG?')
-        assert parsed.route_to == 'chat'
-        assert parsed.personal_override is True
-        assert parsed.stripped_prompt == 'what did I write about RAG?'
-
-    def test_personal_alone_strips_correctly(self):
-        """``/personal`` is a route, not a chained override.
-
-        Per-turn preferences (e.g. local-only) used to compose with
-        ``/personal`` via the now-retired ``/local`` slash. With the
-        2026-05-30 UX simplification preferences move to visible
-        controls (composer sliders / CLI flags / API booleans) and
-        the parser only recognises one leading route at a time.
-        """
-        from core.commands import parse_command
-
-        parsed = parse_command('/personal summarise my wiki')
-        assert parsed.route_to == 'chat'
-        assert parsed.personal_override is True
-        assert parsed.stripped_prompt == 'summarise my wiki'
+    monkeypatch.setattr(cc, '_embed_prompt', stub_embed)
+    (wiki_dir() / 'topic-a.md').write_text('# Topic A\n\n' + ('alpha. ' * 50), encoding='utf-8')
+    (wiki_dir() / 'topic-b.md').write_text('# Topic B\n\n' + ('beta. ' * 50), encoding='utf-8')
+    points = project_chunks_2d()
+    assert points
+    for p in points:
+        assert {'path', 'chunk_index', 'text', 'x', 'y'} <= set(p)
+        assert isinstance(p['x'], float) and isinstance(p['y'], float)

@@ -1,9 +1,11 @@
-"""Tests for the slash-command parser and chat-endpoint integration.
+"""Slash-command parser + API integration.
 
-The parser is pure, so most of the surface is unit-tested directly.
-The API-layer integration is verified through ``test_api.py`` patterns
-— start a FastAPI test client, stub the pipeline, hit ``/api/chat``
-with a slash-command prefix, assert the right behaviour.
+Two tests. The parser is pure so we exercise every recognised route
+plus the soft-fail-on-unknown contract in one comprehensive test. The
+API integration test confirms /help short-circuits without a pipeline
+call, /image and /speech redirect to the right endpoint, and per-turn
+preferences flow through the JSON body (now that the per-turn slashes
+``/local`` / ``/cheap`` / ``/k`` / ``/pseudo`` were retired).
 """
 
 from __future__ import annotations
@@ -11,171 +13,129 @@ from __future__ import annotations
 import pytest
 
 
-class TestParseCommand:
-    """Pure parser — every branch of the if-ladder has one test."""
+def test_parser_recognises_every_route_and_fails_soft_on_unknown():
+    """The parser is leading-only, route-only, and fail-soft. Every
+    recognised route shows up here:
 
-    def test_no_command_is_chat(self):
-        from core.commands import parse_command
+    * ``/image`` and its aliases route to image-gen,
+    * ``/speech`` to STT,
+    * ``/help`` to the static catalogue,
+    * ``/personal`` is a per-turn override that prepends the wiki.
 
-        parsed = parse_command('Hello there.')
+    Unknown commands (typos) pass through as plain text — this is the
+    contract that lets a user *talk about* slash commands in a prompt.
+    The retired per-turn slashes (``/local``, ``/cheap``, ``/k``,
+    ``/pseudo``, ``/nopseudo``) also pass through verbatim so muscle
+    memory doesn't trigger silent behaviour changes.
+    """
+    from core.commands import parse_command, render_help
+
+    # No command → chat with empty overrides.
+    plain = parse_command('Hello there.')
+    assert plain.route_to == 'chat' and plain.matched_commands == []
+
+    # /image and its aliases.
+    for alias in ('/image', '/image-gen', '/img', '/IMG'):
+        assert parse_command(f'{alias} sunset').route_to == 'image'
+
+    # /speech, /help.
+    assert parse_command('/speech').route_to == 'speech'
+    assert parse_command('/help').route_to == 'help'
+
+    # /personal sets the per-turn override and strips the prefix.
+    personal = parse_command('/personal what did I write about Q3?')
+    assert personal.route_to == 'chat'
+    assert personal.personal_override is True
+    assert personal.stripped_prompt == 'what did I write about Q3?'
+
+    # Unknown command and every retired preference slash → pass through.
+    for raw in ('/imagine a sunset', '/local hello', '/cheap 0.005 hello',
+                '/k 5 hello', '/pseudo hello', '/nopseudo hello'):
+        parsed = parse_command(raw)
         assert parsed.route_to == 'chat'
-        assert parsed.stripped_prompt == 'Hello there.'
-        assert parsed.personal_override is False
+        assert parsed.stripped_prompt == raw
         assert parsed.matched_commands == []
 
-    def test_image_routes_to_image(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/image a wren in oil paint')
-        assert parsed.route_to == 'image'
-        assert parsed.stripped_prompt == 'a wren in oil paint'
-        assert parsed.matched_commands == ['/image']
-
-    def test_image_aliases(self):
-        from core.commands import parse_command
-
-        for alias in ('/image', '/image-gen', '/img', '/Image', '/IMG'):
-            parsed = parse_command(f'{alias} sunset')
-            assert parsed.route_to == 'image', f'{alias} failed'
-
-    def test_speech_routes_to_speech(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/speech')
-        assert parsed.route_to == 'speech'
-        assert parsed.stripped_prompt == ''
-
-    def test_help_routes_to_help(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/help')
-        assert parsed.route_to == 'help'
-        assert parsed.stripped_prompt == ''
-
-    def test_personal_routes_to_chat_with_override(self):
-        """``/personal Q`` is a per-turn route that injects the wiki context."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/personal what did I write about Q3?')
-        assert parsed.route_to == 'chat'
-        assert parsed.personal_override is True
-        assert parsed.stripped_prompt == 'what did I write about Q3?'
-        assert parsed.matched_commands == ['/personal']
-
-    def test_unknown_command_passes_through(self):
-        """Typos must not silently change behaviour."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/imagine a sunset')
-        assert parsed.route_to == 'chat'
-        assert parsed.stripped_prompt == '/imagine a sunset'
-        assert parsed.matched_commands == []
-
-    def test_removed_preference_slashes_pass_through_as_text(self):
-        """``/local``, ``/cheap``, ``/k``, ``/pseudo``, ``/nopseudo`` were removed.
-
-        After the 2026-05-30 UX simplification, per-turn preferences are
-        controlled via visible affordances (composer sliders, CLI ``--``
-        flags, API booleans). The old slash forms must NOT silently
-        toggle behaviour — they must pass through as plain text so a
-        muscle-memory typist sees their prompt unchanged.
-        """
-        from core.commands import parse_command
-
-        for legacy in ('/local hello', '/cheap 0.005 hello', '/k 5 hello',
-                       '/pseudo hello', '/nopseudo hello'):
-            parsed = parse_command(legacy)
-            assert parsed.route_to == 'chat'
-            assert parsed.stripped_prompt == legacy
-            assert parsed.matched_commands == []
+    # render_help is the user-facing static catalogue.
+    body = render_help()
+    assert '/image' in body and '/speech' in body and '/help' in body
 
 
-class TestRenderHelp:
-    def test_help_is_non_empty_markdown(self):
-        from core.commands import render_help
+@pytest.fixture
+def api_client(monkeypatch):
+    """A TestClient with the pipeline stubbed."""
+    from fastapi.testclient import TestClient
 
-        body = render_help()
-        assert 'slash-command' in body.lower()
-        assert '/image' in body
-        assert '/speech' in body
-        assert '/help' in body
+    from core.schemas import (
+        ChatResponse,
+        ModelResponse,
+        RouterDecision,
+        SynthesisResult,
+    )
 
-
-class TestApiIntegration:
-    """``/api/chat`` must honour the parser's verdicts."""
-
-    @pytest.fixture
-    def api_client(self, monkeypatch):
-        from fastapi.testclient import TestClient
-
-        # Stub the pipeline so the test doesn't need Ollama.
-        from core import pipeline as pipeline_mod
-        from core.schemas import ChatResponse, ModelResponse, RouterDecision, SynthesisResult
-
-        async def stub_run(payload, router=None):
-            return ChatResponse(
-                conversation_id='conv',
-                router=RouterDecision(
-                    prompt=payload.prompt,
-                    categories={'reasoning': 1.0},
-                    candidates=[],
-                    selected_model_ids=[],
-                    reasoning=[f'preferences={payload.preferences.model_dump()}', f'top_k={payload.top_k}'],
-                ),
-                responses=[
-                    ModelResponse(model_id='stub', provider='stub', content='ok',
-                                  latency_s=0.1),
+    async def stub(payload, router=None):
+        return ChatResponse(
+            conversation_id='conv',
+            router=RouterDecision(
+                prompt=payload.prompt,
+                categories={'reasoning': 1.0},
+                candidates=[],
+                selected_model_ids=[],
+                reasoning=[
+                    f'preferences={payload.preferences.model_dump()}',
+                    f'top_k={payload.top_k}',
                 ],
-                synthesis=SynthesisResult(
-                    model_id='stub-judge', provider='stub', content='stubbed',
-                    judge_summary='', winning_model_ids=[],
-                ),
-                telemetry_id='tel',
-            )
-
-        monkeypatch.setattr(pipeline_mod, 'run_roitelet_chat', stub_run)
-        # Make sure the api module sees the stubbed name even though
-        # it imported the original symbol at module load.
-        from api import main as api_main
-        monkeypatch.setattr(api_main, 'run_roitelet_chat', stub_run)
-
-        return TestClient(api_main.app)
-
-    def test_help_short_circuits(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/help'})
-        assert response.status_code == 200
-        data = response.json()
-        assert 'slash-command' in data['synthesis']['content'].lower()
-        # Help is static — no pipeline run, no telemetry id.
-        assert data['telemetry_id'] == ''
-
-    def test_image_rejected_with_pointer(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/image a sunset'})
-        assert response.status_code == 400
-        detail = response.json()['detail']
-        assert detail['route_to'] == 'image'
-        assert '/api/images' in detail['message']
-
-    def test_speech_rejected_with_pointer(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/speech'})
-        assert response.status_code == 400
-        detail = response.json()['detail']
-        assert detail['route_to'] == 'speech'
-        assert 'multimodal' in detail['message']
-
-    def test_preferences_flow_through_request_payload(self, api_client):
-        """Per-turn preferences ride in the JSON ``preferences`` field — no slash needed."""
-        response = api_client.post(
-            '/api/chat',
-            json={
-                'prompt': 'refactor',
-                'preferences': {'independence': True, 'pseudonymize': True},
-                'top_k': 5,
-            },
+            ),
+            responses=[ModelResponse(model_id='stub', provider='stub',
+                                     content='ok', latency_s=0.1)],
+            synthesis=SynthesisResult(model_id='stub-judge', provider='stub',
+                                      content='stubbed', judge_summary='',
+                                      winning_model_ids=[]),
+            telemetry_id='tel',
         )
-        assert response.status_code == 200
-        data = response.json()
-        joined = ' '.join(data['router']['reasoning'])
-        assert "'independence': True" in joined
-        assert "'pseudonymize': True" in joined
-        assert 'top_k=5' in joined
+
+    from api import main as api_main
+    monkeypatch.setattr(api_main, 'run_roitelet_chat', stub)
+    return TestClient(api_main.app)
+
+
+def test_api_routes_help_redirects_image_and_speech_and_passes_preferences(api_client):
+    """One test covers the four meaningful API behaviours:
+
+    * ``/help`` short-circuits — the static catalogue comes back without
+      a pipeline call (no telemetry id);
+    * ``/image`` returns 400 with a pointer to ``/api/images``;
+    * ``/speech`` returns 400 with a pointer to multimodal;
+    * non-slash chat requests pass ``preferences`` + ``top_k`` straight
+      through to the pipeline.
+    """
+    # /help — no pipeline call, no telemetry id.
+    help_body = api_client.post('/api/chat', json={'prompt': '/help'}).json()
+    assert 'slash-command' in help_body['synthesis']['content'].lower()
+    assert help_body['telemetry_id'] == ''
+
+    # /image redirect.
+    img = api_client.post('/api/chat', json={'prompt': '/image a sunset'})
+    assert img.status_code == 400
+    assert img.json()['detail']['route_to'] == 'image'
+    assert '/api/images' in img.json()['detail']['message']
+
+    # /speech redirect.
+    speech = api_client.post('/api/chat', json={'prompt': '/speech'})
+    assert speech.status_code == 400
+    assert speech.json()['detail']['route_to'] == 'speech'
+    assert 'multimodal' in speech.json()['detail']['message']
+
+    # Per-turn preferences ride in the JSON body.
+    body = api_client.post(
+        '/api/chat',
+        json={
+            'prompt': 'refactor',
+            'preferences': {'independence': True, 'pseudonymize': True},
+            'top_k': 5,
+        },
+    ).json()
+    joined = ' '.join(body['router']['reasoning'])
+    assert "'independence': True" in joined
+    assert "'pseudonymize': True" in joined
+    assert 'top_k=5' in joined

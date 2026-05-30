@@ -28,13 +28,12 @@ from core.capabilities import detect_capabilities, top_capabilities
 from core.config import Settings
 from core.judge import parse_winners
 from core.schemas import (
+    SECRET_MASK,
     AppSettingsPayload,
     CustomEngine,
     ModelCandidate,
     RouterPreferences,
-    SECRET_MASK,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: a real HTTP server that mimics Ollama, plus an autouse cache
@@ -208,7 +207,9 @@ def test_regime_detector_picks_the_right_branch_per_prompt():
         'Please refactor this Python module so the database access '
         'is mockable in unit tests without touching call sites.'
     )
-    assert detect_regime(long_coding, RouterPreferences(), {'coding': 0.8, 'reasoning': 0.2}).name == 'capability_dominant'
+    assert detect_regime(
+        long_coding, RouterPreferences(), {'coding': 0.8, 'reasoning': 0.2},
+    ).name == 'capability_dominant'
 
     # No capability ≥ 30 % and prompt long enough → ambiguous (not trivial).
     chitchat = (

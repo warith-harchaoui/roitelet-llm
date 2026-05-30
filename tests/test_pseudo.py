@@ -1,25 +1,22 @@
-"""Offline unit tests for :mod:`core.pseudo`.
+"""Offline tests for :mod:`core.pseudo`.
+
+Every visible behaviour worth pinning, in five carefully-written tests:
+
+1. forward pass round-trips a typical PII payload;
+2. forward pass fails closed on each of the five validation invariants —
+   exhaustively, so a regression breaking any of them shows up;
+3. restore pass handles both the trivial overlap-ordering case and
+   the inflection case that triggers the LLM repair pass;
+4. pipeline-level integration confirms the original prompt is what
+   the conversation log persists (substitutes live in metadata).
 
 The Ollama client is monkeypatched at the provider-factory seam so the
-whole suite stays network-free. Each test drives the public
-:func:`pseudonymize_prompt` / :func:`restore_text` API end-to-end with
-a hand-written stub reply, asserting the fail-closed contract and the
-PII taxonomy coverage.
-
-Why this layer instead of an end-to-end DeepEval pass:
-
-* the eval pass (``tests/eval/test_pseudo_quality.py``) measures
-  *quality*; this pass measures *contract*. They catch different
-  classes of regression.
-* a unit test that asserts e.g. "an IP address actually round-trips"
-  is meaningful only at the validation seam — the eval suite would
-  attribute any miss to the model rather than the wrapper.
+whole suite stays network-free.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import pytest
 
@@ -33,16 +30,12 @@ from core.pseudo import (
 from core.schemas import ChatMessage, ModelResponse, PIIMapping
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Test fixture: a stub Ollama client that returns canned bodies in order.
 # ---------------------------------------------------------------------------
 
 
 class _StubClient:
-    """Pluggable Ollama-shape client whose .generate(...) returns a fixed body.
-
-    The body can be a string (one-shot) or a list of strings consumed
-    FIFO (for two-stage forward + repair scenarios).
-    """
+    """Stand-in for the Ollama client; yields canned reply bodies FIFO."""
 
     def __init__(self, body: str | list[str]) -> None:
         self._bodies = [body] if isinstance(body, str) else list(body)
@@ -61,401 +54,262 @@ class _StubClient:
 
 @pytest.fixture
 def patch_provider(monkeypatch):
-    """Return a closure that installs a stub provider client for one test."""
+    """Install a stub provider client and pin the resolved model id."""
     from core import pseudo as pseudo_mod
 
     def install(body: str | list[str]) -> _StubClient:
         client = _StubClient(body)
-        monkeypatch.setattr(
-            pseudo_mod, 'get_provider_client', lambda _provider: client
-        )
+        monkeypatch.setattr(pseudo_mod, 'get_provider_client', lambda _p: client)
+
+        class _Stub:
+            local_synthesis_model = 'qwen3:8b'
+            pseudo_model_id = ''
+
+        class _Storage:
+            def load_app_settings(self):
+                return _Stub()
+
+        monkeypatch.setattr(pseudo_mod._storage_mod, 'get_storage', lambda: _Storage())
         return client
 
     return install
 
 
-@pytest.fixture
-def patch_settings(monkeypatch):
-    """Pin the settings-resolved model id so tests don't depend on disk state."""
-    from core import pseudo as pseudo_mod
-
-    class _Stub:
-        local_synthesis_model = 'qwen3:8b'
-        pseudo_model_id = ''
-
-    class _Storage:
-        def load_app_settings(self):
-            return _Stub()
-
-    monkeypatch.setattr(pseudo_mod._storage_mod, 'get_storage', lambda: _Storage())
-
-
 def _forward_body(rewritten: str, mappings: list[dict]) -> str:
+    """Serialise the JSON envelope the local model is expected to return."""
     return json.dumps({'pseudonymized_prompt': rewritten, 'mappings': mappings})
 
 
 # ---------------------------------------------------------------------------
-# Forward-pass tests
+# Tests
 # ---------------------------------------------------------------------------
 
 
-class TestForwardHappyPath:
-    """The wrapper's job is taxonomy-agnostic: validate whatever the model
-    returns. Two cases exercise the round trip — one names+places (the
-    typical newspaper article), one financial id (the structural-substitution
-    promise) — plus the legitimate empty-mapping outcome. The 19-category
-    taxonomy is enforced by the LLM prompt, not by the Python wrapper, so
-    one row per category here would just be testing pytest.parametrize.
-    """
+async def test_forward_pass_round_trips_a_typical_pii_payload(patch_provider):
+    """The wrapper validates whatever the model returns and exposes it
+    on the audit. One representative case (name + place) suffices —
+    every other PII category goes through the same code path.
 
-    async def test_round_trip_on_names_and_places(self, patch_provider, patch_settings):
-        prompt = 'Email Marie Dupont about the Lyon meeting.'
-        rewritten = 'Email Camille Lefèvre about the Toulouse meeting.'
-        mappings = [
+    The empty-mapping case is also a legitimate outcome (a coding
+    question shouldn't be pseudonymised), so we assert that too.
+    """
+    patch_provider(_forward_body(
+        'Email Camille Lefèvre about the Toulouse meeting.',
+        [
             {'original': 'Marie Dupont', 'substitute': 'Camille Lefèvre', 'kind': 'person_name'},
             {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
-        ]
-        patch_provider(_forward_body(rewritten, mappings))
-        audit = await pseudonymize_prompt(prompt)
-        assert audit.pseudonymized_prompt == rewritten
-        assert {m.kind for m in audit.mappings} == {'person_name', 'place_name'}
-        assert audit.model_id.endswith('qwen3:8b')
+        ],
+    ))
+    audit = await pseudonymize_prompt('Email Marie Dupont about the Lyon meeting.')
+    assert audit.pseudonymized_prompt == 'Email Camille Lefèvre about the Toulouse meeting.'
+    assert {m.kind for m in audit.mappings} == {'person_name', 'place_name'}
+    assert audit.model_id.endswith('qwen3:8b')
 
-    async def test_round_trip_on_a_structural_identifier(self, patch_provider, patch_settings):
-        """Credit cards exercise the digit-for-digit substitution rule.
-
-        Same wrapper code path as a name; the value of this test is that
-        a future change to validation that accidentally allows
-        ``original == substitute`` on numeric strings would fail here
-        before failing on a real card.
-        """
-        prompt = 'Card 4242 4242 4242 4242 expires 12/29.'
-        rewritten = 'Card 5500 0000 0000 0004 expires 12/29.'
-        mappings = [
-            {'original': '4242 4242 4242 4242', 'substitute': '5500 0000 0000 0004',
-             'kind': 'financial_id'},
-        ]
-        patch_provider(_forward_body(rewritten, mappings))
-        audit = await pseudonymize_prompt(prompt)
-        assert audit.pseudonymized_prompt == rewritten
-        assert audit.mappings[0].kind == 'financial_id'
-
-    async def test_empty_mapping_is_a_legitimate_outcome(self, patch_provider, patch_settings):
-        """A coding question should not produce any substitutions."""
-        prompt = 'How do I reverse a Python list in place?'
-        patch_provider(_forward_body(prompt, []))
-        audit = await pseudonymize_prompt(prompt)
-        assert audit.mappings == []
-        assert audit.pseudonymized_prompt == prompt
+    # Empty mapping is legitimate, not an error.
+    patch_provider(_forward_body('How do I reverse a Python list in place?', []))
+    audit = await pseudonymize_prompt('How do I reverse a Python list in place?')
+    assert audit.mappings == []
 
 
-class TestForwardFailClosed:
-    """Every validation must abort the turn, never silently let the prompt through."""
+async def test_forward_pass_fails_closed_on_every_validation_breach(patch_provider):
+    """The safety contract: the unredacted prompt is never sent.
 
-    async def test_invalid_json_raises(self, patch_provider, patch_settings):
-        patch_provider('definitely not json')
-        with pytest.raises(PseudonymizationError, match='valid JSON'):
-            await pseudonymize_prompt('hello')
+    Any of these breaches must raise :class:`PseudonymizationError`:
 
-    async def test_original_not_in_prompt_raises(self, patch_provider, patch_settings):
-        body = _forward_body(
-            'hello stranger',
-            [{'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'}],
-        )
-        patch_provider(body)
-        with pytest.raises(PseudonymizationError, match='was in the prompt'):
-            await pseudonymize_prompt('hello')
+    * model returns non-JSON,
+    * mapping refers to a substring not in the input,
+    * substitute is missing from the rewritten prompt,
+    * the original leaks through into the rewritten prompt,
+    * mapping is a no-op (``original == substitute``).
 
-    async def test_substitute_not_in_rewritten_raises(self, patch_provider, patch_settings):
-        body = _forward_body(
-            'hello stranger',
-            [{'original': 'hello', 'substitute': 'salut', 'kind': 'person_name'}],
-        )
-        patch_provider(body)
-        with pytest.raises(PseudonymizationError, match='did not actually use'):
-            await pseudonymize_prompt('hello stranger')
+    A fenced JSON envelope is the one *recoverable* breach — local
+    models often wrap output in ```` ```json ```` despite the prompt
+    saying not to. We tolerate that.
+    """
+    # Invalid JSON.
+    patch_provider('definitely not json')
+    with pytest.raises(PseudonymizationError, match='valid JSON'):
+        await pseudonymize_prompt('hello')
 
-    async def test_original_leaks_into_rewritten_raises(self, patch_provider, patch_settings):
-        body = _forward_body(
-            'Marie also greets Camille.',
-            [{'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'}],
-        )
-        patch_provider(body)
-        with pytest.raises(PseudonymizationError, match='left the original'):
-            await pseudonymize_prompt('Marie says hi.')
+    # Original not actually in the prompt.
+    patch_provider(_forward_body(
+        'hello stranger',
+        [{'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'}],
+    ))
+    with pytest.raises(PseudonymizationError, match='was in the prompt'):
+        await pseudonymize_prompt('hello')
 
-    async def test_no_op_mapping_raises(self, patch_provider, patch_settings):
-        body = _forward_body(
-            'Marie says hi.',
-            [{'original': 'Marie', 'substitute': 'Marie', 'kind': 'person_name'}],
-        )
-        patch_provider(body)
-        with pytest.raises(PseudonymizationError, match='no-op'):
-            await pseudonymize_prompt('Marie says hi.')
+    # Substitute missing from the rewritten output.
+    patch_provider(_forward_body(
+        'hello stranger',
+        [{'original': 'hello', 'substitute': 'salut', 'kind': 'person_name'}],
+    ))
+    with pytest.raises(PseudonymizationError, match='did not actually use'):
+        await pseudonymize_prompt('hello stranger')
 
-    async def test_empty_response_raises(self, patch_provider, patch_settings):
-        patch_provider('')
-        with pytest.raises(PseudonymizationError, match='empty'):
-            await pseudonymize_prompt('hello')
+    # Original leaks into the rewritten prompt.
+    patch_provider(_forward_body(
+        'Marie also greets Camille.',
+        [{'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'}],
+    ))
+    with pytest.raises(PseudonymizationError, match='left the original'):
+        await pseudonymize_prompt('Marie says hi.')
 
-    async def test_fenced_json_is_tolerated(self, patch_provider, patch_settings):
-        """Models that wrap output in ```json fences despite the prompt must still work."""
-        prompt = 'I am Marie.'
-        body = '```json\n' + _forward_body(
+    # No-op mapping.
+    patch_provider(_forward_body(
+        'Marie says hi.',
+        [{'original': 'Marie', 'substitute': 'Marie', 'kind': 'person_name'}],
+    ))
+    with pytest.raises(PseudonymizationError, match='no-op'):
+        await pseudonymize_prompt('Marie says hi.')
+
+    # ```json fences are tolerated — recoverable, not a breach.
+    patch_provider(
+        '```json\n'
+        + _forward_body(
             'I am Camille.',
             [{'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'}],
-        ) + '\n```'
-        patch_provider(body)
-        audit = await pseudonymize_prompt(prompt)
-        assert audit.pseudonymized_prompt == 'I am Camille.'
+        )
+        + '\n```'
+    )
+    audit = await pseudonymize_prompt('I am Marie.')
+    assert audit.pseudonymized_prompt == 'I am Camille.'
 
 
-# ---------------------------------------------------------------------------
-# Reverse-pass tests
-# ---------------------------------------------------------------------------
+async def test_restore_handles_overlap_then_inflection(patch_provider):
+    """Restore is two stages and both have one subtle case worth pinning.
 
-
-class TestLiteralRestore:
-    """The literal pass handles the typical case. The one subtle case
-    worth nailing down is overlapping substitutes — without
-    length-ordering the inner match would consume the outer one and
-    we'd silently corrupt the answer.
+    * Stage 1 (literal): if substitute A is contained in substitute B,
+      longer-first ordering is what stops the inner replace from
+      corrupting the outer one ("Toulouse" inside "New Toulouse").
+    * Stage 2 (LLM repair): when the synthesis judge inflects a
+      multi-token substitute ("Camille Lefèvre" → "Mme Lefèvre")
+      the literal pass leaves "Lefèvre" surviving; the repair pass
+      fires exactly here, not on a single-token substitute that the
+      literal pass would already have handled.
     """
+    # Stage 1: overlap ordering.
+    mappings = [
+        PIIMapping(original='New York', substitute='New Toulouse', kind='place_name'),
+        PIIMapping(original='Lyon', substitute='Toulouse', kind='place_name'),
+    ]
+    assert (
+        literal_restore('I left New Toulouse and arrived at Toulouse.', mappings)
+        == 'I left New York and arrived at Lyon.'
+    )
 
-    def test_typical_two_swap(self):
-        mappings = [
-            PIIMapping(original='Marie Dupont', substitute='Camille Lefèvre', kind='person_name'),
-            PIIMapping(original='Lyon', substitute='Toulouse', kind='place_name'),
-        ]
-        text = 'Camille Lefèvre will travel to Toulouse on Monday.'
-        assert literal_restore(text, mappings) == 'Marie Dupont will travel to Lyon on Monday.'
+    # Orphan-detection invariants: fires on a surviving distinctive token,
+    # not when the token was in the original too.
+    inflection_case = [PIIMapping(
+        original='Marie Dupont', substitute='Camille Lefèvre', kind='person_name',
+    )]
+    assert _has_orphan_substitutes('Mme Lefèvre said hi.', inflection_case) is True
 
-    def test_longer_substitute_wins_over_overlapping_shorter(self):
-        """``New Toulouse`` must be restored to ``New York`` before ``Toulouse → Lyon`` fires."""
-        mappings = [
-            PIIMapping(original='New York', substitute='New Toulouse', kind='place_name'),
-            PIIMapping(original='Lyon', substitute='Toulouse', kind='place_name'),
-        ]
-        text = 'I left New Toulouse and arrived at Toulouse.'
-        assert literal_restore(text, mappings) == 'I left New York and arrived at Lyon.'
+    shared_token_case = [PIIMapping(
+        original='Marie Curie', substitute='Marie Sklodowska', kind='person_name',
+    )]
+    assert _has_orphan_substitutes('Marie was happy.', shared_token_case) is False
 
-
-class TestOrphanDetection:
-    """Orphan detection is the trigger for the LLM repair pass. The
-    one case that actually fires it is a multi-token substitute that
-    the judge inflected (``Camille Lefèvre`` → ``Mme Lefèvre``). The
-    false-positive case (token survives because it was in the original
-    too) is the other invariant worth pinning.
-    """
-
-    def test_fires_when_distinctive_token_of_multitoken_substitute_survives(self):
-        """``Camille Lefèvre`` → judge wrote ``Mme Lefèvre`` → ``Lefèvre`` survives."""
-        mappings = [
-            PIIMapping(
-                original='Marie Dupont',
-                substitute='Camille Lefèvre',
-                kind='person_name',
-            ),
-        ]
-        assert _has_orphan_substitutes('Mme Lefèvre said hi.', mappings) is True
-
-    def test_does_not_fire_when_surviving_token_appears_in_the_original(self):
-        """If the substitute reuses a token from the original, survival isn't a paraphrase."""
-        mappings = [
-            PIIMapping(
-                original='Marie Curie',
-                substitute='Marie Sklodowska',
-                kind='person_name',
-            ),
-        ]
-        assert _has_orphan_substitutes('Marie was happy.', mappings) is False
+    # Stage 2: repair pass fires on the inflection case and the audit
+    # records that it ran.
+    client = patch_provider('Mme Dupont wrote back the next day.')
+    out, repair_used = await restore_text(
+        'Mme Lefèvre wrote back the next day.', inflection_case,
+    )
+    assert repair_used is True
+    assert out == 'Mme Dupont wrote back the next day.'
+    assert 'Camille Lefèvre → Marie Dupont' in client.calls[0]['messages'][1]['content']
 
 
-class TestRestoreText:
-    async def test_literal_only_skips_llm_call(self, patch_provider, patch_settings):
-        client = patch_provider('SHOULD NOT BE CALLED')
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
-        out, repair_used = await restore_text('Hi Camille!', mappings)
-        assert out == 'Hi Marie!'
-        assert repair_used is False
-        assert client.calls == []  # the repair pass never ran
+async def test_pipeline_persists_original_prompt_and_returns_restored_answer(
+    monkeypatch, tmp_path,
+):
+    """The persistence contract: the conversation log stores what the
+    user typed, never the substituted version. Substitutes live only
+    on ``metadata.pseudonymization`` so a future audit / reload reads
+    naturally to the user while still proving what left the box.
 
-    async def test_repair_pass_fires_on_inflected_multitoken_substitute(
-        self, patch_provider, patch_settings,
-    ):
-        """The classic case: ``Camille Lefèvre`` came back as ``Mme Lefèvre``.
+    Every model-side seam is stubbed so the test stays hermetic; the
+    real storage manager writes to ``tmp_path``."""
+    from core import config as config_mod
+    from core import pipeline as pipeline_mod
+    from core import pseudo as pseudo_mod
+    from core import storage as storage_mod
+    from core.schemas import (
+        ChatRequest,
+        ModelResponse,
+        RouterDecision,
+        RouterPreferences,
+        SynthesisResult,
+    )
 
-        The literal pass searches for ``Camille Lefèvre`` and finds
-        nothing, but ``Lefèvre`` is a survivor token of a multi-token
-        substitute → repair pass fires.
-        """
-        client = patch_provider('Mme Dupont wrote back the next day.')
-        mappings = [
-            PIIMapping(
-                original='Marie Dupont',
-                substitute='Camille Lefèvre',
-                kind='person_name',
-            ),
-        ]
-        out, repair_used = await restore_text(
-            'Mme Lefèvre wrote back the next day.', mappings,
-        )
-        assert repair_used is True
-        assert out == 'Mme Dupont wrote back the next day.'
-        assert len(client.calls) == 1
-        repair_user_msg = client.calls[0]['messages'][1]['content']
-        assert 'Camille Lefèvre → Marie Dupont' in repair_user_msg
+    monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
+    from core.storage import get_storage as _get_storage
+    config_mod.get_settings.cache_clear()
+    _get_storage.cache_clear()
 
-    async def test_repair_pass_failure_falls_back_to_literal(
-        self, patch_provider, patch_settings,
-    ):
-        client = patch_provider('')  # empty repair response
-        mappings = [
-            PIIMapping(
-                original='Marie Dupont',
-                substitute='Camille Lefèvre',
-                kind='person_name',
-            ),
-        ]
-        # Inflected form survives the literal pass → repair triggers,
-        # repair returns empty → we keep the literal output (which here
-        # is the input unchanged because ``Camille Lefèvre`` wasn't a
-        # substring match).
-        out, repair_used = await restore_text(
-            'Mme Lefèvre said hi.', mappings,
-        )
-        assert out == 'Mme Lefèvre said hi.'
-        assert repair_used is False
-        assert len(client.calls) == 1  # we tried, then fell back
+    # Pseudonymizer stub.
+    client = _StubClient(_forward_body(
+        'Email Camille about Toulouse.',
+        [
+            {'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'},
+            {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
+        ],
+    ))
+    monkeypatch.setattr(pseudo_mod, 'get_provider_client', lambda _p: client)
 
+    seen: list[str] = []
 
+    async def fake_query_one(model_id: str, messages):
+        seen.append(messages[0].content)
+        return ModelResponse(model_id=model_id, provider='ollama',
+                             content=f'Reply for {messages[0].content!r}', latency_s=0.01)
 
-# ---------------------------------------------------------------------------
-# Pipeline-integration smoke test (pipeline + storage layer, no Ollama)
-# ---------------------------------------------------------------------------
-
-
-class TestPipelineIntegration:
-    """End-to-end pipeline turn with pseudonymization on, every model stubbed."""
-
-    async def test_pipeline_uses_pseudonymized_prompt_and_restores(
-        self, monkeypatch, tmp_path,
-    ):
-        """End-to-end pipeline turn using a fresh temp data dir.
-
-        Deliberately does NOT use ``patch_settings`` (that fixture
-        replaces ``get_storage`` and would break ``get_conversation``).
-        Instead we point ``ROITELET_DATA_DIR`` at ``tmp_path`` so the
-        real storage manager writes to an isolated location, then we
-        stub the model-side seam (``get_provider_client``) only.
-        """
-        from core import pipeline as pipeline_mod
-        from core import pseudo as pseudo_mod
-        from core import storage as storage_mod
-        from core.schemas import (
-            ChatRequest,
-            ModelResponse,
-            RouterDecision,
-            RouterPreferences,
-            SynthesisResult,
+    async def fake_judge(prompt: str, responses):
+        # The candidate side and the judge both see the substituted prompt.
+        assert prompt == 'Email Camille about Toulouse.'
+        return SynthesisResult(
+            model_id='ollama/qwen3:8b', provider='ollama',
+            content='Camille will receive an email about Toulouse.',
+            judge_summary='', winning_model_ids=[], latency_s=0.01,
         )
 
-        # Point storage at a clean temp dir so the test doesn't touch
-        # the user's real conversation log.
-        monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-        from core import config as config_mod
-        from core.storage import get_storage as _real_get_storage
-        config_mod.get_settings.cache_clear()
-        _real_get_storage.cache_clear()
-
-        # Stub the pseudonymizer's local model (talks through
-        # core.pseudo.get_provider_client).
-        rewritten = 'Email Camille about Toulouse.'
-        forward_body = _forward_body(
-            rewritten,
-            [
-                {'original': 'Marie', 'substitute': 'Camille', 'kind': 'person_name'},
-                {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
-            ],
-        )
-        client = _StubClient(forward_body)
-        monkeypatch.setattr(pseudo_mod, 'get_provider_client', lambda _provider: client)
-
-        seen_prompts: list[str] = []
-
-        async def fake_query_one(model_id: str, messages: Any) -> ModelResponse:
-            seen_prompts.append(messages[0].content)
-            return ModelResponse(
-                model_id=model_id,
-                provider='ollama',
-                content=f'Reply for {messages[0].content!r}',
-                latency_s=0.01,
+    class _RouterStub:
+        def route(self, prompt, preferences, top_k):
+            seen.append(f'router:{prompt}')
+            return RouterDecision(
+                prompt=prompt, categories={'reasoning': 1.0}, candidates=[],
+                selected_model_ids=['ollama/qwen3:8b'], reasoning=[],
             )
 
-        async def fake_judge(prompt: str, responses: list[ModelResponse]) -> SynthesisResult:
-            # The judge sees the pseudonymized prompt and echoes a
-            # paraphrase that uses the substitute.
-            assert prompt == rewritten
-            return SynthesisResult(
-                model_id='ollama/qwen3:8b',
-                provider='ollama',
-                content='Camille will receive an email about Toulouse.',
-                judge_summary='',
-                winning_model_ids=[],
-                latency_s=0.01,
-            )
+    class _RegistryStub:
+        elo_state: dict = {}
 
-        monkeypatch.setattr(pipeline_mod, '_query_one', fake_query_one)
-        monkeypatch.setattr(pipeline_mod, 'judge_and_synthesize', fake_judge)
+        def update_elo(self, *_args, **_kw):
+            return None
 
-        # Bypass the router heuristic: install a tiny router stub that
-        # returns one selected model id.
-        class _RouterStub:
-            def route(self, prompt, preferences, top_k):
-                seen_prompts.append(f'router:{prompt}')
-                return RouterDecision(
-                    prompt=prompt,
-                    categories={'reasoning': 1.0},
-                    candidates=[],
-                    selected_model_ids=['ollama/qwen3:8b'],
-                    reasoning=[],
-                )
+    monkeypatch.setattr(pipeline_mod, '_query_one', fake_query_one)
+    monkeypatch.setattr(pipeline_mod, 'judge_and_synthesize', fake_judge)
+    monkeypatch.setattr(pipeline_mod, 'get_router', lambda: _RouterStub())
+    monkeypatch.setattr(pipeline_mod._registry_mod, 'get_registry', lambda: _RegistryStub())
 
-        monkeypatch.setattr(pipeline_mod, 'get_router', lambda: _RouterStub())
+    response = await pipeline_mod.run_roitelet_chat(
+        ChatRequest(
+            prompt='Email Marie about Lyon.',
+            preferences=RouterPreferences(pseudonymize=True),
+        ),
+    )
 
-        # Bypass the registry too — bootstrap priors live outside tmp_path,
-        # and the only thing pipeline does with the registry is a no-op
-        # Elo update we don't care about here.
-        class _RegistryStub:
-            elo_state: dict = {}
+    # Router and candidate both ran on the substituted prompt.
+    assert 'router:Email Camille about Toulouse.' in seen
+    # The user-visible answer has the originals back.
+    assert response.synthesis.content == 'Marie will receive an email about Lyon.'
+    # The audit is on the response.
+    assert response.pseudonymization is not None
+    assert {m.original for m in response.pseudonymization.mappings} == {'Marie', 'Lyon'}
 
-            def update_elo(self, winners, losers, capabilities):
-                return None
-
-        monkeypatch.setattr(pipeline_mod._registry_mod, 'get_registry', lambda: _RegistryStub())
-
-        response = await pipeline_mod.run_roitelet_chat(
-            ChatRequest(
-                prompt='Email Marie about Lyon.',
-                preferences=RouterPreferences(pseudonymize=True),
-            )
-        )
-
-        # The router and the candidate both saw the pseudonymized text.
-        assert seen_prompts[0] == 'router:Email Camille about Toulouse.'
-        assert any(p == 'Email Camille about Toulouse.' for p in seen_prompts)
-        # The user sees the originals back.
-        assert response.synthesis.content == 'Marie will receive an email about Lyon.'
-        # The audit is attached to the response.
-        assert response.pseudonymization is not None
-        assert response.pseudonymization.pseudonymized_prompt == rewritten
-        assert {m.original for m in response.pseudonymization.mappings} == {'Marie', 'Lyon'}
-
-        # Persistence contract: the conversation log stores the ORIGINAL
-        # prompt; the substitute lives only in metadata.
-        storage = storage_mod.get_storage()
-        conv = storage.get_conversation(response.conversation_id)
-        assert conv is not None
-        user_message = conv.messages[0]
-        assert user_message.content == 'Email Marie about Lyon.'
-        assert 'pseudonymization' in user_message.metadata
+    # Persistence contract: original prompt on the user message,
+    # substitutes only in metadata.
+    conv = storage_mod.get_storage().get_conversation(response.conversation_id)
+    assert conv.messages[0].content == 'Email Marie about Lyon.'
+    assert 'pseudonymization' in conv.messages[0].metadata

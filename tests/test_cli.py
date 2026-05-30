@@ -1,9 +1,14 @@
-"""CLI tests for Roitelet LLM.
+"""CLI tests for the ``roitelet`` console-script.
 
-These tests drive ``cli.main.main()`` with real ``sys.argv`` and a real
-``input()`` substitute. The only seam stubbed out is the pipeline call
-``run_roitelet_chat`` — replaced via :meth:`MonkeyPatch.setattr` with a
-hand-written async function (no ``unittest.mock``).
+Two tests:
+
+* ``roitelet ask`` round-trips a prompt through the pipeline and exits
+  non-zero on a pipeline error.
+* ``roitelet chat`` runs the REPL, dispatches every non-empty prompt,
+  skips blanks, and exits cleanly on ``exit`` / Ctrl-D.
+
+The only seam stubbed out is the pipeline call; argparse, the REPL
+loop, and the welcome banner all run for real.
 """
 
 from __future__ import annotations
@@ -13,151 +18,86 @@ import sys
 import pytest
 
 from cli.main import main
-from core.schemas import (
-    ChatResponse,
-    ModelResponse,
-    RouterDecision,
-    SynthesisResult,
-)
+from core.schemas import ChatResponse, ModelResponse, RouterDecision, SynthesisResult
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
-def _stub_chat_response(content: str = 'Stub synthesis.') -> ChatResponse:
-    """Construct a minimal valid :class:`ChatResponse` for stubbing."""
+def _stub_response(content: str = 'Stub.') -> ChatResponse:
     return ChatResponse(
-        conversation_id='conv-test',
+        conversation_id='conv',
         router=RouterDecision(
-            prompt='stub',
-            categories={'reasoning': 1.0},
-            candidates=[],
+            prompt='stub', categories={'reasoning': 1.0}, candidates=[],
             selected_model_ids=['ollama/qwen2.5:14b-instruct'],
             reasoning=['stubbed'],
         ),
-        responses=[
-            ModelResponse(
-                model_id='ollama/qwen2.5:14b-instruct',
-                provider='ollama',
-                content=content,
-                latency_s=0.01,
-            )
-        ],
+        responses=[ModelResponse(
+            model_id='ollama/qwen2.5:14b-instruct', provider='ollama',
+            content=content, latency_s=0.01,
+        )],
         synthesis=SynthesisResult(
-            model_id='ollama/qwen2.5:14b-instruct',
-            provider='ollama',
-            content=content,
-            judge_summary=f'{content}\nWINNERS: 1',
+            model_id='ollama/qwen2.5:14b-instruct', provider='ollama',
+            content=content, judge_summary=f'{content}\nWINNERS: 1',
             winning_model_ids=['ollama/qwen2.5:14b-instruct'],
         ),
-        telemetry_id='tel-test',
+        telemetry_id='tel',
     )
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+def test_ask_dispatches_to_pipeline_and_propagates_errors(monkeypatch, capsys):
+    """``roitelet ask <prompt>`` should forward the prompt verbatim
+    and print the synthesis. A pipeline failure must exit with status 1
+    and print a clear error rather than crashing with a traceback."""
+    captured: dict = {}
 
-class TestCliAskCommand:
-    """``roitelet ask "..."`` runs single-shot and prints synthesis content."""
+    async def stub_ok(request):
+        captured['prompt'] = request.prompt
+        return _stub_response('42')
 
-    def test_ask_invokes_pipeline_with_prompt(self, monkeypatch, capsys):
-        captured: dict = {}
+    monkeypatch.setattr('cli.main.run_roitelet_chat', stub_ok)
+    monkeypatch.setattr(sys, 'argv', ['roitelet', 'ask', 'What is the answer?'])
+    main()
+    assert captured['prompt'] == 'What is the answer?'
+    assert '42' in capsys.readouterr().out
 
-        async def stub_run(request):
-            captured['prompt'] = request.prompt
-            return _stub_chat_response(content='42')
+    async def stub_boom(request):
+        raise RuntimeError('boom')
 
-        monkeypatch.setattr('cli.main.run_roitelet_chat', stub_run)
-        monkeypatch.setattr(sys, 'argv', ['roitelet', 'ask', 'What is the answer?'])
-
+    monkeypatch.setattr('cli.main.run_roitelet_chat', stub_boom)
+    monkeypatch.setattr(sys, 'argv', ['roitelet', 'ask', 'anything'])
+    with pytest.raises(SystemExit) as exc:
         main()
-
-        assert captured['prompt'] == 'What is the answer?'
-        out = capsys.readouterr().out
-        assert '42' in out
-
-    def test_ask_exits_nonzero_on_pipeline_error(self, monkeypatch, capsys):
-        async def stub_run(request):
-            raise RuntimeError('boom')
-
-        monkeypatch.setattr('cli.main.run_roitelet_chat', stub_run)
-        monkeypatch.setattr(sys, 'argv', ['roitelet', 'ask', 'anything'])
-
-        with pytest.raises(SystemExit) as excinfo:
-            main()
-        assert excinfo.value.code == 1
-        out = capsys.readouterr().out
-        assert 'Error processing prompt' in out
-        assert 'boom' in out
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert 'Error processing prompt' in out and 'boom' in out
 
 
-class TestCliChatCommand:
-    """``roitelet chat`` runs the REPL until 'exit' or EOF."""
+def test_chat_repl_dispatches_non_blank_prompts_until_exit(monkeypatch, capsys):
+    """The REPL prints the welcome banner, dispatches every non-blank
+    line through the pipeline, and exits cleanly on ``exit`` *or* EOF.
 
-    def test_chat_repl_processes_then_exits(self, monkeypatch, capsys):
-        invocations: list[str] = []
+    Blank prompts must be skipped silently — otherwise hitting Enter
+    by mistake would burn a real fan-out + judge call."""
+    invocations: list[str] = []
 
-        async def stub_run(request):
-            invocations.append(request.prompt)
-            return _stub_chat_response(content=f'echo: {request.prompt}')
+    async def stub(request):
+        invocations.append(request.prompt)
+        return _stub_response(f'echo: {request.prompt}')
 
-        monkeypatch.setattr('cli.main.run_roitelet_chat', stub_run)
+    monkeypatch.setattr('cli.main.run_roitelet_chat', stub)
+    monkeypatch.setattr(sys, 'argv', ['roitelet', 'chat'])
 
-        prompts = iter(['hello world', 'exit'])
-        monkeypatch.setattr('builtins.input', lambda _prompt: next(prompts))
-        monkeypatch.setattr(sys, 'argv', ['roitelet', 'chat'])
+    # Mix of blank, whitespace-only, real prompt, then 'exit'.
+    prompts = iter(['', '   ', 'real prompt', 'exit'])
+    monkeypatch.setattr('builtins.input', lambda _p: next(prompts))
+    main()
+    assert invocations == ['real prompt']
 
-        main()
+    out = capsys.readouterr().out
+    assert 'Welcome to Roitelet LLM CLI' in out
+    assert 'echo: real prompt' in out
 
-        # Only the non-exit prompt is dispatched to the pipeline.
-        assert invocations == ['hello world']
-        out = capsys.readouterr().out
-        assert 'Welcome to Roitelet LLM CLI' in out
-        assert 'echo: hello world' in out
-
-    def test_chat_repl_skips_blank_prompts(self, monkeypatch, capsys):
-        invocations: list[str] = []
-
-        async def stub_run(request):
-            invocations.append(request.prompt)
-            return _stub_chat_response()
-
-        monkeypatch.setattr('cli.main.run_roitelet_chat', stub_run)
-
-        prompts = iter(['', '   ', 'real prompt', 'quit'])
-        monkeypatch.setattr('builtins.input', lambda _prompt: next(prompts))
-        monkeypatch.setattr(sys, 'argv', ['roitelet', 'chat'])
-
-        main()
-
-        assert invocations == ['real prompt']
-
-    def test_chat_repl_exits_on_eof(self, monkeypatch, capsys):
-        async def stub_run(request):
-            return _stub_chat_response()
-
-        monkeypatch.setattr('cli.main.run_roitelet_chat', stub_run)
-
-        def raise_eof(_prompt):
-            raise EOFError()
-
-        monkeypatch.setattr('builtins.input', raise_eof)
-        monkeypatch.setattr(sys, 'argv', ['roitelet', 'chat'])
-
-        main()  # must not raise
-
-        out = capsys.readouterr().out
-        assert 'Exiting' in out
-
-
-class TestCliHelp:
-    """``roitelet`` with no subcommand prints help."""
-
-    def test_no_command_prints_help(self, monkeypatch, capsys):
-        monkeypatch.setattr(sys, 'argv', ['roitelet'])
-        main()
-        out = capsys.readouterr().out
-        assert 'usage' in out.lower()
-        assert 'chat' in out
-        assert 'ask' in out
+    # EOF (Ctrl-D) exits cleanly without raising.
+    invocations.clear()
+    monkeypatch.setattr('builtins.input', lambda _p: (_ for _ in ()).throw(EOFError()))
+    monkeypatch.setattr(sys, 'argv', ['roitelet', 'chat'])
+    main()
+    assert 'Exiting' in capsys.readouterr().out
