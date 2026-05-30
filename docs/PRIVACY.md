@@ -19,7 +19,7 @@ that matches your threat model.
 |---|---|---|---|
 | **Local-only** | Everything: prompt, candidates, judge, telemetry, embeddings. | Nothing. | Sensitive prompts; air-gapped or offline use. |
 | **Local-first** (default) | Synthesis judge + storage + embeddings. | The prompt is sent to each selected remote candidate (if any) using that provider's API. | Most desktop / single-user use. The trade is that remote candidates can substantially improve answer quality. |
-| **Pseudonymized local-first** | Same as local-first, plus a local model rewrites PII out of the prompt before fan-out and restores it on the way back. | A *redacted* prompt where person names, places, organisations, contact details, IPs, and IDs are replaced with same-locale substitutes. See [PSEUDO.md](../PSEUDO.md). | When you want remote candidates' quality but don't want their audit logs to see the originals. Reduces casual exposure; does not anonymize against an adversary controlling the provider. |
+| **Pseudonymized local-first** | Same as local-first, plus a local model rewrites PII out of the prompt before fan-out and restores it on the way back. | A *redacted* prompt where person names, places, organisations, contact details, IPs, and IDs are replaced with same-locale substitutes. See [PSEUDO.md](PSEUDO.md). | When you want remote candidates' quality but don't want their audit logs to see the originals. Reduces casual exposure; does not anonymize against an adversary controlling the provider. |
 | **Remote-augmented** | Judge + storage stay local. | Most candidates are remote; the prompt is sent to several providers per turn. | When you actively want diverse remote opinions and accept the corresponding API spend and privacy cost. |
 
 ### How to switch to local-only
@@ -47,7 +47,7 @@ Three equivalent ways:
 - **Persistent:** Settings → *Pseudonymize remote calls (PII swap)*;
   or `roitelet settings set enable_pseudonymization true`.
 
-See [PSEUDO.md](../PSEUDO.md) for the PII taxonomy, the fail-closed
+See [PSEUDO.md](PSEUDO.md) for the PII taxonomy, the fail-closed
 contract, and the audit affordance.
 
 When local-only mode is active, you should see only `ollama/...`
@@ -70,7 +70,7 @@ No additional sanitisation or redaction is applied **unless
 pseudonymization is on for the turn** — in which case `core/pseudo.py`
 runs first, swaps PII for plausible same-origin substitutes, and the
 substituted prompt is what the provider sees. The audit trail
-records exactly what went over the wire. See [PSEUDO.md](../PSEUDO.md).
+records exactly what went over the wire. See [PSEUDO.md](PSEUDO.md).
 
 If the prompt contains an attachment-derived text block (audio
 transcript, PDF text, image caption), that text is in the prompt the

@@ -129,7 +129,7 @@ Quelques mises en garde utiles à connaître d'emblée :
   les informations personnelles (noms, lieux, organisations, contacts,
   identifiants, IP) en substituts plausibles de même origine avant
   appels distants, puis restaurés dans la réponse. Fail-closed ;
-  audit attaché à chaque tour. Voir [PSEUDO.md](PSEUDO.md).
+  audit attaché à chaque tour. Voir [PSEUDO.md](docs/PSEUDO.md).
 - **Endpoints standardisés.** `/v1/chat/completions` +
   `/v1/images/generations` compatibles OpenAI, FastAPI natif, MCP
   JSON-RPC.
@@ -410,7 +410,7 @@ correspond à ce que vous voulez faire.
   de route (`/image`, `/speech`, `/personal`, `/help`) et matrice
   associant les préférences par tour aux contrôles visibles
   (curseurs GUI / arguments CLI / booléens API).
-- **[PSEUDO.md](PSEUDO.md)** — pseudonymisation : taxonomie PII,
+- **[PSEUDO.md](docs/PSEUDO.md)** — pseudonymisation : taxonomie PII,
   contrat fail-closed, surfaces GUI / CLI / API, audit.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
   ce qui est stocké sur disque, ce qui part sur le réseau.

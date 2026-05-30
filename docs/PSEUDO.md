@@ -2,6 +2,7 @@
 
 > **Status:** implemented in `core/pseudo.py`, wired through pipeline,
 > available on every surface (GUI / CLI / API / MCP).
+>
 > **Origin:** request 2026-05-30.
 
 A per-conversation toggle that lets a Roitelet turn:
