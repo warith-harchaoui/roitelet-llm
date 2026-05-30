@@ -1,29 +1,14 @@
 # Roitelet LLM
 
-> **A local-first LLM router with online preference learning,
-> optional PII pseudonymization, and a local fused-answer judge.**
-> Every routing decision, candidate response, judge transcript,
-> energy estimate, and rolling-Elo update is inspectable as plain
-> JSON.
+> **Ask one question — several AI models answer at the same time — a
+> small model on your computer picks the best parts of each answer
+> and gives you one response.**
 
-A few primitives Roitelet packages together that I don't see
-combined elsewhere:
-
-- **Per-capability rolling Elo updated from the judge's own
-  signal** — a calibrated, online preference loop, not a fixed
-  scorecard or an offline-trained classifier.
-- **Ecofrugality as a first-class router input** — cost (USD) +
-  energy (kWh) + latency in one bonus term.
-- **LLM-based pseudonymization with a 19-category taxonomy and a
-  literal+LLM repair reverse pass**, fail-closed if any invariant
-  breaks. Not a regex/NER proxy.
-- **Regime-aware hybrid routing** — the linear blend composes with
-  per-prompt regimes (trivial, budget-constrained, long-context,
-  ambiguous, capability-dominant).
-
-What it isn't: a new model architecture, a calibrated
-`P(strong wins)` cost-router (that's RouteLLM), a hosted gateway
-(LiteLLM), or a peer-reviewed result.
+Roitelet runs on your machine. You can use the AI on your laptop, or
+plug in cloud models (ChatGPT, Claude, Gemini via OpenRouter, …) and
+let them compete on each question. Optionally, Roitelet hides your
+personal information before anything goes to the cloud and puts it
+back in the answer.
 
 ![Roitelet](assets/roitelet.jpg)
 
@@ -46,7 +31,86 @@ running its own local synthesis pass on top.
 
 ---
 
-## How it works
+## Which doc should I read?
+
+Pick the row that matches what you came here to do.
+
+| You are… | …and you want to | Start here |
+|---|---|---|
+| 🧑 **A curious user** | Try Roitelet on your laptop, ask it a question, see it work | [Quick start](#quick-start) (below) |
+| 🧰 **A user with files** | Drop in PDFs, audio, images, or a website URL and ask about them | [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md) |
+| 🔐 **A privacy-conscious user** | Understand what stays local and how PII hiding works | [docs/PRIVACY.md](docs/PRIVACY.md) → [docs/PSEUDO.md](docs/PSEUDO.md) |
+| 🧑‍💻 **A developer with existing OpenAI tooling** | Point your `openai` SDK / LiteLLM / Continue.dev at Roitelet | [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md) |
+| 🏗️ **A developer wiring more models** | Add a local GGUF, OpenAI, Mistral, Together, etc. | [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) |
+| 🎛️ **A power user** | Use slash routes (`/image`, `/personal`, …) and per-turn controls | [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) |
+| 🖥️ **A sysadmin / installer** | Install on Linux/Mac/Windows with conda, venv, or Docker | [INSTALL.md](INSTALL.md) ([Français](INSTALLER.md)) |
+| 🔬 **A researcher / honest skeptic** | See the numbers — does fusion actually help? | [docs/EVALUATION.md](docs/EVALUATION.md) |
+| 🛠️ **A contributor / forker** | Understand the internals: router, regimes, Elo loop | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 🇫🇷 **Francophone** | Tout ce qui précède, en français | [LISEZMOI.md](LISEZMOI.md) |
+
+---
+
+## Quick start
+
+Five minutes to a running Roitelet on your laptop:
+
+```bash
+# 1. Install Ollama (one-time).
+#    macOS: brew install ollama
+#    Linux: curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Pull a small local model so Roitelet has something to talk to.
+ollama pull qwen3:8b
+ollama pull nomic-embed-text     # tiny — used by personal mode
+
+# 3. Install Roitelet.
+git clone https://github.com/<your-fork>/roitelet-llm.git
+cd roitelet-llm
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+# 4. Run.
+./start.sh                       # opens http://localhost:8000
+```
+
+Open `http://localhost:8000` and ask anything. The web UI is
+self-explanatory — there's a language toggle (EN/FR) in the
+sidebar header, a "sliders" icon next to the send button for
+per-message options, and a Settings sheet behind the gear at the
+bottom of the sidebar.
+
+Prefer the terminal? Same operations, different surface:
+
+```bash
+roitelet ask "Explain quicksort in one paragraph."
+roitelet ask --pseudonymize "Email Marie Dupont at marie@orange.fr about Q3."
+roitelet ask --url https://docs.python.org/3/library/asyncio.html "Summarise."
+roitelet chat --independence     # interactive REPL, local-only
+roitelet settings get            # see what's persisted
+```
+
+For installer deep-dives (Docker, model bundles, profile comparison):
+[INSTALL.md](INSTALL.md) (English), [INSTALLER.md](INSTALLER.md)
+(French).
+
+---
+
+## What it does (plain language)
+
+| Feature | What it means for you |
+|---|---|
+| **Compare AI models** | One prompt, several answers (e.g. Claude + Llama + Gemma), one final response. |
+| **Local-first** | If you only configure local models, **nothing leaves your machine**. |
+| **Hide personal info** | Toggle "Pseudonymize" — names, addresses, IDs are swapped for plausible fakes before sending, restored in the answer. |
+| **Attach files** | Audio (transcribed), images (read by a vision model), PDFs (text-extracted) — all locally. |
+| **Attach websites** | Paste a URL — Roitelet scrapes the page (Firecrawl) and includes it in the prompt. |
+| **Personal RAG** | Drop your own notes into a folder; Roitelet uses them to answer your questions. |
+| **Image generation** | If you've configured DALL-E / Stable Diffusion / Imagen, ask with `/image` to draw. |
+| **Same operations in CLI and API** | Anything you can do in the GUI you can do from the terminal or an HTTP call. |
+
+---
+
+## How it works (one diagram)
 
 ```mermaid
 flowchart LR
@@ -74,62 +138,63 @@ flowchart LR
     style ELO fill:#f3e8ff,stroke:#a855f7
 ```
 
-Per turn, in plain words:
+Per turn:
 
-1. **Router.** Score every registered model (local + optional remote)
-   on capability priors, rolling Elo, regimes (cost budget, trivial,
-   long-context). Take the top-K (default K=2 — empirical sweet spot,
-   see [docs/EVALUATION.md §4.3](docs/EVALUATION.md)).
-2. **Fan-out.** K candidates answer in parallel via `asyncio.gather`;
-   one slow provider doesn't block the others.
-3. **Judge.** A local Ollama model reads the K answers — anonymised
-   and shuffled — and fuses them.
-4. **Elo update.** Winners gain Elo on the prompt's capabilities;
-   losers lose. Bounded; no runaway.
+1. **Router** picks the top-K models for the question (default K=2).
+2. **Fan-out** — the K models answer in parallel.
+3. **Judge** — a model on your machine reads the K answers
+   (anonymised and shuffled), then fuses them into one.
+4. **Elo update** — winners gain points on the question's topic;
+   losers lose. The next turn benefits from this signal.
 
-Optional **pseudonymization** wraps the whole thing: a local model
-swaps PII (names, places, IDs, …) for plausible same-locale
-substitutes before remote calls, then restores them on the way back.
-Audit trail attached to every turn. See
-[docs/PSEUDO.md](docs/PSEUDO.md).
-
-Every step is inspectable. The router decision, the candidate
-replies, the judge's reasoning, and the Elo state are plain JSON
-files on disk — nothing is hidden behind an opaque service.
+Full internals (the math, the regime detectors, the matrix-fac
+router variant) live in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
-## What this is good for
+## What's actually in here (the honest pitch)
 
-- **Comparing model families** on the same prompt without juggling
-  three SDKs.
-- **Running a local synthesis pass** on top of remote candidate
-  answers — final word from a model you control.
-- **Hiding personal info** before sending to a cloud model
-  (`pseudonymize`).
-- **Studying tradeoffs** between cost, latency, privacy, and answer
-  quality, with the data trail to make those studies reproducible.
+Roitelet packages a few primitives together that I don't see
+combined elsewhere:
 
-Caveats up front: the fused answer is not guaranteed to beat the
-strongest single candidate on every prompt class — that's exactly
-what the ablation roadmap in
-[docs/EVALUATION.md](docs/EVALUATION.md) is designed to measure. The
-synthesis judge is not an objective oracle; Roitelet learns
-*judge-conditioned* preferences. And Roitelet is local-**first**,
-not local-**only** — see [docs/PRIVACY.md](docs/PRIVACY.md) for the
-precise distinction and the local-only switch.
+- **Per-capability rolling Elo updated from the judge's own
+  signal** — an online preference loop, not a fixed scorecard or
+  an offline-trained classifier.
+- **Calibrated `quality_threshold` knob** — a single number in
+  [0, 1] traces the cost/quality Pareto frontier of Roitelet's
+  router (shape-equivalent to RouteLLM's threshold knob, derived
+  from the rolling-Elo blend).
+- **Ecofrugality as a first-class router input** — cost (USD) +
+  energy (kWh) + latency in one bonus term.
+- **LLM-based pseudonymization** with a 19-category PII taxonomy
+  and a literal+LLM repair reverse pass, fail-closed if any
+  invariant breaks. Not a regex/NER proxy.
+- **Regime-aware hybrid routing** — the linear blend composes
+  with per-prompt regimes (trivial, budget-constrained,
+  long-context, ambiguous, capability-dominant).
+- **Firecrawl recursive crawling** as a fourth input modality,
+  alongside audio / image / PDF.
+- **Cross-surface parity** — every operation works in the GUI, on
+  the CLI, and in the API (native + OpenAI-compatible + MCP), with
+  full EN/FR i18n.
+
+What it isn't:
+
+- a new model architecture
+- a calibrated `P(strong wins)` cost-router (that's RouteLLM)
+- a hosted gateway (that's LiteLLM)
+- a peer-reviewed result
 
 ---
 
 ## Three surfaces, same features
 
-The same operations work across all three surfaces:
-
 | Surface | How to access | Per-turn preferences |
 |---|---|---|
 | **Web** (GUI) | `http://localhost:8000/` after `./start.sh` | Sliders icon next to the send button |
-| **CLI** | `roitelet ask "…"` / `roitelet chat` | `--top-k`, `--independence`, `--pseudonymize`, `--max-cost-usd`, `--verbose` |
-| **API** | Native `POST /api/chat`, OpenAI-compatible `POST /v1/chat/completions`, MCP `POST /mcp` | `preferences.{independence, pseudonymize, top_k, max_cost_usd, …}` in the JSON body |
+| **CLI** | `roitelet ask "…"` / `roitelet chat` | `--top-k`, `--independence`, `--pseudonymize`, `--max-cost-usd`, `--quality-threshold`, `--url[ --url-recursive]`, `--verbose` |
+| **API** | Native `POST /api/chat`, OpenAI-compatible `POST /v1/chat/completions`, MCP `POST /mcp` | `preferences.{independence, pseudonymize, top_k, max_cost_usd, quality_threshold}` in the JSON body |
 
 For OpenAI clients (Python SDK, LiteLLM, Continue.dev, …) Roitelet
 is a drop-in target — see [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md).
@@ -138,27 +203,30 @@ don't lose anything by using the OpenAI shape.
 
 ---
 
-## Features at a glance
+## What works today (feature list)
 
 - **Hybrid routing** — capability priors + rolling Elo + regimes
   (cost budget, trivial-prompt, long-context, ambiguous,
   capability-dominant). Optional learned matrix-fac router behind
   `ROITELET_ROUTER=mf`.
 - **Parallel top-K fan-out** — bounded by the slowest candidate.
-  K=2 default (`ROITELET_DEFAULT_TOP_K` overrides).
+  K=2 default.
 - **Local synthesis** — anonymised, shuffled candidates → fused
   answer; replaceable judge.
 - **Pseudonymization** — opt-in PII swap before remote calls,
-  restore after. Fail-closed; full audit. See
-  [docs/PSEUDO.md](docs/PSEUDO.md).
-- **Personal mode** — drop files into `data/personal/inbox/`; small
-  corpora inject inline, large ones switch to embedding retrieval.
-  2-D PCA scatter. See [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
+  restore after. Fail-closed; full audit.
+  [docs/PSEUDO.md](docs/PSEUDO.md)
+- **Personal mode** — drop files into `data/personal/inbox/`;
+  small corpora inject inline, large ones switch to embedding
+  retrieval. 2-D PCA scatter.
+  [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)
 - **Multimodal attachments** — images, PDFs, audio extracted
   locally (Ollama VLM, kreuzberg, whisper.cpp + NeMo) before the
   text pipeline.
+- **Website attachments** — Firecrawl-scraped markdown (single
+  page or recursive crawl).
 - **Image generation** — K=1 routing to the strongest registered
-  image-gen model (no fusion — image ensembling isn't defined).
+  image-gen model.
 - **Universal extension** — any provider with an OpenAI-compatible
   endpoint registers in three settings fields.
 - **Standardized endpoints** — native `/api/chat`,
@@ -166,100 +234,37 @@ don't lose anything by using the OpenAI shape.
   MCP JSON-RPC `/mcp`.
 - **Slash commands** — routes only (`/image`, `/speech`,
   `/personal`, `/help`). Per-turn preferences are visible controls,
-  not slashes. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+  not slashes.
 - **Local telemetry** — per-turn JSON: router decision, every
   candidate (failures included), synthesis, winners.
-- **Optional Bearer-token gate** — `ROITELET_API_TOKEN` locks every
-  endpoint except `/healthz` and the static SPA. Off by default to
-  preserve the single-user-localhost UX.
+- **Optional Bearer-token gate** — `ROITELET_API_TOKEN` locks
+  every endpoint except `/healthz` and the static SPA.
 
 ---
 
-## Quick start
-
-```bash
-# Install runtime deps (conda or venv both work).
-conda env create -f environment.yaml && conda activate roitelet-llm
-# or:
-python -m venv .venv && source .venv/bin/activate && pip install -e .
-
-# Pull a model bundle (Minimal ~3 GB or Full local ~15 GB).
-chmod +x scripts/pull_defaults.sh
-./scripts/pull_defaults.sh --minimal
-
-# Optional: configure remote providers.
-cp .env.example .env       # then edit to add API keys
-
-# Run.
-./start.sh                 # binds 127.0.0.1:8000 by default
-```
-
-Then open `http://localhost:8000/` for the web UI, or use the CLI:
-
-```bash
-roitelet ask "Explain quicksort in one paragraph."
-roitelet ask --pseudonymize "Email Marie Dupont at marie@orange.fr about Q3."
-roitelet settings get
-roitelet chat --independence    # interactive REPL, local-only
-```
-
-For installation deep-dives (Docker, venv variants, profile
-comparison): [INSTALL.md](INSTALL.md) (English),
-[INSTALLER.md](INSTALLER.md) (French).
-
----
-
-## Latency and cost in one paragraph
+## Latency, cost, when not to use it
 
 A turn's wall-clock is `max(candidate_latencies) + judge_latency`
 because the fan-out runs through `asyncio.gather`. Local models are
-free at the marginal token but cost RAM/VRAM. Remote candidates cost
-what their provider charges — Roitelet doesn't arbitrage, it just
-calls them. The cost-budget regime (`--max-cost-usd` flag, composer
-slider, or `preferences.max_cost_usd`) drops candidates above the
-budget *before* scoring. **K=2 is the empirical sweet spot** on the
-held-out dataset (see below); K=1 leaves quality on the table, K=3
-doubles wall-clock for ~+1 pp.
+free at the marginal token but cost RAM/VRAM. Remote candidates
+cost what their provider charges — Roitelet doesn't arbitrage, it
+just calls them.
 
-### Has fusion been measured?
+K=2 is the empirical sweet spot on the held-out dataset (see
+[docs/EVALUATION.md](docs/EVALUATION.md)); K=1 leaves quality on
+the table, K=3 doubles wall-clock for ~+1 pp.
 
-End-to-end ablation on the 25-prompt mixed dataset, local-only (3
-small OSS candidates, `qwen3:8b` judge), graded by DeepEval
-`GEval(correctness, threshold=0.6)`:
+**When not to use Roitelet:**
 
-| K | mean correctness | pass (≥0.6) | mean wall-clock per prompt | judge share |
-|---|---|---|---|---|
-| 1 | 0.87 | 23 / 25 | 32.1 s | 70 % |
-| 2 | **0.95** | **25 / 25** | 55.9 s | 74 % |
-| 3 | 0.96 | **25 / 25** | 112.1 s | 73 % |
-
-> "Mean wall-clock per prompt" is the average end-to-end latency
-> for one user prompt: router + parallel candidate fan-out (bounded
-> by the slowest candidate) + judge + telemetry. Averaged across
-> the 25 prompts.
-
-K=1 → K=2 is **+8 pp mean correctness** for +24 s of wall-clock.
-K=2 → K=3 hits a quality ceiling. Full per-category breakdown,
-caveats, judge-swap ablation (3B vs 4B vs 8B), and the open
-follow-ups live in [docs/EVALUATION.md](docs/EVALUATION.md).
-
----
-
-## When **not** to use Roitelet
-
-- **Very low-latency chat UX.** A single fast model beats fan-out +
-  fusion. If your UI lives or dies by sub-second response times,
-  pick the wrong tool.
+- **Very low-latency chat UX.** A single fast model beats fan-out
+  + fusion. If your UI lives or dies by sub-second response,
+  wrong tool.
 - **Trivial prompts.** "What's 2+2?" doesn't need three opinions.
-- **High-volume production traffic.** Roitelet calls K models + a
-  judge per turn; cost is multiplicative. A single calibrated model
-  + caching is cheaper.
+- **High-volume production traffic.** Cost is multiplicative
+  (K models + a judge per turn). A single calibrated model +
+  caching is cheaper.
 - **You just want one provider gateway.** That's
   [LiteLLM](https://github.com/BerriAI/litellm)'s job.
-
-Use Roitelet when you value comparison, redundancy, model diversity,
-local synthesis on top of remote answers, or auditable studies of
-the tradeoffs.
 
 ---
 
@@ -286,56 +291,16 @@ keys. Threat model: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ---
 
-## Documentation
-
-Three tiers — pick by intent:
-
-### Run it
-- [README.md](README.md) / [LISEZMOI.md](LISEZMOI.md) — what it is,
-  quickstart (this file).
-- [INSTALL.md](INSTALL.md) / [INSTALLER.md](INSTALLER.md) — full
-  installation guide (conda, venv, Docker).
-
-### Use a feature
-- [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md) — drop Roitelet
-  into existing OpenAI tooling.
-- [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) — route slashes
-  + the visible-control matrix.
-- [docs/PSEUDO.md](docs/PSEUDO.md) — pseudonymization (PII
-  taxonomy, fail-closed contract, audit).
-- [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md) — personal-RAG
-  workflow + the embedding viz.
-- [docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md) — wiring
-  image-gen providers.
-- [docs/PRIVACY.md](docs/PRIVACY.md) — what's stored on disk,
-  what goes over the network, the four privacy modes.
-- [docs/EVALUATION.md](docs/EVALUATION.md) — standing ablation
-  roadmap with results.
-
-### Extend it
-- [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) — bring your
-  own GGUF.
-- [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) — wire any
-  OpenAI-compatible paid provider.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — internals
-  deep-dive (Mermaid diagrams, routing math, Elo loop, regimes,
-  matrix-fac router).
-
----
-
 ## How Roitelet differs from neighbouring projects
 
 | Project | Primary role | How Roitelet differs |
 |---|---|---|
 | [LiteLLM](https://github.com/BerriAI/litellm) | OpenAI-compatible gateway over many APIs | Roitelet is narrower: local-first fan-out + local synthesis + inspectable Elo. LiteLLM is a candidate Roitelet could call. |
 | [OpenRouter](https://openrouter.ai) | Hosted multi-model marketplace | Roitelet runs on your machine. OpenRouter is a candidate provider, not a replacement. |
-| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Cost-aware strong-vs-weak routing trained on preferences | Roitelet does top-K + fusion, not binary routing. RouteLLM's `mf` slots behind Roitelet's Router Protocol. |
+| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Cost-aware strong-vs-weak routing trained on preferences | Roitelet does top-K + fusion, not binary routing. Roitelet exposes a `quality_threshold` knob in the same *shape* (single scalar, monotonic), derived from rolling Elo rather than a preference-trained classifier. |
 | [LangChain](https://www.langchain.com) / LangGraph | LLM-orchestration frameworks | Roitelet is an end-user system, not a framework. |
-| [DSPy](https://github.com/stanfordnlp/dspy) | Programming model for prompt-pipeline optimisation | Roitelet routes and fuses at inference time; rolling Elo is its only online "optimisation". They can coexist. |
+| [DSPy](https://github.com/stanfordnlp/dspy) | Prompt-pipeline optimisation | Roitelet routes and fuses at inference time. They can coexist. |
 | Single-model chat clients | One model in, one answer out | Roitelet trades simplicity and latency for comparison + redundancy + synthesis. |
-
-Roitelet is a **workbench**, not a gateway, marketplace, framework,
-or chat client.
 
 ---
 
@@ -347,10 +312,10 @@ roitelet-llm/
 ├── api/                # FastAPI app (native + OpenAI-compat + MCP)
 ├── web/                # Vanilla-JS GUI (served at /)
 ├── cli/                # `roitelet` console-script entry point
-├── docs/               # Topic guides — architecture, eval, features
+├── docs/               # Topic guides — architecture, eval, features, privacy
 ├── data/bootstrap/     # Default Elo + capability priors
 ├── scripts/            # pull_defaults.sh, vendor_web_assets.sh
-├── tests/              # Unit + opt-in DeepEval suite
+├── tests/              # Unit + opt-in DeepEval / MT-Bench suite
 ├── .demos/             # Reproducible demo bundle (screenshots, transcripts, video)
 ├── INSTALL.md          # English install
 ├── INSTALLER.md        # French install
