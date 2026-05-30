@@ -23,9 +23,9 @@ caché dans ses plumes, se laissa porter tout en haut — et au sommet,
 d'un petit battement d'ailes supplémentaire, lui rafla la couronne.
 
 Ce n'est pas que le roitelet soit l'oiseau le plus fort — il ne
-l'est pas. Ce qui compte, c'est ce que de petits mouvements locaux,
-bien placés, peuvent ajouter par-dessus de bien plus grandes forces
-externes. Roitelet LLM est bâti sur la même idée : une petite
+l'est pas. Ce qui compte, c'est ce que de petits battements d'ailes,
+bien placés, peuvent ajouter par-dessus de bien plus grandes forces.
+Roitelet LLM est bâti sur la même idée : une petite
 pipeline locale qui se pose sur les grands modèles de langage — les
 compose, compare leurs réponses, et passe une couche de synthèse
 locale par-dessus.
