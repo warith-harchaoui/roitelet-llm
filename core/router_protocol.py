@@ -4,7 +4,7 @@ A typing seam for "how does Roitelet pick which K models to query?"
 
 Today there's exactly one implementation
 (:class:`core.router.RoiteletRouter`, capability-conditioned rolling Elo
-scoring). MECHANISM.md already gestures at future alternatives — a
+scoring). docs/ARCHITECTURE.md already gestures at future alternatives — a
 prompt → top-K classifier, a contextual bandit, a learned policy trained
 on accumulated telemetry. This Protocol pins the contract so swapping in
 any of those doesn't need to touch the pipeline.

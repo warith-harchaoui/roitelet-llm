@@ -9,7 +9,7 @@ well-defined operation, so the strongest single candidate's output is
 the answer.
 
 This guide walks through wiring up an image generator. The architectural
-walk-through lives in [MECHANISM.md](ARCHITECTURE.md).
+walk-through lives in [docs/ARCHITECTURE.md](ARCHITECTURE.md).
 
 ---
 
@@ -148,5 +148,5 @@ periodic `find data/images/ -mtime +30 -delete` is the right shape.
   pattern used for paid text LLMs.
 - [`docs/ADDING_LOCAL_LLM.md`](ADDING_LOCAL_LLM.md) — bring your own
   GGUF (text), via Ollama or `llama-server`.
-- [`MECHANISM.md`](ARCHITECTURE.md) — architectural walk-through covering
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — architectural walk-through covering
   the image-gen pipeline alongside the text routing pipeline.

@@ -197,5 +197,5 @@ response (it says "I don't have that in your notes").
 
 - [`docs/SLASH_COMMANDS.md`](SLASH_COMMANDS.md) — full slash-command
   catalogue.
-- [`MECHANISM.md`](ARCHITECTURE.md) — full architecture, including
+- [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) — full architecture, including
   the personal-mode pipeline integration.
