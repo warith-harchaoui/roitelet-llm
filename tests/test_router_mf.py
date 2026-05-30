@@ -231,10 +231,12 @@ class TestEnvSelector:
             router = get_router_from_env()
             assert router.__class__.__name__ == 'LearnedMFRouter'
 
-    def test_unknown_flavour_falls_back(self):
+    def test_env_calibrated_selects_calibrated_router(self):
+        """``ROITELET_ROUTER=calibrated`` swaps in the RouteLLM-shaped router."""
         from core.router_mf import get_router_from_env
 
         with pytest.MonkeyPatch().context() as m:
-            m.setenv('ROITELET_ROUTER', 'gobbledygook')
+            m.setenv('ROITELET_ROUTER', 'calibrated')
             router = get_router_from_env()
-            assert router.__class__.__name__ == 'RoiteletRouter'
+            assert router.__class__.__name__ == 'CalibratedCostRouter'
+

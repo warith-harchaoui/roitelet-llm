@@ -1,10 +1,14 @@
 # Roitelet LLM
 
-> **Un atelier local-first de routage et de fusion de LLM.** Roitelet
-> route les prompts vers des modèles locaux et distants, compare leurs
-> réponses, synthétise une réponse finale localement, et apprend ses
-> préférences de routage au fil du temps à partir de son propre signal
-> de juge.
+> **Posez une question — plusieurs IA répondent en même temps — un
+> petit modèle sur votre ordinateur sélectionne les meilleurs morceaux
+> de chaque réponse et vous donne une seule réponse.**
+
+Roitelet tourne sur votre machine. Vous pouvez utiliser l'IA de votre
+ordinateur portable, ou brancher des modèles cloud (ChatGPT, Claude,
+Gemini via OpenRouter, …) et les faire concourir sur chaque question.
+En option, Roitelet masque vos informations personnelles avant que
+quoi que ce soit parte vers le cloud et les remet dans la réponse.
 
 ![Roitelet](assets/roitelet.jpg)
 
@@ -26,409 +30,194 @@ pipeline locale qui se pose sur les grands modèles de langage — les
 compose, compare leurs réponses, et passe une couche de synthèse
 locale par-dessus.
 
-### Comment cela se traduit dans la pipeline
+---
 
-Pour un prompt donné, Roitelet :
+## Quel document devrais-je lire ?
 
-1. **Choisit la formation de vol.** Un routeur hybride note chaque
-   modèle enregistré (local + distant optionnel) selon des a priori
-   de capacité curés, l'Elo glissant et un petit jeu d'ajustements
-   régime-conscients (budget coût, prompt trivial, long contexte,
-   …), puis garde les top-K (K=2 par défaut — point d'équilibre
-   empirique du [docs/EVALUATION.md §4.3](docs/EVALUATION.md) ;
-   surchargé par tour).
-2. **Les laisse voler en parallèle.** Les K candidats répondent en
-   concurrence via `asyncio.gather` ; un fournisseur lent ne bloque
-   pas les autres.
-3. **Ajoute le battement d'aile du roitelet.** Un juge de synthèse
-   local lit les K réponses — anonymisées et mélangées, pour ne pas
-   pouvoir reconnaître l'identité des modèles — et les fusionne en
-   une réponse unique.
-4. **Se souvient de ce qui a marché.** La télémétrie par tour
-   atterrit en JSON sur le disque, et l'Elo glissant par capacité
-   oriente légèrement la décision de routage suivante.
+Choisissez la ligne qui correspond à ce que vous êtes venu faire.
 
-Chaque étape est inspectable. La décision du routeur, les réponses
-candidates, le raisonnement du juge et l'état Elo sont tous des
-fichiers JSON ; rien n'est caché derrière un service opaque.
+| Vous êtes… | …et vous voulez | Commencez par |
+|---|---|---|
+| 🧑 **Un·e utilisateur·rice curieux·se** | Essayer Roitelet sur votre ordinateur, lui poser une question | [Démarrage rapide](#démarrage-rapide) (ci-dessous) |
+| 🧰 **Un·e utilisateur·rice avec des fichiers** | Déposer PDF, audio, images, ou une URL et interroger | [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md) |
+| 🔐 **Un·e utilisateur·rice attentif·ve à la vie privée** | Comprendre ce qui reste local et comment fonctionne le masquage des PII | [docs/PRIVACY.md](docs/PRIVACY.md) → [docs/PSEUDO.md](docs/PSEUDO.md) |
+| 🧑‍💻 **Un·e dev avec un outillage OpenAI existant** | Brancher votre SDK `openai` / LiteLLM / Continue.dev sur Roitelet | [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md) |
+| 🏗️ **Un·e dev qui ajoute des modèles** | Brancher un GGUF local, OpenAI, Mistral, Together, etc. | [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md) |
+| 🎛️ **Un·e utilisateur·rice avancé·e** | Utiliser les routes slash (`/image`, `/personal`, …) et contrôles par tour | [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md) |
+| 🖥️ **Un·e sysadmin / installateur·rice** | Installer sur Linux/Mac/Windows avec conda, venv ou Docker | [INSTALLER.md](INSTALLER.md) ([English](INSTALL.md)) |
+| 🔬 **Un·e chercheur·se / sceptique honnête** | Voir les chiffres — la fusion aide-t-elle vraiment ? | [docs/EVALUATION.md](docs/EVALUATION.md) |
+| 🛠️ **Un·e contributeur·rice / forkeur·se** | Comprendre l'intérieur : routeur, régimes, boucle Elo | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 🇬🇧 **Anglophone** | Tout ce qui précède, en anglais | [README.md](README.md) |
 
 ---
 
-## À quoi cela sert
+## Démarrage rapide
 
-- **Comparer des familles de modèles** sur un même prompt sans
-  jongler avec trois SDK.
-- **Lancer une passe de synthèse locale** par-dessus les réponses
-  candidates distantes — utile quand on veut que le mot final vienne
-  d'un modèle que l'on contrôle.
-- **Expérimenter avec des stratégies de routage et de fusion**
-  (filtres de budget, routeur appris par factorisation matricielle,
-  détecteur de capacité par embeddings) sous une même API.
-- **Étudier les compromis** entre coût, latence, vie privée et
-  qualité de réponse, avec la traçabilité nécessaire pour rendre ces
-  études reproductibles.
-
-Quelques mises en garde utiles à connaître d'emblée :
-
-- La réponse fusionnée n'est pas garantie de battre le meilleur
-  candidat individuel sur toute classe de prompt — c'est précisément
-  ce que mesure la feuille de route d'ablation dans
-  [docs/EVALUATION.md](docs/EVALUATION.md).
-- Le juge de synthèse n'est pas un oracle objectif. Roitelet apprend
-  des préférences *conditionnées au juge* ; différents juges
-  produisent différentes trajectoires d'Elo. Ce biais est une
-  propriété à inspecter, pas à cacher.
-- Roitelet est local-**first**, pas local-**only**. Les prompts
-  partent vers des fournisseurs distants quand des candidats distants
-  sont sélectionnés. Voir [docs/PRIVACY.md](docs/PRIVACY.md) pour la
-  distinction précise et le mode local-only.
-
----
-
-## Fonctionnalités
-
-- **Routage hybride.** A priori de capacité + Elo glissant +
-  ajustements régime-conscients (budget coût, prompt trivial, long
-  contexte, ambigu, capacité dominante). Routeur appris optionnel par
-  factorisation matricielle (`ROITELET_ROUTER=mf`).
-- **Fan-out parallèle top-K.** K=2 par défaut (le point d'équilibre
-  du §4.3), configurable par tour via `ROITELET_DEFAULT_TOP_K` ou
-  le champ `top_k` de la requête.
-  Le temps mur est borné par le candidat le plus lent (voir la
-  section [latence et coût](#latence-et-coût) ci-dessous).
-- **Passe de synthèse locale.** Les réponses candidates sont
-  anonymisées, mélangées et transmises à un modèle local Ollama qui
-  les fusionne. Le juge est remplaçable.
-- **Elo glissant par capacité.** À chaque tour, les gagnants du juge
-  gagnent de l'Elo sur les capacités appelées par le prompt ; les
-  perdants en perdent. Mises à jour bornées ; pas d'emballement.
-- **Point d'extension universel.** Tout LLM payant avec une API
-  `/v1/chat/completions` compatible OpenAI s'enregistre via trois
-  champs de réglage. Idem pour tout GGUF local servi par
-  `llama-server`.
-- **Pièces jointes multimodales.** Glissez images, PDF, audio —
-  extraits localement (Ollama VLM, kreuzberg, whisper.cpp + NeMo)
-  avant la pipeline textuelle.
-- **Génération d'images.** Routage K=1 vers le modèle image-gen
-  enregistré le plus apte (pas de fusion — l'ensemblage d'images
-  n'est pas défini).
-- **Mode personnel.** Déposez vos propres fichiers dans un dossier ;
-  petits corpus injectés en long-context (style LLM-wiki à la
-  Karpathy), gros corpus basculés sur recherche par embeddings.
-  Inclut une projection PCA 2-D. Voir
-  [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
-- **Deux détecteurs de capacité.** Scan par mots-clés par défaut +
-  classifieur sur embeddings locaux Ollama en option.
-- **Commandes slash** — sélection de route uniquement : `/image`,
-  `/speech`, `/personal`, `/help`. Les préférences par tour
-  (top-K, mode local, pseudonymisation, budget) vivent sur des
-  contrôles visibles : icône curseurs dans le composeur web,
-  arguments `--` du CLI, booléens `preferences` dans l'API. Voir
-  [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
-- **Pseudonymisation** — bascule opt-in qui fait réécrire localement
-  les informations personnelles (noms, lieux, organisations, contacts,
-  identifiants, IP) en substituts plausibles de même origine avant
-  appels distants, puis restaurés dans la réponse. Fail-closed ;
-  audit attaché à chaque tour. Voir [PSEUDO.md](docs/PSEUDO.md).
-- **Endpoints standardisés.** `/v1/chat/completions` +
-  `/v1/images/generations` compatibles OpenAI, FastAPI natif, MCP
-  JSON-RPC.
-- **Télémétrie locale.** Enregistrement JSON par tour de la décision
-  du routeur, de chaque réponse candidate (y compris les échecs),
-  de la synthèse et des gagnants. Voir
-  [docs/PRIVACY.md](docs/PRIVACY.md) pour ce qui est enregistré.
-- **Gate Bearer-token optionnel.** `ROITELET_API_TOKEN` verrouille
-  tous les endpoints mutants ou de listage. Désactivé par défaut
-  pour préserver l'UX mono-utilisateur en local.
-
----
-
-## Pourquoi la fusion peut aider — et où se loge le biais du juge
-
-Toute l'idée du juge de synthèse repose sur une asymétrie unique :
-**évaluer et synthétiser est plus facile que créer à partir de zéro.**
-
-Un juge qui a sous les yeux K réponses candidates déjà rédigées n'a
-pas besoin de connaître la réponse ; il doit comparer des
-brouillons, repérer les recouvrements, écarter les contradictions,
-préserver les détails utiles, et produire une réponse fusionnée
-unique. C'est une tâche fondamentalement plus petite que produire
-la première réponse sans aucun échafaudage. Un modèle local
-relativement modeste peut s'en sortir, pour la même raison qu'un
-correcteur peut noter une pile de copies sans être capable d'écrire
-la meilleure lui-même.
-
-C'est cette asymétrie qui rend plausible le pipeline « petit modèle
-local par-dessus de gros candidats distants » de Roitelet. Le travail
-du juge est la curation, pas l'invention.
-
-### Est-ce que ça aide vraiment ? (K-sweep du 2026-05-26)
-
-Campagne complète sur les 25 prompts du dataset mixte,
-**local-only** (3 petits candidats OSS — `llama3.2:3b`,
-`qwen2.5:3b`, `gemma3:4b` ; juge de synthèse `qwen3:8b`), notée par
-DeepEval `GEval(correctness, threshold=0.6)`. Vrai K=3 (chaque tour
-K=3 fan-out aux trois candidats, Gemma incluse ; voir
-[l'enquête `fan_out=2`](docs/EVALUATION.md) pour comprendre
-pourquoi la première tentative ne l'avait pas) :
-
-| K | exactitude moyenne | pass (≥0,6) | latence totale | part du juge |
-|---|---|---|---|---|
-| 1 | 0,87 | 23 / 25 | 32,1 s | 70 % |
-| 2 | **0,95** | **25 / 25** | 55,9 s | 74 % |
-| 3 | 0,96 | **25 / 25** | 112,1 s | 73 % |
-
-**Verdict** : K=1 → K=2 = **+8 points** d'exactitude moyenne
-(0,87 → 0,95) et **+2 prompts** au-dessus du seuil (tous les
-prompts passent à K=2), pour **+24 s** de temps mur. K=2 → K=3
-atteint le plafond de qualité sur ce dataset (+1 point, 25/25
-encore) mais **double le temps mur** à 112 s. **K=2 est le point
-d'équilibre** sur ce juge / ce pool ; K=3 ne vaut pas son coût.
-Le multilingue est la catégorie où la fusion aide le plus
-(0,33 → 0,93 → 1,00) ; le long-context régresse à K=3 (le juge
-sur-curera et perd des exemples concrets).
-
-Tous les chiffres, le détail par catégorie, les deux erreurs de
-grader DeepEval à K=1 (assumées honnêtement), les mises en garde,
-et le suivi K=2 → optimiser-le-juge vivent dans
-[docs/EVALUATION.md §4.3](docs/EVALUATION.md). Les rapports JSON
-bruts (`ksweep-20260526T*Z.json`, deux fichiers — la première
-tentative qui a révélé l'interaction avec le filtre VLM, et le
-re-run qui l'a corrigée) sont conservés dans le répertoire
-`eval_runs/` ignoré.
-
-### Et le juge compte — beaucoup (judge-swap à K=2, 2026-05-26)
-
-Dataset, routeur, candidats et K figés sur le point d'équilibre §4.3 ;
-seul le juge de synthèse tourne sur trois tailles (`qwen3:8b`,
-`gemma3:4b`, `llama3.2:3b`). Même grader `qwen3:8b` pour les trois :
-
-| Juge | exactitude moyenne | pass (≥0,6) | latence juge moyenne |
-|---|---|---|---|
-| **qwen3:8b** (8B)   | **0,93** | 24 / 25 | 38,9 s |
-| **gemma3:4b** (4B)  | 0,88     | 23 / 25 | 18,4 s |
-| **llama3.2:3b** (3B) | 0,72    | 19 / 25 | 20,3 s |
-
-**Verdict** : le juge 8B bat le juge 3B de **+22 points** d'exactitude
-moyenne sur les mêmes prompts avec les mêmes candidats. La majorité
-du temps mur passé sur Roitelet *est* le juge — le réduire restitue
-de la qualité, pas seulement de la vitesse. Le juge 4B est le point
-de Pareto pour les régimes contraints en latence (−5 points pour
-deux fois moins de temps juge). Les 25/25 prompts montrent un
-désaccord sur l'ensemble des gagnants entre juges ; 8/25 montrent
-un PASS/FAIL franchement opposé — preuve forte que **Roitelet apprend
-des préférences conditionnées au juge, pas universelles**, exactement
-ce que le mécanisme §1.1 annonce.
-
-Par catégorie, les points faibles des petits juges sont **l'écriture**
-(0,40 sous llama3.2:3b contre 0,95–1,00 sous les juges plus gros) et
-**le multilingue** (0,47 sous gemma3:4b contre 0,97 sous qwen3:8b).
-La crainte naïve « les juges préfèrent leur propre famille » n'apparaît
-ici que faiblement ; le motif plus fort est un **biais anti-candidat
-laconique sur les petits juges** (gemma3:4b ne choisit le candidat
-`llama3.2:3b`, plus terse, que 1/25 fois). Détail par prompt et
-mises en garde : [docs/EVALUATION.md §4.4](docs/EVALUATION.md). JSON
-brut : `judgeswap-20260526T123130Z.json`.
-
-Cela dit, **ce n'est pas magique** :
-
-- Roitelet apprend des préférences *conditionnées au juge*. Si Qwen
-  est le juge local, la boucle Elo glissante internalise discrètement
-  ce que Qwen tend à préférer. Utile pour router *sous ce juge* ;
-  pas un signal universel de qualité.
-- Un juge mal calibré fusionne avec assurance dans la mauvaise
-  direction. Le parse fail-closed du marqueur de gagnants
-  (`core/judge.py`) borne la dégradation de l'état Elo, mais le
-  *contenu* d'une mauvaise fusion reste mauvais.
-- Que la fusion de trois candidats OSS batte le meilleur candidat
-  payant dépend de la classe du prompt, de la diversité des
-  candidats et du juge. C'est empirique, pas théorique.
-
-Les études d'ablation sont donc une préoccupation de premier ordre,
-pas une note de bas de page. Voir
-[docs/EVALUATION.md](docs/EVALUATION.md).
-
----
-
-## Interface Utilisateur & Contrôle
-
-Roitelet est fourni avec un tableau de bord web (JS vanilla, servi par l'API sur `/`) offrant une vue transparente sur votre flotte d'IA :
-
-* **Configuration :** Sauvegardez vos clés API, calibrez le choix du modèle local, et modifiez vos paramètres de routage (Puissance Pure, Écofrugalité, Indépendance).
-* **Usage & Dashboard :** Surveillez l'utilisation de vos modèles et vérifiez vos estimations de consommation énergétique.
-* **Découverte Automatique :** Branchez le système sur votre instance locale Ollama. Roitelet scannera en direct pour ingérer tout nouveau modèle (ex: `ollama pull llama3.3:70b-instruct`) et l'ajoutera automatiquement au processus de routage en 60 secondes.
-
-![Interface web Roitelet — un prompt utilisateur, trois candidats OSS locaux exécutés en parallèle, le juge local fusionne leurs réponses et indique celles qu'il a effectivement utilisées.](assets/screenshot.png)
-
----
-
-## Note sur la sécurité
-
-Roitelet est **sécurisé par défaut** côté réseau : `start.sh` (et la
-valeur par défaut `Settings.app_host` en bare-metal) écoute sur
-`127.0.0.1`, et `ROITELET_API_TOKEN` est vide. Localhost-only sans
-authentification convient à un usage laptop mono-utilisateur.
-
-L'image Docker est la seule exception — uvicorn dans le conteneur
-écoute sur `0.0.0.0` car le port-forwarding du conteneur l'exige.
-L'exposition réseau réelle est alors gouvernée par votre mapping
-de ports dans `docker-compose.yml` et le pare-feu hôte, pas par
-l'adresse de bind interne.
-
-Si vous voulez exposer l'API sur un LAN, une IP publique, une VM
-avec port-forward, ngrok, Tailscale, ou n'importe où d'accessible
-depuis une autre machine, faites **d'abord deux choses** :
-
-1. Définissez `ROITELET_API_TOKEN` à une valeur non vide (verrouille
-   `/api/chat`, `/api/settings`, `/api/conversations`,
-   `/api/telemetry`, `/api/personal*`, `/api/images`, et
-   `/v1/chat/completions`).
-2. Soit conservez le service derrière un reverse proxy qui gère
-   l'authentification, soit acceptez que le jeton est votre seule
-   ligne de défense. Si vous basculez
-   `ROITELET_APP_HOST=0.0.0.0` pour un `./start.sh` bare-metal, le
-   LAN vous voit dès qu'uvicorn écoute.
-
-Sans ces étapes, quiconque peut joindre le port peut lire vos
-conversations, votre télémétrie brute (qui contient les prompts et
-les réponses des fournisseurs), et déclencher des appels payants
-sur vos clés API. Modèle de menace détaillé :
-[docs/PRIVACY.md](docs/PRIVACY.md).
-
----
-
-## Démarrage Rapide
-
-> **Guide d'installation complet** : Lisez [INSTALLER.md](INSTALLER.md) pour les déploiements avancés (Docker, venv).
-
-### Avec Conda (Recommandé)
+Cinq minutes pour avoir Roitelet sur votre machine :
 
 ```bash
-# 1. Créer l'environnement isolé
-conda env create -f environment.yaml
-conda activate roitelet-llm
+# 1. Installer Ollama (une fois).
+#    macOS : brew install ollama
+#    Linux : curl -fsSL https://ollama.com/install.sh | sh
 
-# 2. Configurer les accès
-cp .env.example .env
-# Éditez le fichier .env en y insérant vos clés API (OPENROUTER, ANTHROPIC, etc.)
+# 2. Télécharger un petit modèle local pour donner à Roitelet quelqu'un à qui parler.
+ollama pull qwen3:8b
+ollama pull nomic-embed-text     # minuscule — utilisé par le mode personnel
 
-# 3. Télécharger le bundle OSS par défaut (Qwen + Llama + Gemma + Phi + VLM)
-chmod +x scripts/pull_defaults.sh
-./scripts/pull_defaults.sh
+# 3. Installer Roitelet.
+git clone https://github.com/<votre-fork>/roitelet-llm.git
+cd roitelet-llm
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
 
-# 4. Lancer l'application
-chmod +x start.sh
-./start.sh
+# 4. Lancer.
+./start.sh                       # ouvre http://localhost:8000
 ```
 
-- **API :** `http://localhost:8000`
-- **Interface web :** `http://localhost:8000/` (servie par l'API)
+Ouvrez `http://localhost:8000` et posez n'importe quelle question.
+L'interface web s'explique d'elle-même — bascule de langue (EN/FR)
+dans l'en-tête de la barre latérale, icône « curseurs » à côté du
+bouton d'envoi pour les options par message, et une feuille Réglages
+derrière l'engrenage en bas de la barre latérale.
 
----
+Vous préférez le terminal ? Mêmes opérations, surface différente :
 
-## Ajouter d'autres LLMs
-
-Roitelet considère tout fournisseur exposant un endpoint
-`/v1/chat/completions` compatible OpenAI comme un point d'extension de
-première classe. Le même chemin fonctionne pour les API payantes, les
-modèles frontière relayés par OpenRouter, et les fichiers GGUF locaux
-servis par `llama-server` (`llama.cpp`).
-
-- **N'importe quel LLM payant (ChatGPT, Mistral, Together, Groq, …)** —
-  configurez le endpoint + la clé, listez les noms de modèles. Voilà.
-  Walkthrough complet dans
-  [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
-- **N'importe quel fichier GGUF local** — soit via un `Modelfile`
-  Ollama (recommandé, aucune édition des réglages), soit en le servant
-  avec `llama-server` et en le traitant comme un endpoint
-  OpenAI-compatible. Détaillé dans
-  [docs/ADDING_MODELS.md](docs/ADDING_MODELS.md).
-- **OpenAI direct** — cas particulier du premier : définissez
-  `OPENAI_API_KEY` puis redémarrez ; `openai/gpt-4.1`, `openai/gpt-4o`
-  et `openai/gpt-4o-mini` figurent déjà dans
-  `data/bootstrap/model_priors.json`.
-
----
-
-## Arborescence du projet
-
-```text
-roitelet-llm/
-├── core/               # Logique backend, routeur, stockage, capacités
-│   ├── pipeline.py     # Orchestration end-to-end (routeur → fan-out → juge → Elo)
-│   ├── router.py       # Scoring pondéré par capacité + sélection top-K
-│   ├── registry.py     # Pool bootstrap + utilisateur + Ollama live, Elo continu
-│   ├── judge.py        # Synthèse anonymisée avec sentinelle de gagnants
-│   ├── capabilities.py # Détection de capacités lexicale
-│   ├── providers/      # Clients Ollama + OpenAI-compatible (OpenRouter, OpenAI, ...)
-│   └── multimodal/     # Extracteurs locaux audio / image / PDF
-├── api/                # FastAPI (natif + OpenAI-compatible + MCP + multimodal)
-├── web/                # Interface web (JS vanilla, servie sur `/` par l'API)
-├── cli/                # Interface en ligne de commande (REPL terminal)
-├── docs/               # Guides ciblés (ex. ADDING_MODELS.md)
-├── data/
-│   └── bootstrap/model_priors.json   # Base d'informations avec scores Elo
-├── scripts/            # Crawler, vendor JS, pull_defaults.sh
-├── tests/              # Suite pytest (core, api, pipeline, cli, eval)
-├── assets/             # Branding (logo)
-├── start.sh            # Script de lancement
-├── Dockerfile          # Fichier de build Docker multi-stade
-├── docker-compose.yml  # Déploiement en conteneur
-├── environment.yaml    # Dépendances Conda
-├── requirements.txt    # Dépendances natives Python (pip)
-├── INSTALLER.md        # Guide d'installation (FR)
-├── INSTALL.md          # Guide d'installation (EN)
-├── docs/ARCHITECTURE.md        # Architecture détaillée (Mermaid) — contributeurs
-└── .env.example
+```bash
+roitelet ask "Explique le tri rapide en un paragraphe."
+roitelet ask --pseudonymize "Email à Marie Dupont à marie@orange.fr au sujet du Q3."
+roitelet ask --url https://docs.python.org/3/library/asyncio.html "Résume."
+roitelet chat --independence     # REPL interactif, en local uniquement
+roitelet settings get            # voir ce qui est persisté
 ```
 
+Pour les détails d'installation (Docker, bundles de modèles,
+comparaison de profils) : [INSTALLER.md](INSTALLER.md) (français),
+[INSTALL.md](INSTALL.md) (anglais).
+
 ---
 
-## Plan de la documentation
+## Ce que ça fait (en clair)
 
-La documentation est organisée en trois niveaux. Choisissez celui qui
-correspond à ce que vous voulez faire.
+| Fonctionnalité | Ce que ça veut dire pour vous |
+|---|---|
+| **Comparer les modèles** | Une question, plusieurs réponses (par ex. Claude + Llama + Gemma), une réponse finale. |
+| **Local-first** | Si vous ne configurez que des modèles locaux, **rien ne quitte votre machine**. |
+| **Masquer les infos perso** | Activez « Pseudonymiser » — noms, adresses, identifiants sont remplacés par des fakes plausibles avant l'envoi, restaurés dans la réponse. |
+| **Joindre des fichiers** | Audio (transcrit), images (lues par un modèle vision), PDF (texte extrait) — tout localement. |
+| **Joindre des sites web** | Collez une URL — Roitelet scrape la page (Firecrawl) et l'inclut dans le prompt. |
+| **RAG personnel** | Déposez vos propres notes dans un dossier ; Roitelet s'en sert pour répondre. |
+| **Génération d'images** | Si vous avez configuré DALL-E / Stable Diffusion / Imagen, demandez avec `/image`. |
+| **Mêmes opérations en CLI et API** | Tout ce que vous faites dans l'interface, vous le faites en terminal ou par appel HTTP. |
 
-### Niveau 1 — Utilisateurs (vous voulez *lancer* Roitelet)
-- **[LISEZMOI.md](LISEZMOI.md)** / **[README.md](README.md)** — ce
-  qu'est Roitelet, pourquoi il existe, démarrage rapide en 5 minutes.
-- **[INSTALLER.md](INSTALLER.md)** / **[INSTALL.md](INSTALL.md)** —
-  guide d'installation complet (conda, venv, Docker).
+---
 
-### Niveau 2 — Tech (vous voulez *utiliser* les fonctionnalités)
-- **[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)** — brancher
-  n'importe quel LLM payant compatible OpenAI (ChatGPT, Mistral, …).
-- **[docs/ADDING_MODELS.md](docs/ADDING_MODELS.md)** — apporter
-  votre propre GGUF via Ollama ou `llama-server`.
-- **[docs/IMAGE_GENERATION.md](docs/IMAGE_GENERATION.md)** — activer
-  la génération d'images (DALL-E, Stable Diffusion local, …).
-- **[docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md)** — déposer des
-  fichiers, ingestion, interroger votre base personnelle. Inclut la
-  projection 2-D des embeddings (style Karpathy) et l'index RAG
-  persistant accéléré par turbovec (`pip install -e .[personal]`).
-- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — sélection
-  de route (`/image`, `/speech`, `/personal`, `/help`) et matrice
-  associant les préférences par tour aux contrôles visibles
-  (curseurs GUI / arguments CLI / booléens API).
-- **[PSEUDO.md](docs/PSEUDO.md)** — pseudonymisation : taxonomie PII,
-  contrat fail-closed, surfaces GUI / CLI / API, audit.
-- **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
-  ce qui est stocké sur disque, ce qui part sur le réseau.
-- **[docs/EVALUATION.md](docs/EVALUATION.md)** — feuille de route
-  permanente des ablations : quelles configurations comparer,
-  quelles métriques, ce qui a été exécuté, ce qui reste planifié.
+## Comment ça marche (un diagramme)
 
-### Niveau 3 — Contributeurs (vous voulez *modifier* Roitelet)
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — visite architecturale complète
-  avec diagrammes Mermaid. Maths de routage, régimes, boucle Elo,
-  les deux routeurs, les deux détecteurs de capacité, pipeline
-  image-gen.
+```mermaid
+flowchart LR
+    U[Prompt utilisateur] --> P{Pseudonymiser ?<br>(opt-in)}
+    P -- oui --> PFW[LLM local<br>retire les PII] --> R
+    P -- non --> R
+    R[Routeur<br>priors capacités<br>+ Elo glissant<br>+ régimes] --> SEL[Top-K<br>candidats]
+    SEL -.parallèle.-> C1[Candidat 1]
+    SEL -.parallèle.-> C2[Candidat 2]
+    SEL -.parallèle.-> CN[Candidat K]
+    C1 --> J[Juge local<br>anonymisé<br>+ mélangé]
+    C2 --> J
+    CN --> J
+    J --> REV{Pseudo activé ?}
+    REV -- oui --> PREV[LLM local<br>restaure les PII] --> A
+    REV -- non --> A
+    A[Réponse fusionnée] --> USER[Utilisateur]
+    J -.gagnants.-> ELO[(Elo glissant<br>par capacité)]
+    ELO -.tour suivant.-> R
+    style P fill:#fef3c7,stroke:#f59e0b
+    style REV fill:#fef3c7,stroke:#f59e0b
+    style PFW fill:#fef3c7,stroke:#f59e0b
+    style PREV fill:#fef3c7,stroke:#f59e0b
+    style J fill:#dbeafe,stroke:#3b82f6
+    style ELO fill:#f3e8ff,stroke:#a855f7
+```
+
+Par tour :
+
+1. **Routeur** sélectionne les top-K modèles pour la question (K=2 par défaut).
+2. **Fan-out** — les K modèles répondent en parallèle.
+3. **Juge** — un modèle local lit les K réponses (anonymisées et
+   mélangées) et les fusionne en une seule.
+4. **Mise à jour Elo** — les gagnants gagnent des points sur le sujet ;
+   les perdants en perdent. Le tour suivant profite de ce signal.
+
+Les détails internes (les maths, les détecteurs de régime, la
+variante du routeur en factorisation matricielle) vivent dans
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## Trois surfaces, mêmes fonctionnalités
+
+| Surface | Accès | Préférences par tour |
+|---|---|---|
+| **Web** (GUI) | `http://localhost:8000/` après `./start.sh` | Icône curseurs à côté du bouton d'envoi |
+| **CLI** | `roitelet ask "…"` / `roitelet chat` | `--top-k`, `--independence`, `--pseudonymize`, `--max-cost-usd`, `--quality-threshold`, `--url[ --url-recursive]`, `--verbose` |
+| **API (MCP inclus)** | `POST /api/chat` natif, `POST /v1/chat/completions` compatible OpenAI, MCP JSON-RPC `POST /mcp` (Model Context Protocol — fonctionne comme source d'outils pour Claude Desktop, Cursor, et tout client MCP) | `preferences.{independence, pseudonymize, top_k, max_cost_usd, quality_threshold}` dans le body JSON ; pour MCP, des champs de même nom sur l'appel d'outil `roitelet.chat`. |
+
+Pour les clients OpenAI : voir [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md).
+
+---
+
+## Latence, coût, quand ne **pas** utiliser
+
+Le wall-clock d'un tour est `max(latences_candidats) + latence_juge`
+parce que le fan-out passe par `asyncio.gather`. Les modèles locaux
+sont gratuits au token marginal mais coûtent en RAM/VRAM. Les
+candidats distants coûtent ce que leur fournisseur facture.
+
+K=2 est le point d'équilibre empirique sur le dataset (voir
+[docs/EVALUATION.md](docs/EVALUATION.md)).
+
+**Quand ne pas utiliser Roitelet :**
+
+- **UX chat très basse latence.** Un seul modèle rapide bat le
+  fan-out + fusion.
+- **Prompts triviaux.** « 2+2 ? » n'a pas besoin de trois opinions.
+- **Trafic production gros volume.** Le coût est multiplicatif.
+- **Vous voulez juste une passerelle.** C'est le boulot de
+  [LiteLLM](https://github.com/BerriAI/litellm).
+
+---
+
+## Note sécurité
+
+Roitelet livre **sûr par défaut** : `start.sh` se bind à `127.0.0.1`
+et `ROITELET_API_TOKEN` est vide. Localhost-only sans auth est OK
+pour un laptop mono-utilisateur.
+
+**Avant d'exposer sur LAN, Internet, ngrok, Tailscale, etc. :**
+
+1. Mettez `ROITELET_API_TOKEN` à une valeur non vide.
+2. Soit gardez le service derrière un reverse proxy qui gère l'auth,
+   soit acceptez que le token soit votre seule ligne de défense.
+
+Modèle de menace : [docs/PRIVACY.md](docs/PRIVACY.md).
+
+---
+
+## Comment Roitelet diffère des projets voisins
+
+| Projet | Rôle principal | Comment Roitelet diffère |
+|---|---|---|
+| [LiteLLM](https://github.com/BerriAI/litellm) | Passerelle compatible OpenAI sur plusieurs APIs | Roitelet est plus étroit : fan-out local-first + synthèse locale + Elo inspectable. LiteLLM est un candidat que Roitelet pourrait appeler. |
+| [OpenRouter](https://openrouter.ai) | Marketplace multi-modèles hébergé | Roitelet tourne sur votre machine. OpenRouter est un fournisseur de candidats, pas un remplaçant. |
+| [RouteLLM](https://github.com/lm-sys/RouteLLM) | Routage coût-conscient strong/weak entraîné sur préférences | Roitelet fait top-K + fusion, pas du routage binaire. Roitelet expose un bouton `quality_threshold` de même forme (scalaire unique, monotone), dérivé de l'Elo glissant. |
+| [LangChain](https://www.langchain.com) / LangGraph | Frameworks d'orchestration LLM | Roitelet est un système end-user, pas un framework. |
+| Clients chat mono-modèle | Un modèle entre, une réponse sort | Roitelet échange simplicité et latence contre comparaison + redondance + synthèse. |
 
 ---
 
 ## Licence
 
-Distribué sous **licence BSD 3-Clause** — voir [LICENSE](LICENSE).
+Publié sous la **licence BSD à 3 clauses** — voir [LICENSE](LICENSE).
 
 ## Auteur
 

@@ -445,19 +445,33 @@ class LearnedMFRouter:
         )
 
 
-def get_router_from_env() -> RoiteletRouter | LearnedMFRouter:
+def get_router_from_env():
     """Pick the router implementation according to ``ROITELET_ROUTER``.
 
-    ``ROITELET_ROUTER=mf`` selects the learned router; anything else
-    (the default) selects the heuristic. The choice is single-process
-    — set the env var before launching uvicorn / the CLI.
+    Three flavours, picked at process start:
+
+    * unset / ``heuristic`` (default) — :class:`core.router.RoiteletRouter`.
+      Curated priors + rolling Elo + regimes. Works on a fresh install
+      with zero telemetry. The naive baseline; documented behaviour.
+    * ``mf`` — :class:`LearnedMFRouter`. TF-IDF + SVD over telemetry to
+      blend a learned quality score with the heuristic. Degrades to
+      the heuristic when telemetry is sparse.
+    * ``calibrated`` — :class:`core.router_calibrated.CalibratedCostRouter`.
+      RouteLLM-shaped: a calibrated logistic regression predicts
+      ``P(strong wins | prompt)`` for the per-turn head/tail pair; the
+      :attr:`RouterPreferences.quality_threshold` becomes the
+      Pareto-frontier knob. Also degrades to the heuristic when
+      telemetry is sparse.
 
     The pipeline never calls this directly; the public seam is the
-    ``router`` argument on :func:`core.pipeline.run_roitelet_chat`. Use
-    this factory from the API startup hook when wiring an alternative
-    router in.
+    ``router`` argument on :func:`core.pipeline.run_roitelet_chat`.
+    Use this factory from the API startup hook when wiring an
+    alternative router in.
     """
     flavour = os.environ.get('ROITELET_ROUTER', 'heuristic').lower().strip()
     if flavour == 'mf':
         return LearnedMFRouter()
+    if flavour == 'calibrated':
+        from .router_calibrated import CalibratedCostRouter
+        return CalibratedCostRouter()
     return RoiteletRouter()

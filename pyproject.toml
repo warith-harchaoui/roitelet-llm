@@ -43,6 +43,10 @@ dev = [
 # re-running `pytest -m eval` end-to-end with the candidate version.
 eval = [
     "deepeval>=3.0,<4.0",
+    # MT-Bench loader. ``datasets`` pulls in pyarrow + huggingface_hub
+    # (~80 MB once cached) which is why this stays opt-in. See
+    # tests/eval/bench_mtbench.py for the runner.
+    "datasets>=2.18",
 ]
 # Multimodal inputs.
 #   Audio = whisper.cpp (transcription) + NeMo Sortformer (diarization).

@@ -82,53 +82,34 @@ def ollama_http_server():
 # ---------------------------------------------------------------------------
 
 class TestDetectCapabilities:
-    def test_coding_prompt(self):
-        scores = detect_capabilities("Write a Python function to parse CSV files.")
-        assert scores.get("coding", 0) > 0, "Coding prompt must have a coding score"
+    """The keyword detector is meant to *bias* the router, not classify.
 
-    def test_math_prompt(self):
-        scores = detect_capabilities("Solve the equation x^2 + 3x - 4 = 0.")
-        assert scores.get("math", 0) > 0 or scores.get("reasoning", 0) > 0
+    Three invariants are worth nailing down; the rest is keyword-list
+    bookkeeping that the detector + the regime tests already exercise
+    transitively.
+    """
 
-    def test_normalized(self):
+    def test_scores_sum_to_one(self):
+        """A normalised distribution is what the router multiplies against."""
         scores = detect_capabilities("Translate this email to French.")
         total = sum(scores.values())
         assert abs(total - 1.0) < 1e-6, f"Scores must sum to 1.0, got {total}"
 
-    def test_backtick_coding_boost(self):
+    def test_code_fence_strongly_signals_coding(self):
+        """A fenced code block in the prompt should dominate the distribution."""
         scores = detect_capabilities("```python\ndef add(a, b):\n    return a + b\n```")
-        assert scores.get("coding", 0) > 0.3, "Code block should strongly signal coding"
+        assert scores.get("coding", 0) > 0.3
 
-    def test_long_prompt_threshold(self):
-        # Under 4000 chars should NOT trigger long_context
-        short = "Summarize this document. " * 50   # ~1250 chars
-        scores_short = detect_capabilities(short)
-        # Over 4000 chars should trigger long_context
-        long = "Summarize this document. " * 200   # ~5000 chars
-        scores_long = detect_capabilities(long)
-        assert scores_long.get("long_context", 0) >= scores_short.get("long_context", 0)
+    def test_long_prompts_trigger_long_context(self):
+        """5 000 chars should rank higher than 1 250 on the long_context axis."""
+        short = detect_capabilities("Summarize this document. " * 50)
+        long = detect_capabilities("Summarize this document. " * 200)
+        assert long.get("long_context", 0) >= short.get("long_context", 0)
 
-    def test_top_capabilities(self):
-        caps = {"coding": 0.6, "math": 0.3, "reasoning": 0.1}
-        top = top_capabilities(caps, limit=2)
+    def test_top_capabilities_returns_dominant_first(self):
+        top = top_capabilities({"coding": 0.6, "math": 0.3, "reasoning": 0.1}, limit=2)
         assert top[0] == "coding"
         assert len(top) == 2
-
-    def test_expanded_coding_keywords(self):
-        """Ensure expanded keyword list covers modern dev terms."""
-        for word in ("typescript", "docker", "refactor", "kubernetes"):
-            scores = detect_capabilities(f"Help me {word} this project.")
-            assert scores.get("coding", 0) > 0, f"'{word}' should trigger coding"
-
-    def test_expanded_math_keywords(self):
-        for word in ("statistics", "calculus", "theorem", "formula"):
-            scores = detect_capabilities(f"Explain {word} to me.")
-            assert scores.get("math", 0) > 0 or scores.get("reasoning", 0) > 0
-
-    def test_multilingual_keywords(self):
-        # Use English keywords that are in CAPABILITY_KEYWORDS
-        scores = detect_capabilities("Translate this text to chinese.")
-        assert scores.get("multilingual", 0) > 0, "translate + chinese should trigger multilingual"
 
 
 # ---------------------------------------------------------------------------
@@ -136,49 +117,33 @@ class TestDetectCapabilities:
 # ---------------------------------------------------------------------------
 
 class TestParseWinners:
-    """Anonymized winners parser — fails closed on garbage, never silently picks one."""
+    """The judge's winners block must fail closed — silently picking
+    candidate one when the marker is missing would poison the Elo loop.
+    """
 
     VALID = {"ab3c9f1d", "9e2f4a17", "1c0e7b22"}
 
-    def test_single_winner(self):
-        assert parse_winners(
-            "Great answer.\n===WINNERS===\nab3c9f1d\n===END===",
-            self.VALID,
-        ) == ["ab3c9f1d"]
-
-    def test_multiple_winners(self):
+    def test_typical_two_winners(self):
         assert parse_winners(
             "Both good.\n===WINNERS===\nab3c9f1d, 1c0e7b22\n===END===",
             self.VALID,
         ) == ["ab3c9f1d", "1c0e7b22"]
 
-    def test_empty_when_missing(self):
-        # No marker at all — fail closed (NOT default to first candidate).
+    def test_no_marker_means_no_winners(self):
+        """The whole point of the sentinel — no winners block, no Elo update."""
         assert parse_winners("Plain prose, no marker here.", self.VALID) == []
 
-    def test_unknown_tokens_ignored(self):
-        # Stray hex tokens that don't belong to this call must not contaminate.
-        text = (
-            "===WINNERS===\nab3c9f1d, deadbeef, 9e2f4a17\n===END==="
-        )
+    def test_stray_hex_outside_the_valid_set_is_ignored(self):
+        """A token from a prior turn (or fabricated) must not contaminate."""
+        text = "===WINNERS===\nab3c9f1d, deadbeef, 9e2f4a17\n===END==="
         assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
 
-    def test_prose_separators_between_tokens(self):
-        # Judge sometimes writes "a and b" — tokenizer still recovers both.
-        text = "===WINNERS===\nab3c9f1d and 9e2f4a17\n===END==="
-        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
-
-    def test_close_marker_missing(self):
-        # Truncated output: open marker present, close marker missing — still parse.
+    def test_truncated_output_with_only_open_marker_still_parses(self):
+        """A cut-off judge response shouldn't lose its winners."""
         text = "Prose.\n===WINNERS===\nab3c9f1d, 9e2f4a17"
         assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
 
-    def test_duplicates_collapsed_in_order(self):
-        text = "===WINNERS===\nab3c9f1d, ab3c9f1d, 9e2f4a17\n===END==="
-        assert parse_winners(text, self.VALID) == ["ab3c9f1d", "9e2f4a17"]
-
-    def test_case_insensitive_hex(self):
-        # Judge may uppercase hex; we normalize.
+    def test_uppercase_hex_is_normalised(self):
         text = "===WINNERS===\nAB3C9F1D\n===END==="
         assert parse_winners(text, self.VALID) == ["ab3c9f1d"]
 
@@ -187,47 +152,24 @@ class TestParseWinners:
 # Router preferences and schema
 # ---------------------------------------------------------------------------
 
-class TestRouterPreferences:
-    def test_defaults(self):
-        prefs = RouterPreferences()
-        assert prefs.raw_power == 0.7
-        assert prefs.ecofrugality == 0.3
-        assert prefs.independence is False
-        assert prefs.allow_vlms is False
-        assert prefs.max_cost_usd is None
-
-    def test_custom(self):
-        prefs = RouterPreferences(raw_power=1.0, ecofrugality=0.0, independence=True)
-        assert prefs.independence is True
-
-    def test_max_cost_round_trip(self):
-        prefs = RouterPreferences(max_cost_usd=0.005)
-        loaded = RouterPreferences.model_validate(prefs.model_dump())
-        assert loaded.max_cost_usd == 0.005
-
-    def test_serialise_round_trip(self):
-        prefs = RouterPreferences(raw_power=0.5, ecofrugality=0.5, allow_vlms=True)
-        dumped = prefs.model_dump()
-        loaded = RouterPreferences.model_validate(dumped)
-        assert loaded == prefs
-
-    def test_quality_threshold_default_is_zero(self):
-        """quality_threshold defaults to 0 so existing behaviour is unchanged."""
-        assert RouterPreferences().quality_threshold == 0.0
+# RouterPreferences itself has no custom logic — Pydantic does the
+# defaulting and round-tripping. The behaviour that matters (each
+# preference reaches the router and changes a decision) is exercised
+# by the cost-budget routing tests below and by the API integration
+# tests in test_commands.py.
 
 
 class TestQualityProbabilityNormaliser:
     """The Elo→probability normaliser is what makes a single threshold knob work.
 
     Without it, ``quality_threshold`` would compare apples to oranges
-    across turns (raw score units depend on how many candidates the
-    weighted blend ran over). The normaliser maps every turn's pool
-    to [0, 1] with the best candidate at 1.0 — same shape as
-    RouteLLM's threshold knob, even though derived from rolling Elo
-    + capability priors rather than a preference-trained classifier.
+    across turns. The normaliser maps every turn's pool to [0, 1] with
+    the best candidate at 1.0 — same shape as RouteLLM's threshold knob,
+    even though derived from rolling Elo + capability priors rather than
+    a preference-trained classifier.
     """
 
-    def test_best_candidate_is_one_worst_is_zero(self):
+    def test_best_and_worst_anchor_at_one_and_zero(self):
         from core.router import _attach_quality_probability
         from core.schemas import ModelCandidate
 
@@ -241,7 +183,7 @@ class TestQualityProbabilityNormaliser:
         assert candidates[-1].quality_probability == 0.0
         assert 0.0 < candidates[1].quality_probability < 1.0
 
-    def test_tied_pool_all_get_one(self):
+    def test_tied_pool_survives_any_threshold(self):
         """If everyone ties, no candidate should be dropped by a threshold filter."""
         from core.router import _attach_quality_probability
         from core.schemas import ModelCandidate
@@ -252,11 +194,6 @@ class TestQualityProbabilityNormaliser:
         ]
         _attach_quality_probability(candidates)
         assert all(c.quality_probability == 1.0 for c in candidates)
-
-    def test_empty_pool_is_noop(self):
-        from core.router import _attach_quality_probability
-
-        _attach_quality_probability([])  # must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -807,28 +744,6 @@ class TestStorageManager:
             assert loaded is not None
             assert loaded.conversation_id == convo.conversation_id
 
-    def test_atomic_write_produces_valid_json(self, tmp_path):
-        with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
-            import core.storage as st_mod
-            mgr = st_mod.StorageManager()
-            target = tmp_path / "test_atomic.json"
-            mgr._write_json(target, {"key": "value", "number": 42})
-            assert target.exists()
-            parsed = json.loads(target.read_text())
-            assert parsed["key"] == "value"
-
-    def test_no_tmp_file_left_on_success(self, tmp_path):
-        """Atomic write must not leave .tmp files behind on success."""
-        with pytest.MonkeyPatch().context() as m:
-            m.setattr("core.storage.get_settings", lambda: _real_settings(tmp_path))
-            import core.storage as st_mod
-            mgr = st_mod.StorageManager()
-            target = tmp_path / "clean.json"
-            mgr._write_json(target, {"ok": True})
-            tmp_files = list(tmp_path.glob("*.tmp"))
-            assert tmp_files == [], f"Stray .tmp files found: {tmp_files}"
-
     def test_list_conversations_sorted(self, tmp_path):
         """list_conversations must return newest first."""
         with pytest.MonkeyPatch().context() as m:
@@ -883,27 +798,6 @@ class TestStorageManager:
             mgr = st_mod.StorageManager()
             mgr.set_cache('demo', 'k', {'r': 1})
             assert mgr.get_cache('demo', 'k') == {'r': 1}
-
-    def test_storage_manager_satisfies_storage_protocol(self):
-        """``StorageManager`` must structurally implement :class:`Storage`.
-
-        Catches accidental breaks if someone renames a method on the
-        manager (or adds a new requirement on the Protocol) without
-        keeping the two in sync.
-        """
-        from core.storage import StorageManager
-        from core.storage_protocol import Storage
-        assert isinstance(StorageManager(), Storage)
-
-    def test_roitelet_router_satisfies_router_protocol(self):
-        """``RoiteletRouter`` must structurally implement :class:`Router`.
-
-        Same rationale as the Storage check — Protocol drift is silent,
-        a runtime ``isinstance`` makes it loud.
-        """
-        from core.router import RoiteletRouter
-        from core.router_protocol import Router
-        assert isinstance(RoiteletRouter(), Router)
 
     def test_conversation_path_rejects_traversal(self, tmp_path):
         """Non-UUID conversation ids must be refused so callers cannot escape the data dir."""

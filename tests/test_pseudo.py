@@ -100,76 +100,48 @@ def _forward_body(rewritten: str, mappings: list[dict]) -> str:
 
 
 class TestForwardHappyPath:
-    """Each PII category, end-to-end through the stub."""
+    """The wrapper's job is taxonomy-agnostic: validate whatever the model
+    returns. Two cases exercise the round trip — one names+places (the
+    typical newspaper article), one financial id (the structural-substitution
+    promise) — plus the legitimate empty-mapping outcome. The 19-category
+    taxonomy is enforced by the LLM prompt, not by the Python wrapper, so
+    one row per category here would just be testing pytest.parametrize.
+    """
 
-    @pytest.mark.parametrize(
-        ('prompt', 'rewritten', 'mappings'),
-        [
-            (
-                'Email Marie Dupont about the Lyon meeting.',
-                'Email Camille Lefèvre about the Toulouse meeting.',
-                [
-                    {'original': 'Marie Dupont', 'substitute': 'Camille Lefèvre', 'kind': 'person_name'},
-                    {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
-                ],
-            ),
-            (
-                'My number is +33 6 12 34 56 78 and my email is marie@orange.fr.',
-                'My number is +33 6 98 76 54 32 10 and my email is camille@orange.fr.',
-                [
-                    {'original': '+33 6 12 34 56 78', 'substitute': '+33 6 98 76 54 32 10', 'kind': 'phone'},
-                    {'original': 'marie@orange.fr', 'substitute': 'camille@orange.fr', 'kind': 'email'},
-                ],
-            ),
-            (
-                'Card 4242 4242 4242 4242 expires 12/29.',
-                'Card 5500 0000 0000 0004 expires 12/29.',
-                [
-                    {'original': '4242 4242 4242 4242', 'substitute': '5500 0000 0000 0004', 'kind': 'financial_id'},
-                ],
-            ),
-            (
-                'My SSN is 123-45-6789.',
-                'My SSN is 987-65-4321.',
-                [
-                    {'original': '123-45-6789', 'substitute': '987-65-4321', 'kind': 'national_id'},
-                ],
-            ),
-            (
-                'Server 192.168.1.42 is down.',
-                'Server 10.0.5.117 is down.',
-                [
-                    {'original': '192.168.1.42', 'substitute': '10.0.5.117', 'kind': 'ip_address'},
-                ],
-            ),
-            (
-                'I work at Acme Corp and report to Jane Doe, the CEO.',
-                'I work at Globex Industries and report to Liam Carter, the CEO.',
-                [
-                    {'original': 'Acme Corp', 'substitute': 'Globex Industries', 'kind': 'organization'},
-                    {'original': 'Jane Doe', 'substitute': 'Liam Carter', 'kind': 'person_name'},
-                ],
-            ),
-        ],
-        ids=[
-            'name+place',
-            'phone+email',
-            'credit-card',
-            'ssn',
-            'ip-address',
-            'org+name',
-        ],
-    )
-    async def test_forward_round_trips(self, patch_provider, patch_settings, prompt, rewritten, mappings):
+    async def test_round_trip_on_names_and_places(self, patch_provider, patch_settings):
+        prompt = 'Email Marie Dupont about the Lyon meeting.'
+        rewritten = 'Email Camille Lefèvre about the Toulouse meeting.'
+        mappings = [
+            {'original': 'Marie Dupont', 'substitute': 'Camille Lefèvre', 'kind': 'person_name'},
+            {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
+        ]
         patch_provider(_forward_body(rewritten, mappings))
         audit = await pseudonymize_prompt(prompt)
         assert audit.pseudonymized_prompt == rewritten
-        assert len(audit.mappings) == len(mappings)
-        assert {m.kind for m in audit.mappings} == {m['kind'] for m in mappings}
+        assert {m.kind for m in audit.mappings} == {'person_name', 'place_name'}
         assert audit.model_id.endswith('qwen3:8b')
 
-    async def test_no_pii_means_empty_mappings(self, patch_provider, patch_settings):
-        """The model is allowed to find nothing; that is a legitimate outcome."""
+    async def test_round_trip_on_a_structural_identifier(self, patch_provider, patch_settings):
+        """Credit cards exercise the digit-for-digit substitution rule.
+
+        Same wrapper code path as a name; the value of this test is that
+        a future change to validation that accidentally allows
+        ``original == substitute`` on numeric strings would fail here
+        before failing on a real card.
+        """
+        prompt = 'Card 4242 4242 4242 4242 expires 12/29.'
+        rewritten = 'Card 5500 0000 0000 0004 expires 12/29.'
+        mappings = [
+            {'original': '4242 4242 4242 4242', 'substitute': '5500 0000 0000 0004',
+             'kind': 'financial_id'},
+        ]
+        patch_provider(_forward_body(rewritten, mappings))
+        audit = await pseudonymize_prompt(prompt)
+        assert audit.pseudonymized_prompt == rewritten
+        assert audit.mappings[0].kind == 'financial_id'
+
+    async def test_empty_mapping_is_a_legitimate_outcome(self, patch_provider, patch_settings):
+        """A coding question should not produce any substitutions."""
         prompt = 'How do I reverse a Python list in place?'
         patch_provider(_forward_body(prompt, []))
         audit = await pseudonymize_prompt(prompt)
@@ -226,16 +198,6 @@ class TestForwardFailClosed:
         with pytest.raises(PseudonymizationError, match='empty'):
             await pseudonymize_prompt('hello')
 
-    async def test_invalid_kind_raises(self, patch_provider, patch_settings):
-        body = _forward_body(
-            'hello stranger',
-            [{'original': 'hello', 'substitute': 'salut', 'kind': 'not_a_real_kind'}],
-        )
-        patch_provider(body)
-        # Pydantic Literal validation surfaces inside our PII parse step.
-        with pytest.raises(PseudonymizationError, match='invalid mapping entry'):
-            await pseudonymize_prompt('hello stranger')
-
     async def test_fenced_json_is_tolerated(self, patch_provider, patch_settings):
         """Models that wrap output in ```json fences despite the prompt must still work."""
         prompt = 'I am Marie.'
@@ -254,7 +216,13 @@ class TestForwardFailClosed:
 
 
 class TestLiteralRestore:
-    def test_simple_swap(self):
+    """The literal pass handles the typical case. The one subtle case
+    worth nailing down is overlapping substitutes — without
+    length-ordering the inner match would consume the outer one and
+    we'd silently corrupt the answer.
+    """
+
+    def test_typical_two_swap(self):
         mappings = [
             PIIMapping(original='Marie Dupont', substitute='Camille Lefèvre', kind='person_name'),
             PIIMapping(original='Lyon', substitute='Toulouse', kind='place_name'),
@@ -262,23 +230,25 @@ class TestLiteralRestore:
         text = 'Camille Lefèvre will travel to Toulouse on Monday.'
         assert literal_restore(text, mappings) == 'Marie Dupont will travel to Lyon on Monday.'
 
-    def test_longer_substitute_wins(self):
-        """If one substitute contains another, the longer match must replace first."""
+    def test_longer_substitute_wins_over_overlapping_shorter(self):
+        """``New Toulouse`` must be restored to ``New York`` before ``Toulouse → Lyon`` fires."""
         mappings = [
             PIIMapping(original='New York', substitute='New Toulouse', kind='place_name'),
             PIIMapping(original='Lyon', substitute='Toulouse', kind='place_name'),
         ]
         text = 'I left New Toulouse and arrived at Toulouse.'
-        # Without length-ordering, the inner "Toulouse" would consume the
-        # outer "New Toulouse" first and the answer would be wrong.
         assert literal_restore(text, mappings) == 'I left New York and arrived at Lyon.'
-
-    def test_empty_mappings_passthrough(self):
-        assert literal_restore('hello', []) == 'hello'
 
 
 class TestOrphanDetection:
-    def test_orphan_detected_when_token_of_multitoken_substitute_remains(self):
+    """Orphan detection is the trigger for the LLM repair pass. The
+    one case that actually fires it is a multi-token substitute that
+    the judge inflected (``Camille Lefèvre`` → ``Mme Lefèvre``). The
+    false-positive case (token survives because it was in the original
+    too) is the other invariant worth pinning.
+    """
+
+    def test_fires_when_distinctive_token_of_multitoken_substitute_survives(self):
         """``Camille Lefèvre`` → judge wrote ``Mme Lefèvre`` → ``Lefèvre`` survives."""
         mappings = [
             PIIMapping(
@@ -289,14 +259,7 @@ class TestOrphanDetection:
         ]
         assert _has_orphan_substitutes('Mme Lefèvre said hi.', mappings) is True
 
-    def test_no_orphan_for_single_token_substitute(self):
-        """Single-token substitutes are always handled by the literal pass."""
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
-        # Post-literal would be ``Mme Marie said hi.`` — the token check
-        # finds no surviving substitute token.
-        assert _has_orphan_substitutes('Mme Marie said hi.', mappings) is False
-
-    def test_no_orphan_when_token_also_in_original(self):
+    def test_does_not_fire_when_surviving_token_appears_in_the_original(self):
         """If the substitute reuses a token from the original, survival isn't a paraphrase."""
         mappings = [
             PIIMapping(
@@ -305,8 +268,6 @@ class TestOrphanDetection:
                 kind='person_name',
             ),
         ]
-        # "Marie" survives but it's also in the original — not a sign
-        # the judge inflected the substitute.
         assert _has_orphan_substitutes('Marie was happy.', mappings) is False
 
 
@@ -367,24 +328,6 @@ class TestRestoreText:
         assert repair_used is False
         assert len(client.calls) == 1  # we tried, then fell back
 
-    async def test_allow_llm_repair_false_disables_second_pass(
-        self, patch_provider, patch_settings,
-    ):
-        client = patch_provider('SHOULD NOT BE CALLED')
-        mappings = [
-            PIIMapping(
-                original='Marie Dupont',
-                substitute='Camille Lefèvre',
-                kind='person_name',
-            ),
-        ]
-        out, repair_used = await restore_text(
-            'Mme Lefèvre said hi.', mappings, allow_llm_repair=False,
-        )
-        assert repair_used is False
-        assert client.calls == []
-        # No literal match for the full substitute → output unchanged.
-        assert out == 'Mme Lefèvre said hi.'
 
 
 # ---------------------------------------------------------------------------

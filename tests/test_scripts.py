@@ -38,29 +38,26 @@ def crawl_arena():
 
 
 class TestNormalizeElo:
-    """The Elo→Roitelet rescaling pins the bootstrap priors. Lock it down."""
+    """The Elo→Roitelet rescaling pins the bootstrap priors. A single
+    monotonic + bounded test pins the contract without inventing four
+    micro-cases for the same trapezoid.
+    """
 
-    def test_below_floor_is_clamped_to_0_5(self, crawl_arena):
-        # Anything ≤ ELO_MIN maps to 0.5 — the minimum-credible-baseline.
-        assert crawl_arena.normalize_elo(crawl_arena.ELO_MIN) == 0.5
-        assert crawl_arena.normalize_elo(crawl_arena.ELO_MIN - 50) == 0.5
-        assert crawl_arena.normalize_elo(0) == 0.5
-
-    def test_at_or_above_ceiling_is_capped(self, crawl_arena):
-        assert crawl_arena.normalize_elo(crawl_arena.ELO_MAX) == crawl_arena.ROITELET_MAX
-        assert crawl_arena.normalize_elo(crawl_arena.ELO_MAX + 100) == crawl_arena.ROITELET_MAX
-
-    def test_midpoint_lands_at_midpoint(self, crawl_arena):
-        """Halfway between ELO_MIN and ELO_MAX should map to the midpoint
-        of the [0.5, 1.5] output band — i.e. 1.0."""
-        midpoint = (crawl_arena.ELO_MIN + crawl_arena.ELO_MAX) / 2.0
-        assert crawl_arena.normalize_elo(midpoint) == pytest.approx(1.0, abs=1e-9)
-
-    def test_monotonic(self, crawl_arena):
-        """Higher Elo must produce a higher (or equal at the bounds) score."""
-        elos = [950, 1000, 1050, 1100, 1150, 1200, 1250, 1300, 1400]
-        scores = [crawl_arena.normalize_elo(e) for e in elos]
-        assert scores == sorted(scores), 'normalize_elo must be monotonic non-decreasing'
+    def test_monotonic_with_bounds_anchored(self, crawl_arena):
+        n = crawl_arena.normalize_elo
+        lo = crawl_arena.ELO_MIN
+        hi = crawl_arena.ELO_MAX
+        # Below floor → 0.5 (minimum-credible-baseline).
+        assert n(lo - 50) == 0.5
+        # At ceiling → ROITELET_MAX.
+        assert n(hi) == crawl_arena.ROITELET_MAX
+        # Above ceiling → same cap, no overflow.
+        assert n(hi + 100) == crawl_arena.ROITELET_MAX
+        # Midpoint anchors at the middle of the [0.5, 1.5] output band.
+        assert n((lo + hi) / 2.0) == pytest.approx(1.0, abs=1e-9)
+        # Strictly non-decreasing across a representative sweep.
+        sweep = [n(e) for e in (950, 1000, 1100, 1200, 1300, 1400)]
+        assert sweep == sorted(sweep)
 
 
 def test_update_priors_only_touches_known_models(crawl_arena, tmp_path, monkeypatch):

@@ -79,14 +79,51 @@ sidebar header, a "sliders" icon next to the send button for
 per-message options, and a Settings sheet behind the gear at the
 bottom of the sidebar.
 
-Prefer the terminal? Same operations, different surface:
+Prefer the terminal? Same operations, different surface. The `#`
+comments describe **what kind of output** you'll see — the actual
+text depends on which models you've configured.
 
 ```bash
 roitelet ask "Explain quicksort in one paragraph."
+# → prints a markdown paragraph: the synthesis judge's fused answer
+#   from your top-K models. No metadata unless you pass --verbose.
+
 roitelet ask --pseudonymize "Email Marie Dupont at marie@orange.fr about Q3."
+#
+# What happens, step by step:
+#
+# 1. The local pseudonymizer rewrites the prompt before fan-out — every
+#    person name and contact detail gets a plausible same-locale stand-in:
+#       prompt that left the local pseudonymizer →
+#       "Email Camille Lefèvre at camille.lefevre@orange.fr about Q3."
+#
+# 2. The candidate models (local or remote, whichever the router picks)
+#    answer that rewritten prompt. They never see "Marie Dupont" or the
+#    real email. If a cloud provider logs the request, this is what it logs.
+#
+# 3. The local reverse pass swaps the substitutes back to the originals
+#    in the fused answer, so what the user sees is:
+#       Subject: Q3 update
+#       Dear Marie Dupont,
+#       I'd like to share the Q3 figures with you …
+#
+# Pass --verbose for the full audit table (every original → substitute
+# pair, the exact rewritten prompt, the forward + reverse latencies).
+
 roitelet ask --url https://docs.python.org/3/library/asyncio.html "Summarise."
-roitelet chat --independence     # interactive REPL, local-only
-roitelet settings get            # see what's persisted
+# → Firecrawl scrapes the page locally (or via your FIRECRAWL_API_KEY),
+#   prepends the markdown as a [Website: …] block, then runs the
+#   normal pipeline. The synthesis is your fused summary.
+
+roitelet chat --independence    # interactive REPL, local-only
+# → a "You> " prompt; type your question, hit Enter, "Roitelet> "
+#   prints the fused answer. No remote candidates are called.
+#   Type "exit" or Ctrl-D to leave.
+
+roitelet settings get           # see what's persisted
+# → prints the full AppSettingsPayload as pretty JSON: model ids,
+#   Ollama URL, masked API keys, ecofrugality weights, etc.
+#   Use `roitelet settings get <key>` to read one field.
 ```
 
 For installer deep-dives (Docker, model bundles, profile comparison):
@@ -95,7 +132,7 @@ For installer deep-dives (Docker, model bundles, profile comparison):
 
 ---
 
-## What it does (plain language)
+## What it does 
 
 | Feature | What it means for you |
 |---|---|
@@ -161,10 +198,14 @@ combined elsewhere:
 - **Per-capability rolling Elo updated from the judge's own
   signal** — an online preference loop, not a fixed scorecard or
   an offline-trained classifier.
-- **Calibrated `quality_threshold` knob** — a single number in
-  [0, 1] traces the cost/quality Pareto frontier of Roitelet's
-  router (shape-equivalent to RouteLLM's threshold knob, derived
-  from the rolling-Elo blend).
+- **Three router flavours** — the default heuristic (capability
+  priors + rolling Elo + regimes), a TF-IDF/SVD learned blend
+  (`ROITELET_ROUTER=mf`), and a **calibrated `P(strong wins)`
+  classifier** (`ROITELET_ROUTER=calibrated`) — the literal RouteLLM
+  recipe: sklearn `LogisticRegression` wrapped in
+  `CalibratedClassifierCV(sigmoid)` trained on the judge's own
+  winners. A single `quality_threshold` in [0, 1] traces the
+  cost/quality Pareto frontier on all three.
 - **Ecofrugality as a first-class router input** — cost (USD) +
   energy (kWh) + latency in one bonus term.
 - **LLM-based pseudonymization** with a 19-category PII taxonomy
@@ -182,9 +223,9 @@ combined elsewhere:
 What it isn't:
 
 - a new model architecture
-- a calibrated `P(strong wins)` cost-router (that's RouteLLM)
 - a hosted gateway (that's LiteLLM)
-- a peer-reviewed result
+- a peer-reviewed result on a benchmark — the eval suite hits
+  MT-Bench but the numbers are small and self-judged
 
 ---
 
@@ -194,7 +235,7 @@ What it isn't:
 |---|---|---|
 | **Web** (GUI) | `http://localhost:8000/` after `./start.sh` | Sliders icon next to the send button |
 | **CLI** | `roitelet ask "…"` / `roitelet chat` | `--top-k`, `--independence`, `--pseudonymize`, `--max-cost-usd`, `--quality-threshold`, `--url[ --url-recursive]`, `--verbose` |
-| **API** | Native `POST /api/chat`, OpenAI-compatible `POST /v1/chat/completions`, MCP `POST /mcp` | `preferences.{independence, pseudonymize, top_k, max_cost_usd, quality_threshold}` in the JSON body |
+| **API (incl. MCP)** | Native `POST /api/chat`, OpenAI-compatible `POST /v1/chat/completions`, MCP JSON-RPC `POST /mcp` (Model Context Protocol — works as a tool source for Claude Desktop, Cursor, and any MCP client) | `preferences.{independence, pseudonymize, top_k, max_cost_usd, quality_threshold}` in the JSON body; same field names on the `roitelet.chat` MCP tool call. |
 
 For OpenAI clients (Python SDK, LiteLLM, Continue.dev, …) Roitelet
 is a drop-in target — see [docs/OPENAI_COMPAT.md](docs/OPENAI_COMPAT.md).
