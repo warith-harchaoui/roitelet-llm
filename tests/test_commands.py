@@ -20,9 +20,7 @@ class TestParseCommand:
         parsed = parse_command('Hello there.')
         assert parsed.route_to == 'chat'
         assert parsed.stripped_prompt == 'Hello there.'
-        assert parsed.independence_override is None
-        assert parsed.max_cost_usd_override is None
-        assert parsed.top_k_override is None
+        assert parsed.personal_override is False
         assert parsed.matched_commands == []
 
     def test_image_routes_to_image(self):
@@ -54,54 +52,15 @@ class TestParseCommand:
         assert parsed.route_to == 'help'
         assert parsed.stripped_prompt == ''
 
-    def test_local_sets_independence(self):
+    def test_personal_routes_to_chat_with_override(self):
+        """``/personal Q`` is a per-turn route that injects the wiki context."""
         from core.commands import parse_command
 
-        parsed = parse_command('/local refactor this module')
+        parsed = parse_command('/personal what did I write about Q3?')
         assert parsed.route_to == 'chat'
-        assert parsed.independence_override is True
-        assert parsed.stripped_prompt == 'refactor this module'
-
-    def test_cheap_sets_budget(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/cheap 0.001 summarise this')
-        assert parsed.max_cost_usd_override == 0.001
-        assert parsed.stripped_prompt == 'summarise this'
-
-    def test_k_sets_top_k(self):
-        from core.commands import parse_command
-
-        parsed = parse_command('/k 5 explain quicksort')
-        assert parsed.top_k_override == 5
-        assert parsed.stripped_prompt == 'explain quicksort'
-
-    def test_k_clamps_to_sane_range(self):
-        from core.commands import parse_command
-
-        assert parse_command('/k 0 hi').top_k_override == 1
-        assert parse_command('/k 100 hi').top_k_override == 8
-
-    def test_chained_overrides(self):
-        """``/local /cheap 0.001 refactor`` peels both off cleanly."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/local /cheap 0.001 refactor')
-        assert parsed.route_to == 'chat'
-        assert parsed.independence_override is True
-        assert parsed.max_cost_usd_override == 0.001
-        assert parsed.stripped_prompt == 'refactor'
-        assert set(parsed.matched_commands) == {'/local', '/cheap'}
-
-    def test_routing_command_short_circuits_override(self):
-        """``/local /image foo`` keeps /local *and* routes to image."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/local /image a sunset')
-        # /local is consumed first, then /image short-circuits.
-        assert parsed.route_to == 'image'
-        assert parsed.independence_override is True
-        assert parsed.stripped_prompt == 'a sunset'
+        assert parsed.personal_override is True
+        assert parsed.stripped_prompt == 'what did I write about Q3?'
+        assert parsed.matched_commands == ['/personal']
 
     def test_unknown_command_passes_through(self):
         """Typos must not silently change behaviour."""
@@ -112,40 +71,23 @@ class TestParseCommand:
         assert parsed.stripped_prompt == '/imagine a sunset'
         assert parsed.matched_commands == []
 
-    def test_cheap_without_number_passes_through(self):
-        """``/cheap`` without a numeric argument is treated as plain text."""
+    def test_removed_preference_slashes_pass_through_as_text(self):
+        """``/local``, ``/cheap``, ``/k``, ``/pseudo``, ``/nopseudo`` were removed.
+
+        After the 2026-05-30 UX simplification, per-turn preferences are
+        controlled via visible affordances (composer sliders, CLI ``--``
+        flags, API booleans). The old slash forms must NOT silently
+        toggle behaviour — they must pass through as plain text so a
+        muscle-memory typist sees their prompt unchanged.
+        """
         from core.commands import parse_command
 
-        parsed = parse_command('/cheap rent in this neighborhood')
-        # Missing argument → stops peeling, leaves the command in the prompt.
-        assert parsed.max_cost_usd_override is None
-        assert parsed.stripped_prompt == '/cheap rent in this neighborhood'
-
-    def test_pseudo_forces_on(self):
-        """``/pseudo PROMPT`` forces pseudonymization on for the turn."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/pseudo email Marie about Lyon')
-        assert parsed.pseudonymize_override is True
-        assert parsed.stripped_prompt == 'email Marie about Lyon'
-        assert parsed.matched_commands == ['/pseudo']
-
-    def test_nopseudo_forces_off(self):
-        """``/nopseudo`` overrides a persisted ON setting for one turn."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/nopseudo what did Napoleon do in 1812?')
-        assert parsed.pseudonymize_override is False
-        assert parsed.stripped_prompt == 'what did Napoleon do in 1812?'
-
-    def test_pseudo_composes_with_local(self):
-        """``/local /pseudo PROMPT`` keeps both overrides."""
-        from core.commands import parse_command
-
-        parsed = parse_command('/local /pseudo draft the contract')
-        assert parsed.independence_override is True
-        assert parsed.pseudonymize_override is True
-        assert parsed.stripped_prompt == 'draft the contract'
+        for legacy in ('/local hello', '/cheap 0.005 hello', '/k 5 hello',
+                       '/pseudo hello', '/nopseudo hello'):
+            parsed = parse_command(legacy)
+            assert parsed.route_to == 'chat'
+            assert parsed.stripped_prompt == legacy
+            assert parsed.matched_commands == []
 
 
 class TestRenderHelp:
@@ -221,32 +163,19 @@ class TestApiIntegration:
         assert detail['route_to'] == 'speech'
         assert 'multimodal' in detail['message']
 
-    def test_local_override_flows_to_preferences(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/local refactor'})
+    def test_preferences_flow_through_request_payload(self, api_client):
+        """Per-turn preferences ride in the JSON ``preferences`` field — no slash needed."""
+        response = api_client.post(
+            '/api/chat',
+            json={
+                'prompt': 'refactor',
+                'preferences': {'independence': True, 'pseudonymize': True},
+                'top_k': 5,
+            },
+        )
         assert response.status_code == 200
         data = response.json()
-        # The router stub echoes preferences in reasoning, so the
-        # override is visible without us mocking deeper.
         joined = ' '.join(data['router']['reasoning'])
         assert "'independence': True" in joined
-
-    def test_cheap_override_flows_to_preferences(self, api_client):
-        response = api_client.post(
-            '/api/chat', json={'prompt': '/cheap 0.005 summarise'}
-        )
-        data = response.json()
-        joined = ' '.join(data['router']['reasoning'])
-        assert "'max_cost_usd': 0.005" in joined
-
-    def test_k_override_flows_to_top_k(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/k 5 explain'})
-        data = response.json()
-        joined = ' '.join(data['router']['reasoning'])
-        assert 'top_k=5' in joined
-
-    def test_pseudo_override_flows_to_preferences(self, api_client):
-        response = api_client.post('/api/chat', json={'prompt': '/pseudo hello there'})
-        assert response.status_code == 200
-        data = response.json()
-        joined = ' '.join(data['router']['reasoning'])
         assert "'pseudonymize': True" in joined
+        assert 'top_k=5' in joined

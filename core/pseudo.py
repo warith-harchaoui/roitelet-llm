@@ -488,16 +488,37 @@ def literal_restore(text: str, mappings: Iterable[PIIMapping]) -> str:
 
 
 def _has_orphan_substitutes(text: str, mappings: Iterable[PIIMapping]) -> bool:
-    """Detect literal-pass misses where a substitute still appears in the text.
+    """Detect literal-pass misses where the judge paraphrased a substitute.
 
-    The forward pass guarantees substitutes are present in the
-    pseudonymized prompt, but the synthesis judge sees the
-    pseudonymized prompt and is free to inflect substitutes
-    ("Camille Lefèvre" → "Mme Lefèvre" or "Camille"). After the
-    literal pass, any *whole* substitute substring left in the text
-    is a sign the judge is paraphrasing — repair pass material.
+    The literal pass is a plain substring replace, so any full
+    substitute string in the input is *always* swept away. The
+    interesting case is the judge writing an *inflected* form: the
+    substitute ``Camille Lefèvre`` may come back as ``Mme Lefèvre``,
+    where the literal pass finds no exact match. We detect that by
+    scanning for any **distinctive token** of a multi-token
+    substitute that survived in the post-literal text.
+
+    "Distinctive" means: length > 3 (so common words like "de", "le",
+    "la" don't fire), and the token isn't already a common word in
+    the original (avoids false positives when the original itself
+    contained the token). We only flag substitutes that have multiple
+    whitespace-separated tokens — single-token substitutes are
+    handled completely by the literal pass.
     """
-    return any(m.substitute in text for m in mappings)
+    for mapping in mappings:
+        sub_tokens = [t for t in mapping.substitute.split() if len(t) > 3]
+        if len(sub_tokens) < 2:
+            continue
+        # Skip tokens that also appear in the original (the literal
+        # pass would have rewritten them back already, so survival
+        # isn't evidence of a paraphrase).
+        original_lower = mapping.original.lower()
+        for token in sub_tokens:
+            if token.lower() in original_lower:
+                continue
+            if token in text:
+                return True
+    return False
 
 
 async def restore_text(

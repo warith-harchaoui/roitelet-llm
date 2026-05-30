@@ -119,9 +119,17 @@ Quelques mises en garde utiles à connaître d'emblée :
   [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
 - **Deux détecteurs de capacité.** Scan par mots-clés par défaut +
   classifieur sur embeddings locaux Ollama en option.
-- **Commandes slash.** `/image`, `/speech`, `/personal`, `/local`,
-  `/cheap <usd>`, `/k <n>`, `/help`. Voir
+- **Commandes slash** — sélection de route uniquement : `/image`,
+  `/speech`, `/personal`, `/help`. Les préférences par tour
+  (top-K, mode local, pseudonymisation, budget) vivent sur des
+  contrôles visibles : icône curseurs dans le composeur web,
+  arguments `--` du CLI, booléens `preferences` dans l'API. Voir
   [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- **Pseudonymisation** — bascule opt-in qui fait réécrire localement
+  les informations personnelles (noms, lieux, organisations, contacts,
+  identifiants, IP) en substituts plausibles de même origine avant
+  appels distants, puis restaurés dans la réponse. Fail-closed ;
+  audit attaché à chaque tour. Voir [PSEUDO.md](PSEUDO.md).
 - **Endpoints standardisés.** `/v1/chat/completions` +
   `/v1/images/generations` compatibles OpenAI, FastAPI natif, MCP
   JSON-RPC.
@@ -398,8 +406,12 @@ correspond à ce que vous voulez faire.
   fichiers, ingestion, interroger votre base personnelle. Inclut la
   projection 2-D des embeddings (style Karpathy) et l'index RAG
   persistant accéléré par turbovec (`pip install -e .[personal]`).
-- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
-  `/personal`, `/local`, `/cheap`, `/k`, `/help` — surcharges par tour.
+- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — sélection
+  de route (`/image`, `/speech`, `/personal`, `/help`) et matrice
+  associant les préférences par tour aux contrôles visibles
+  (curseurs GUI / arguments CLI / booléens API).
+- **[PSEUDO.md](PSEUDO.md)** — pseudonymisation : taxonomie PII,
+  contrat fail-closed, surfaces GUI / CLI / API, audit.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
   ce qui est stocké sur disque, ce qui part sur le réseau.
 - **[docs/EVALUATION.md](docs/EVALUATION.md)** — feuille de route

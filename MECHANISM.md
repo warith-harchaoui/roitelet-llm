@@ -470,5 +470,6 @@ half-formed mix.
 | `core/image_pipeline.py` | ~160 | K=1 image-generation pipeline |
 | `core/providers/openai_images.py` | ~200 | OpenAI-compatible image-generation client |
 | `core/personal.py` | ~380 | Inbox → wiki ingestion + size-dependent context strategy + PCA viz |
-| `core/commands.py` | ~210 | Slash-command parser (`/image`, `/personal`, `/local`, …) |
+| `core/commands.py` | ~120 | Slash-route parser (`/image`, `/speech`, `/personal`, `/help`) |
+| `core/pseudo.py` | ~480 | Pseudonymization forward + reverse passes against a local Ollama model |
 | `tests/test_pipeline.py` | ~470 | Worked example of running the pipeline end-to-end with stubs |

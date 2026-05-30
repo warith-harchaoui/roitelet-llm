@@ -249,10 +249,9 @@ def _apply_command_overrides(payload: ChatRequest) -> tuple[ChatRequest, str | N
 
     overrides: dict = {}
     # If /personal fired, splice the personal-knowledge-base context
-    # in front of the (already-stripped) prompt before any other
-    # rewrite. The injection respects the wiki-vs-RAG strategy in
-    # ``core.personal``: small corpus → all in long context, large
-    # corpus → top-K retrieval.
+    # in front of the (already-stripped) prompt. Per-turn preferences
+    # are not slash-typed any more — clients send the booleans in
+    # ``preferences`` directly. See :data:`core.commands.PREFERENCE_SURFACES`.
     if parsed.personal_override:
         ctx = build_personal_context(parsed.stripped_prompt or payload.prompt)
         if ctx:
@@ -262,17 +261,6 @@ def _apply_command_overrides(payload: ChatRequest) -> tuple[ChatRequest, str | N
             overrides['prompt'] = parsed.stripped_prompt
     elif parsed.stripped_prompt != payload.prompt:
         overrides['prompt'] = parsed.stripped_prompt
-    pref_updates: dict = {}
-    if parsed.independence_override is not None:
-        pref_updates['independence'] = parsed.independence_override
-    if parsed.max_cost_usd_override is not None:
-        pref_updates['max_cost_usd'] = parsed.max_cost_usd_override
-    if parsed.pseudonymize_override is not None:
-        pref_updates['pseudonymize'] = parsed.pseudonymize_override
-    if pref_updates:
-        overrides['preferences'] = payload.preferences.model_copy(update=pref_updates)
-    if parsed.top_k_override is not None:
-        overrides['top_k'] = parsed.top_k_override
     if not overrides:
         return payload, None
     return payload.model_copy(update=overrides), None

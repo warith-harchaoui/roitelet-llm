@@ -112,9 +112,16 @@ A few caveats worth knowing up front:
   See [docs/PERSONAL_MODE.md](docs/PERSONAL_MODE.md).
 - **Two capability detectors.** Default keyword scan + opt-in
   embedding-based classifier on top of a local Ollama embedding model.
-- **Slash commands.** `/image`, `/speech`, `/personal`, `/local`,
-  `/cheap <usd>`, `/k <n>`, `/help`. See
-  [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- **Slash commands** — route selection only: `/image`, `/speech`,
+  `/personal`, `/help`. Per-turn preferences (top-K, local-only,
+  pseudonymize, max cost) live on visible controls: the web composer's
+  sliders icon, the CLI's `--` flags, the API's `preferences`
+  booleans. See [docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md).
+- **Pseudonymization** — opt-in toggle that has a local LLM rewrite
+  PII (names, places, organisations, contacts, IDs, IPs) into
+  plausible same-locale substitutes before remote calls and restores
+  them in the answer. Fail-closed; audit trail attached to every
+  turn. See [PSEUDO.md](PSEUDO.md).
 - **Standardized endpoints.** OpenAI-compatible `/v1/chat/completions`
   + `/v1/images/generations`, native FastAPI, MCP JSON-RPC.
 - **Local telemetry.** Per-turn JSON records of the router decision,
@@ -275,9 +282,9 @@ time as one candidate. The result: total time is approximately
 **Cost.** Local models are free at the marginal token but pay for
 themselves in RAM/VRAM and disk. Remote candidates cost what their
 provider charges — Roitelet does not arbitrage; it just calls them.
-The cost-budget regime (`/cheap <usd>` slash command or
-`max_cost_usd` in `RouterPreferences`) drops candidates above the
-budget *before* scoring.
+The cost-budget regime (`--max-cost-usd` flag, composer slider, or
+`preferences.max_cost_usd` in the JSON API) drops candidates above
+the budget *before* scoring.
 
 ### When **not** to use Roitelet
 
@@ -466,8 +473,12 @@ you're trying to do.
   ingest, query your personal knowledge base. Includes the
   Karpathy-style 2-D embedding scatter and the turbovec-backed
   persistent RAG index (`pip install -e .[personal]`).
-- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — `/image`,
-  `/personal`, `/local`, `/cheap`, `/k`, `/help` per-turn overrides.
+- **[docs/SLASH_COMMANDS.md](docs/SLASH_COMMANDS.md)** — route
+  selection (`/image`, `/speech`, `/personal`, `/help`) and the
+  matrix mapping per-turn preferences to the composer sliders /
+  CLI flags / API booleans.
+- **[PSEUDO.md](PSEUDO.md)** — pseudonymization: PII taxonomy,
+  fail-closed contract, GUI / CLI / API surfaces, audit trail.
 - **[docs/PRIVACY.md](docs/PRIVACY.md)** — local-first vs local-only,
   what's stored on disk, what goes over the network.
 - **[docs/EVALUATION.md](docs/EVALUATION.md)** — standing ablation

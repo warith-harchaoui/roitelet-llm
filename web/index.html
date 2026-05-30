@@ -148,7 +148,7 @@
             <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
             <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
             <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-              Tip — start a message with <code>/image</code>, <code>/personal</code>, <code>/local</code>, <code>/pseudo</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
+              Tip — start a message with <code>/image</code>, <code>/personal</code>, or <code>/help</code> to switch routes. Use the sliders icon below for per-turn preferences.
             </p>
           </div>
         </div>
@@ -164,6 +164,15 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <input id="fileInput" type="file" multiple accept="audio/*,image/*,application/pdf" class="hidden">
+            <button type="button" id="prefsBtn" title="Per-turn preferences (top-K, local-only, pseudonymize, budget)"
+              class="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sysblue dark:hover:text-sysblue hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50 relative">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="4" y1="6" x2="13" y2="6"/><circle cx="17" cy="6" r="2.2"/>
+                <line x1="4" y1="12" x2="9" y2="12"/><circle cx="13" cy="12" r="2.2"/><line x1="17" y1="12" x2="20" y2="12"/>
+                <line x1="4" y1="18" x2="15" y2="18"/><circle cx="19" cy="18" r="2.2"/>
+              </svg>
+              <span id="prefsDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sysblue"></span>
+            </button>
             <div class="flex-1 border border-gray-300/80 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus-within:border-sysblue dark:focus-within:border-sysblue focus-within:ring-2 focus-within:ring-sysblue/20 transition-all">
               <textarea id="prompt" rows="1" placeholder="Message Roitelet…"
                 class="w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-[1.4] focus:outline-none placeholder-gray-400 max-h-[200px]"></textarea>
@@ -201,6 +210,39 @@
           <button type="submit" form="settingsForm" class="min-h-[36px] px-4 py-1.5 text-[13px] font-semibold bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">Save</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ───── Per-turn preferences popover (sliders icon on the composer) ─────
+       Lives inside <body> rather than the composer so its absolute position
+       doesn't get clipped by the composer's overflow. JS positions it
+       above the sliders button on open. -->
+  <div id="prefsPopover" class="fixed hidden z-40 w-[280px]">
+    <div class="bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-white/[0.08] shadow-2xl rounded-[10px] p-4 space-y-3">
+      <div class="text-[12px] font-semibold text-gray-700 dark:text-gray-300 pb-1 border-b border-gray-100 dark:border-white/[0.06]">
+        This turn only
+      </div>
+      <label class="flex items-center justify-between text-[13px]">
+        <span>Local models only</span>
+        <input type="checkbox" id="prefIndependence" class="w-5 h-5 accent-sysblue">
+      </label>
+      <label class="flex items-center justify-between text-[13px]">
+        <span>Pseudonymize remote calls</span>
+        <input type="checkbox" id="prefPseudonymize" class="w-5 h-5 accent-sysblue">
+      </label>
+      <label class="flex items-center justify-between gap-2 text-[13px]">
+        <span class="whitespace-nowrap">Top-K fan-out</span>
+        <input type="number" id="prefTopK" min="1" max="8" step="1"
+          class="w-16 px-2 py-1 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 text-right">
+      </label>
+      <label class="flex items-center justify-between gap-2 text-[13px]">
+        <span class="whitespace-nowrap">Max cost (USD)</span>
+        <input type="number" id="prefMaxCost" min="0" step="0.001" placeholder="∞"
+          class="w-20 px-2 py-1 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 text-right">
+      </label>
+      <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed pt-1 border-t border-gray-100 dark:border-white/[0.06]">
+        Persistent defaults live in <button type="button" id="prefsToSettings" class="text-sysblue hover:underline">Settings</button>.
+      </p>
     </div>
   </div>
 

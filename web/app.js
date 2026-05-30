@@ -15,7 +15,23 @@ const state = {
   busy: false,
   attachments: [],       // File objects queued for the next send
   allowVlms: false,      // mirrors the persisted preference; gates image attachments
-  pseudonymize: false,   // mirrors the persisted `enable_pseudonymization`; per-turn slash overrides win
+  // Per-turn preferences. These start at the persisted-settings defaults
+  // and the user adjusts them via the sliders popover next to the send
+  // button. They reset to the persisted defaults on every new chat.
+  prefs: {
+    independence: false,
+    pseudonymize: false,
+    topK: 2,
+    maxCostUsd: null,
+  },
+  // Persisted defaults — mirror of the AppSettingsPayload server-side.
+  // Kept separately so "reset to defaults" in the popover works without
+  // hitting the network.
+  prefDefaults: {
+    independence: false,
+    pseudonymize: false,
+    topK: 2,
+  },
 };
 
 const AUDIO_RX = /\.(wav|mp3|m4a|flac|ogg|opus|aac)$/i;
@@ -66,7 +82,7 @@ function renderMessages() {
         <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
         <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
         <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-          Tip — start a message with <code>/image</code>, <code>/personal</code>, <code>/local</code>, <code>/pseudo</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
+          Tip — start a message with <code>/image</code>, <code>/personal</code>, or <code>/help</code> to switch routes. Use the sliders icon below for per-turn preferences.
         </p>
       </div>`;
     return;
@@ -320,12 +336,17 @@ async function refreshConversations() {
 
 async function refreshPreferences() {
   // Mirror the server's persisted flags so the local gates + the status
-  // pill match what the backend will do on the next turn.
+  // pill match what the backend will do on the next turn, and so the
+  // per-turn popover starts at the user's defaults.
   try {
     const cur = await apiGet('/api/settings');
     state.allowVlms = !!cur.enable_vlms;
-    state.pseudonymize = !!cur.enable_pseudonymization;
+    state.prefDefaults.independence = !!cur.independence_local_only;
+    state.prefDefaults.pseudonymize = !!cur.enable_pseudonymization;
+    state.prefs.independence = state.prefDefaults.independence;
+    state.prefs.pseudonymize = state.prefDefaults.pseudonymize;
     renderStatusPill();
+    renderPrefsDot();
   } catch { /* harmless: defaults stay */ }
 }
 
@@ -335,8 +356,90 @@ function renderStatusPill() {
   const text = $('statusText');
   if (!text || state.busy) return;
   const tags = [];
-  if (state.pseudonymize) tags.push('pseudo');
+  if (state.prefs.pseudonymize) tags.push('pseudo');
+  if (state.prefs.independence) tags.push('local');
   text.textContent = tags.length ? `Ready · ${tags.join(' · ')}` : 'Ready';
+}
+
+// Show a blue dot on the sliders icon whenever the per-turn prefs
+// diverge from the persisted defaults. Visible state for visible state.
+function renderPrefsDot() {
+  const dot = $('prefsDot');
+  if (!dot) return;
+  const dirty =
+    state.prefs.independence !== state.prefDefaults.independence ||
+    state.prefs.pseudonymize !== state.prefDefaults.pseudonymize ||
+    state.prefs.topK !== state.prefDefaults.topK ||
+    state.prefs.maxCostUsd !== null;
+  dot.classList.toggle('hidden', !dirty);
+}
+
+// ─── Per-turn preferences popover ────────────────────────────────────────────
+
+function openPrefsPopover() {
+  const popover = $('prefsPopover');
+  const btn = $('prefsBtn');
+  if (!popover || !btn) return;
+  // Position above the sliders button, right-aligned to the composer.
+  const rect = btn.getBoundingClientRect();
+  popover.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+  popover.style.left = Math.max(8, rect.right - 280) + 'px';
+  // Seed the inputs from current per-turn state.
+  $('prefIndependence').checked = state.prefs.independence;
+  $('prefPseudonymize').checked = state.prefs.pseudonymize;
+  $('prefTopK').value = state.prefs.topK;
+  $('prefMaxCost').value = state.prefs.maxCostUsd ?? '';
+  popover.classList.remove('hidden');
+  // Click-outside-to-close. Bound on the next tick so the click that
+  // opened the popover doesn't immediately close it.
+  setTimeout(() => document.addEventListener('click', closePrefsOnOutside), 0);
+}
+
+function closePrefsPopover() {
+  $('prefsPopover')?.classList.add('hidden');
+  document.removeEventListener('click', closePrefsOnOutside);
+}
+
+function closePrefsOnOutside(event) {
+  const popover = $('prefsPopover');
+  if (!popover) return;
+  if (popover.contains(event.target) || $('prefsBtn').contains(event.target)) return;
+  closePrefsPopover();
+}
+
+function wirePrefsPopover() {
+  $('prefsBtn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const popover = $('prefsPopover');
+    if (popover && !popover.classList.contains('hidden')) closePrefsPopover();
+    else openPrefsPopover();
+  });
+  $('prefIndependence')?.addEventListener('change', (e) => {
+    state.prefs.independence = e.target.checked;
+    renderStatusPill();
+    renderPrefsDot();
+  });
+  $('prefPseudonymize')?.addEventListener('change', (e) => {
+    state.prefs.pseudonymize = e.target.checked;
+    renderStatusPill();
+    renderPrefsDot();
+  });
+  $('prefTopK')?.addEventListener('change', (e) => {
+    const raw = parseInt(e.target.value, 10);
+    state.prefs.topK = Math.min(8, Math.max(1, Number.isNaN(raw) ? 2 : raw));
+    e.target.value = state.prefs.topK;
+    renderPrefsDot();
+  });
+  $('prefMaxCost')?.addEventListener('change', (e) => {
+    const raw = parseFloat(e.target.value);
+    state.prefs.maxCostUsd = Number.isFinite(raw) && raw > 0 ? raw : null;
+    if (state.prefs.maxCostUsd === null) e.target.value = '';
+    renderPrefsDot();
+  });
+  $('prefsToSettings')?.addEventListener('click', () => {
+    closePrefsPopover();
+    openSettings();
+  });
 }
 
 async function loadConversation(id) {
@@ -363,7 +466,15 @@ function newChat() {
   state.conversationId = null;
   state.messages = [];
   state.attachments = [];
+  // Reset per-turn prefs to the persisted defaults — a new chat
+  // shouldn't inherit the previous chat's one-off overrides.
+  state.prefs.independence = state.prefDefaults.independence;
+  state.prefs.pseudonymize = state.prefDefaults.pseudonymize;
+  state.prefs.topK = state.prefDefaults.topK;
+  state.prefs.maxCostUsd = null;
   renderAttachments();
+  renderStatusPill();
+  renderPrefsDot();
   $('conversationTitle').textContent = 'New chat';
   renderMessages();
   renderConversationList();
@@ -546,24 +657,26 @@ async function send() {
       const stripped = speechMatch ? prompt.slice(speechMatch[0].length).trim() : prompt;
       fd.append('prompt', stripped);
       if (state.conversationId) fd.append('conversation_id', state.conversationId);
-      fd.append('top_k', '2');
+      fd.append('top_k', String(state.prefs.topK));
       fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
-      fd.append('pseudonymize', state.pseudonymize ? 'true' : 'false');
+      fd.append('pseudonymize', state.prefs.pseudonymize ? 'true' : 'false');
       for (const f of files) fd.append('files', f);
       res = await apiPostMultipart('/api/chat/multimodal', fd);
       finalizeChatResponse(res, prompt);
     } else {
+      const prefs = {
+        raw_power: 0.7,
+        ecofrugality: 0.3,
+        independence: state.prefs.independence,
+        allow_vlms: state.allowVlms,
+        pseudonymize: state.prefs.pseudonymize,
+      };
+      if (state.prefs.maxCostUsd !== null) prefs.max_cost_usd = state.prefs.maxCostUsd;
       const payload = {
         prompt,
         conversation_id: state.conversationId,
-        preferences: {
-          raw_power: 0.7,
-          ecofrugality: 0.3,
-          independence: false,
-          allow_vlms: state.allowVlms,
-          pseudonymize: state.pseudonymize,
-        },
-        top_k: 2,
+        preferences: prefs,
+        top_k: state.prefs.topK,
       };
       res = await apiPost('/api/chat', payload);
       finalizeChatResponse(res, prompt);
@@ -948,8 +1061,12 @@ async function saveSettings(ev) {
   try {
     await apiPost('/api/settings', next);
     state.allowVlms = !!next.enable_vlms;
-    state.pseudonymize = !!next.enable_pseudonymization;
+    state.prefDefaults.independence = !!next.independence_local_only;
+    state.prefDefaults.pseudonymize = !!next.enable_pseudonymization;
+    state.prefs.independence = state.prefDefaults.independence;
+    state.prefs.pseudonymize = state.prefDefaults.pseudonymize;
     renderStatusPill();
+    renderPrefsDot();
     showToast('Saved');
     closeSettings();
   } catch (err) {
@@ -978,6 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') closeSettings();
   });
 
+  wirePrefsPopover();
   refreshConversations();
   refreshPreferences();
   $('prompt').focus();

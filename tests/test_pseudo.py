@@ -32,7 +32,6 @@ from core.pseudo import (
 )
 from core.schemas import ChatMessage, ModelResponse, PIIMapping
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -279,16 +278,36 @@ class TestLiteralRestore:
 
 
 class TestOrphanDetection:
-    def test_orphan_detected_when_substitute_remains(self):
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
-        # Substitute still in text post-literal-pass: literal pass would
-        # have removed it, so this state implies the judge paraphrased
-        # around it.
-        assert _has_orphan_substitutes('Mme Camille said hi.', mappings) is True
+    def test_orphan_detected_when_token_of_multitoken_substitute_remains(self):
+        """``Camille Lefèvre`` → judge wrote ``Mme Lefèvre`` → ``Lefèvre`` survives."""
+        mappings = [
+            PIIMapping(
+                original='Marie Dupont',
+                substitute='Camille Lefèvre',
+                kind='person_name',
+            ),
+        ]
+        assert _has_orphan_substitutes('Mme Lefèvre said hi.', mappings) is True
 
-    def test_no_orphan_when_literal_pass_covered_everything(self):
+    def test_no_orphan_for_single_token_substitute(self):
+        """Single-token substitutes are always handled by the literal pass."""
         mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
+        # Post-literal would be ``Mme Marie said hi.`` — the token check
+        # finds no surviving substitute token.
         assert _has_orphan_substitutes('Mme Marie said hi.', mappings) is False
+
+    def test_no_orphan_when_token_also_in_original(self):
+        """If the substitute reuses a token from the original, survival isn't a paraphrase."""
+        mappings = [
+            PIIMapping(
+                original='Marie Curie',
+                substitute='Marie Sklodowska',
+                kind='person_name',
+            ),
+        ]
+        # "Marie" survives but it's also in the original — not a sign
+        # the judge inflected the substitute.
+        assert _has_orphan_substitutes('Marie was happy.', mappings) is False
 
 
 class TestRestoreText:
@@ -300,31 +319,51 @@ class TestRestoreText:
         assert repair_used is False
         assert client.calls == []  # the repair pass never ran
 
-    async def test_repair_pass_fires_on_orphans(self, patch_provider, patch_settings):
-        # The literal pass would replace ``Camille`` only. The judge
-        # used ``Mme Camille``, so the substitute survives and triggers
-        # the repair call.
-        client = patch_provider('Mme Marie wrote back the next day.')
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
-        text = 'Mme Camille wrote back the next day.'
-        out, repair_used = await restore_text(text, mappings)
+    async def test_repair_pass_fires_on_inflected_multitoken_substitute(
+        self, patch_provider, patch_settings,
+    ):
+        """The classic case: ``Camille Lefèvre`` came back as ``Mme Lefèvre``.
+
+        The literal pass searches for ``Camille Lefèvre`` and finds
+        nothing, but ``Lefèvre`` is a survivor token of a multi-token
+        substitute → repair pass fires.
+        """
+        client = patch_provider('Mme Dupont wrote back the next day.')
+        mappings = [
+            PIIMapping(
+                original='Marie Dupont',
+                substitute='Camille Lefèvre',
+                kind='person_name',
+            ),
+        ]
+        out, repair_used = await restore_text(
+            'Mme Lefèvre wrote back the next day.', mappings,
+        )
         assert repair_used is True
-        assert out == 'Mme Marie wrote back the next day.'
+        assert out == 'Mme Dupont wrote back the next day.'
         assert len(client.calls) == 1
-        # The repair prompt carries both the table and the literally-
-        # restored text — verify the table arrived.
         repair_user_msg = client.calls[0]['messages'][1]['content']
-        assert 'Camille → Marie' in repair_user_msg
+        assert 'Camille Lefèvre → Marie Dupont' in repair_user_msg
 
     async def test_repair_pass_failure_falls_back_to_literal(
         self, patch_provider, patch_settings,
     ):
         client = patch_provider('')  # empty repair response
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
-        out, repair_used = await restore_text('Mme Camille said hi.', mappings)
-        # Literal pass replaced ``Camille`` -> ``Marie``; ``Mme Camille``
-        # → ``Mme Marie``. Repair returned empty, so we keep that.
-        assert out == 'Mme Marie said hi.'
+        mappings = [
+            PIIMapping(
+                original='Marie Dupont',
+                substitute='Camille Lefèvre',
+                kind='person_name',
+            ),
+        ]
+        # Inflected form survives the literal pass → repair triggers,
+        # repair returns empty → we keep the literal output (which here
+        # is the input unchanged because ``Camille Lefèvre`` wasn't a
+        # substring match).
+        out, repair_used = await restore_text(
+            'Mme Lefèvre said hi.', mappings,
+        )
+        assert out == 'Mme Lefèvre said hi.'
         assert repair_used is False
         assert len(client.calls) == 1  # we tried, then fell back
 
@@ -332,15 +371,20 @@ class TestRestoreText:
         self, patch_provider, patch_settings,
     ):
         client = patch_provider('SHOULD NOT BE CALLED')
-        mappings = [PIIMapping(original='Marie', substitute='Camille', kind='person_name')]
+        mappings = [
+            PIIMapping(
+                original='Marie Dupont',
+                substitute='Camille Lefèvre',
+                kind='person_name',
+            ),
+        ]
         out, repair_used = await restore_text(
-            'Mme Camille said hi.', mappings, allow_llm_repair=False,
+            'Mme Lefèvre said hi.', mappings, allow_llm_repair=False,
         )
         assert repair_used is False
         assert client.calls == []
-        # Literal-pass output still correct on the embedded substitute,
-        # even without repair.
-        assert out == 'Mme Marie said hi.'
+        # No literal match for the full substitute → output unchanged.
+        assert out == 'Mme Lefèvre said hi.'
 
 
 # ---------------------------------------------------------------------------
@@ -352,9 +396,18 @@ class TestPipelineIntegration:
     """End-to-end pipeline turn with pseudonymization on, every model stubbed."""
 
     async def test_pipeline_uses_pseudonymized_prompt_and_restores(
-        self, monkeypatch, tmp_path, patch_provider, patch_settings,
+        self, monkeypatch, tmp_path,
     ):
+        """End-to-end pipeline turn using a fresh temp data dir.
+
+        Deliberately does NOT use ``patch_settings`` (that fixture
+        replaces ``get_storage`` and would break ``get_conversation``).
+        Instead we point ``ROITELET_DATA_DIR`` at ``tmp_path`` so the
+        real storage manager writes to an isolated location, then we
+        stub the model-side seam (``get_provider_client``) only.
+        """
         from core import pipeline as pipeline_mod
+        from core import pseudo as pseudo_mod
         from core import storage as storage_mod
         from core.schemas import (
             ChatRequest,
@@ -366,16 +419,14 @@ class TestPipelineIntegration:
 
         # Point storage at a clean temp dir so the test doesn't touch
         # the user's real conversation log.
-        monkeypatch.setattr(storage_mod, '_storage_mod', storage_mod)
-        storage_mod.get_storage.cache_clear()
         monkeypatch.setenv('ROITELET_DATA_DIR', str(tmp_path))
-
         from core import config as config_mod
+        from core.storage import get_storage as _real_get_storage
         config_mod.get_settings.cache_clear()
-        # The settings stub overrides the in-process resolution, but the
-        # pipeline calls into storage which respects ROITELET_DATA_DIR.
+        _real_get_storage.cache_clear()
 
-        # Stub the pseudonymizer's local model.
+        # Stub the pseudonymizer's local model (talks through
+        # core.pseudo.get_provider_client).
         rewritten = 'Email Camille about Toulouse.'
         forward_body = _forward_body(
             rewritten,
@@ -384,7 +435,8 @@ class TestPipelineIntegration:
                 {'original': 'Lyon', 'substitute': 'Toulouse', 'kind': 'place_name'},
             ],
         )
-        patch_provider(forward_body)
+        client = _StubClient(forward_body)
+        monkeypatch.setattr(pseudo_mod, 'get_provider_client', lambda _provider: client)
 
         seen_prompts: list[str] = []
 
@@ -427,6 +479,17 @@ class TestPipelineIntegration:
                 )
 
         monkeypatch.setattr(pipeline_mod, 'get_router', lambda: _RouterStub())
+
+        # Bypass the registry too — bootstrap priors live outside tmp_path,
+        # and the only thing pipeline does with the registry is a no-op
+        # Elo update we don't care about here.
+        class _RegistryStub:
+            elo_state: dict = {}
+
+            def update_elo(self, winners, losers, capabilities):
+                return None
+
+        monkeypatch.setattr(pipeline_mod._registry_mod, 'get_registry', lambda: _RegistryStub())
 
         response = await pipeline_mod.run_roitelet_chat(
             ChatRequest(

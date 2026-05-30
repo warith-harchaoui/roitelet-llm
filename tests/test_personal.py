@@ -377,10 +377,18 @@ class TestSlashCommandPersonal:
         assert parsed.personal_override is True
         assert parsed.stripped_prompt == 'what did I write about RAG?'
 
-    def test_personal_chained_with_local(self):
+    def test_personal_alone_strips_correctly(self):
+        """``/personal`` is a route, not a chained override.
+
+        Per-turn preferences (e.g. local-only) used to compose with
+        ``/personal`` via the now-retired ``/local`` slash. With the
+        2026-05-30 UX simplification preferences move to visible
+        controls (composer sliders / CLI flags / API booleans) and
+        the parser only recognises one leading route at a time.
+        """
         from core.commands import parse_command
 
-        parsed = parse_command('/local /personal summarise my wiki')
+        parsed = parse_command('/personal summarise my wiki')
         assert parsed.route_to == 'chat'
         assert parsed.personal_override is True
-        assert parsed.independence_override is True
+        assert parsed.stripped_prompt == 'summarise my wiki'

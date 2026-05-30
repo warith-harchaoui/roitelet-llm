@@ -10,14 +10,14 @@ Roitelet-specific subcommands:
 * ``roitelet settings get [KEY]``            — print persisted settings.
 * ``roitelet settings set KEY VALUE``        — edit persisted settings.
 
-Both ``ask`` and ``chat`` honour the same slash commands as the API
-(``/local``, ``/cheap``, ``/k``, ``/personal``, ``/pseudo``,
-``/nopseudo``, ``/help``) so a user can paste a prompt that worked
-in the web UI directly into the terminal. They also expose explicit
-flags (``--top-k``, ``--independence``, ``--ecofrugality``,
-``--max-cost-usd``, ``--pseudonymize`` / ``--no-pseudonymize``) for
-scripted use cases where parsing a slash prefix is awkward — flag
-values override slash overrides override request defaults.
+Both ``ask`` and ``chat`` honour the route slashes (``/image``,
+``/speech``, ``/personal``, ``/help``) the API recognises. Per-turn
+preferences are NOT slash-typed — pass them as ``--`` flags:
+``--top-k``, ``--independence`` / ``--remote``, ``--ecofrugality``,
+``--max-cost-usd``, ``--pseudonymize`` / ``--no-pseudonymize``. The
+visible-flag form keeps state auditable on the command line, the
+same way the composer's sliders icon does in the web UI and the
+booleans on ``preferences`` do in the JSON API.
 
 Examples
 --------
@@ -25,8 +25,6 @@ Examples
 >>> #   roitelet ask "Explain quicksort"
 >>> # Pseudonymize per turn:
 >>> #   roitelet ask --pseudonymize "Email Marie Dupont in Lyon."
->>> # Equivalent with a slash:
->>> #   roitelet ask "/pseudo Email Marie Dupont in Lyon."
 """
 
 from __future__ import annotations
@@ -120,18 +118,8 @@ def _build_request_from_args(
         pseudonymize=settings.enable_pseudonymization,
     )
 
-    # Slash overrides (already parsed by parse_command).
+    # CLI flags carry every preference override. Slashes are routes only.
     pref_updates: dict = {}
-    if parsed.independence_override is not None:
-        pref_updates['independence'] = parsed.independence_override
-    if parsed.max_cost_usd_override is not None:
-        pref_updates['max_cost_usd'] = parsed.max_cost_usd_override
-    if parsed.pseudonymize_override is not None:
-        pref_updates['pseudonymize'] = parsed.pseudonymize_override
-
-    # Explicit CLI flags — highest precedence. Use ``getattr`` because
-    # the ``personal ask`` subcommand re-uses this helper but doesn't
-    # carry every flag.
     if getattr(args, 'independence', None) is True:
         pref_updates['independence'] = True
     if getattr(args, 'remote', None) is True:
@@ -148,7 +136,7 @@ def _build_request_from_args(
     if pref_updates:
         prefs = prefs.model_copy(update=pref_updates)
 
-    top_k: int = parsed.top_k_override or getattr(args, 'top_k', None) or 2
+    top_k: int = getattr(args, 'top_k', None) or 2
 
     return ChatRequest(
         prompt=effective_prompt,

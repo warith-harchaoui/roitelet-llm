@@ -57,8 +57,8 @@ python -m cli personal list
 python -m cli personal ask "what did I write about Q3 revenue?"
 ```
 
-The interactive REPL (`python -m cli chat`) also accepts the
-`/personal` slash command per turn — see below.
+The interactive REPL (`roitelet chat` or `python -m cli chat`) also
+accepts the `/personal` slash command per turn — see below.
 
 ---
 
@@ -90,13 +90,28 @@ The handler:
 4. Runs the standard top-K fan-out + fusion judge against the
    augmented prompt.
 
-Combine with other slash commands as you would expect:
+To combine `/personal` with per-turn preferences (e.g. local-only,
+pseudonymize, top-K), set them on the surface of your choice:
 
-```
-/local /personal explain my notes
+```bash
+# CLI: flags + the slash route.
+roitelet ask --independence --pseudonymize "/personal explain my notes"
 ```
 
-— forces independence mode (local models only) and injects the wiki.
+```bash
+# API: booleans + the slash route on the same request.
+curl -X POST http://localhost:8000/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "/personal explain my notes",
+    "preferences": {"independence": true, "pseudonymize": true}
+  }'
+```
+
+```text
+# Web: click the sliders icon below the composer, tick the boxes,
+# then type "/personal explain my notes".
+```
 
 ---
 

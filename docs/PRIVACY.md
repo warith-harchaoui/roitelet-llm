@@ -13,21 +13,22 @@ that matches your threat model.
 
 ---
 
-## 1. The three modes
+## 1. The four modes
 
 | Mode | What stays local | What goes out | When to use |
 |---|---|---|---|
 | **Local-only** | Everything: prompt, candidates, judge, telemetry, embeddings. | Nothing. | Sensitive prompts; air-gapped or offline use. |
 | **Local-first** (default) | Synthesis judge + storage + embeddings. | The prompt is sent to each selected remote candidate (if any) using that provider's API. | Most desktop / single-user use. The trade is that remote candidates can substantially improve answer quality. |
+| **Pseudonymized local-first** | Same as local-first, plus a local model rewrites PII out of the prompt before fan-out and restores it on the way back. | A *redacted* prompt where person names, places, organisations, contact details, IPs, and IDs are replaced with same-locale substitutes. See [PSEUDO.md](../PSEUDO.md). | When you want remote candidates' quality but don't want their audit logs to see the originals. Reduces casual exposure; does not anonymize against an adversary controlling the provider. |
 | **Remote-augmented** | Judge + storage stay local. | Most candidates are remote; the prompt is sent to several providers per turn. | When you actively want diverse remote opinions and accept the corresponding API spend and privacy cost. |
 
 ### How to switch to local-only
 
 Three equivalent ways:
 
-- **Per turn:** prefix the prompt with `/local`. The slash command
-  forces `independence=True` for that turn, dropping every non-local
-  candidate before scoring.
+- **Per turn:** open the web composer's sliders icon, tick *Local
+  models only*; or pass `--independence` to `roitelet ask|chat`; or
+  set `preferences.independence: true` on `POST /api/chat`.
 - **Persistent UI toggle:** open the web Settings sheet, enable
   *Local models only*. Saved on disk; applies to every turn until you
   flip it back.
@@ -37,6 +38,17 @@ Three equivalent ways:
   specs whose provider has no key
   (`core/registry.py::_prune_unauthorized_remotes`). Effectively
   local-only by configuration absence.
+
+### How to switch to pseudonymized local-first
+
+- **Per turn:** sliders icon → *Pseudonymize remote calls*; or
+  `roitelet ask --pseudonymize ...`; or
+  `preferences.pseudonymize: true` on `POST /api/chat`.
+- **Persistent:** Settings → *Pseudonymize remote calls (PII swap)*;
+  or `roitelet settings set enable_pseudonymization true`.
+
+See [PSEUDO.md](../PSEUDO.md) for the PII taxonomy, the fail-closed
+contract, and the audit affordance.
 
 When local-only mode is active, you should see only `ollama/...`
 model ids in the router decision's `selected_model_ids`. That's the
@@ -54,10 +66,15 @@ endpoint, containing:
 - The model id and any standard OpenAI-shape sampling parameters.
 - The **API key** in an `Authorization: Bearer ...` header.
 
-No additional sanitisation or redaction is applied. If the prompt
-contains an attachment-derived text block (audio transcript, PDF
-text, image caption), that text is in the prompt the same way it
-would be if you sent it yourself.
+No additional sanitisation or redaction is applied **unless
+pseudonymization is on for the turn** — in which case `core/pseudo.py`
+runs first, swaps PII for plausible same-origin substitutes, and the
+substituted prompt is what the provider sees. The audit trail
+records exactly what went over the wire. See [PSEUDO.md](../PSEUDO.md).
+
+If the prompt contains an attachment-derived text block (audio
+transcript, PDF text, image caption), that text is in the prompt the
+same way it would be if you sent it yourself.
 
 The multimodal **inputs** themselves (audio bytes, image bytes, PDF
 bytes) **never leave the machine**: they are converted to text
