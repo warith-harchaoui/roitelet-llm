@@ -150,18 +150,56 @@ def _report_dir() -> Path:
 def test_mtbench_first_turn(mtbench_prompts, mtbench_correctness):
     """Run Roitelet on a slice of MT-Bench's first turns and write a JSON report.
 
-    Asserts only that every selected prompt produces a non-empty
-    answer — the *quality numbers* are what the JSON report carries.
-    Failing on score threshold across categories would make the test
-    bimodal in a way that hides real signal; the report is the
-    artefact, the assertion is just liveness.
+    Designed to run unattended for hours:
+
+    * **Incremental JSON writes** — the same report file is rewritten
+      after every prompt, so a process killed at hour 4 still leaves a
+      valid partial report on disk (atomically written so a SIGKILL
+      mid-write cannot corrupt it).
+    * **Soft failures** — pipeline / grader errors are recorded as
+      fields on the row and the run continues. The test only fails
+      hard if **every** prompt errored (which means Ollama is dead, a
+      real signal to act on).
+    * **Progress lines** — one ``[mtbench i/n …]`` line per prompt to
+      stdout/log so the operator can see liveness without parsing
+      JSON.
     """
     import asyncio
 
     rows: list[dict] = []
     started = time.perf_counter()
-    for case in mtbench_prompts:
+    out = _report_dir() / f'mtbench-{int(started)}.json'
+    total = len(mtbench_prompts)
+
+    def flush() -> None:
+        """Rewrite the report file with whatever has accumulated so far.
+
+        Atomic via tempfile-then-replace so a process killed mid-write
+        leaves either the previous valid file or the new one — never a
+        truncated one. Cheap (~ms) compared to a turn (~minutes), so
+        running it every iteration is fine.
+        """
+        scored = [r for r in rows if r.get('score') is not None]
+        mean = sum(r['score'] for r in scored) / max(1, len(scored))
+        elapsed = time.perf_counter() - started
+        summary = {
+            'rows': rows,
+            'meta': {
+                'limit': _DEFAULT_LIMIT,
+                'completed': len(rows),
+                'expected_total': total,
+                'wall_clock_s': elapsed,
+                'mean_score': mean,
+                'status': 'partial' if len(rows) < total else 'complete',
+            },
+        }
+        tmp = out.with_suffix('.json.tmp')
+        tmp.write_text(json.dumps(summary, indent=2), encoding='utf-8')
+        tmp.replace(out)
+
+    for i, case in enumerate(mtbench_prompts, start=1):
         prompt = case['prompt']
+        prompt_start = time.perf_counter()
         try:
             response = asyncio.get_event_loop().run_until_complete(
                 run_roitelet_chat(
@@ -169,25 +207,25 @@ def test_mtbench_first_turn(mtbench_prompts, mtbench_correctness):
                 ),
             )
             content = response.synthesis.content or ''
+            pipeline_error: str | None = None
+            selected = list(response.router.selected_model_ids)
+            turn_latency = float(response.total_latency_s)
         except Exception as exc:
-            rows.append({
-                'id': case['id'],
-                'category': case['category'],
-                'error': str(exc),
-            })
-            continue
+            content = ''
+            pipeline_error = str(exc)
+            selected = []
+            turn_latency = time.perf_counter() - prompt_start
 
         score: float | None = None
-        try:
-            tc = LLMTestCase(input=prompt, actual_output=content)
-            mtbench_correctness.measure(tc)
-            score = float(mtbench_correctness.score or 0.0)
-        except Exception as exc:
-            # Grading failed; still record the row.
-            score = None
-            grader_error = str(exc)
-        else:
-            grader_error = None
+        grader_error: str | None = None
+        if content and not pipeline_error:
+            try:
+                mtbench_correctness.measure(
+                    LLMTestCase(input=prompt, actual_output=content),
+                )
+                score = float(mtbench_correctness.score or 0.0)
+            except Exception as exc:
+                grader_error = str(exc)
 
         rows.append({
             'id': case['id'],
@@ -195,25 +233,40 @@ def test_mtbench_first_turn(mtbench_prompts, mtbench_correctness):
             'prompt_chars': len(prompt),
             'answer_chars': len(content),
             'score': score,
+            'pipeline_error': pipeline_error,
             'grader_error': grader_error,
-            'total_latency_s': float(response.total_latency_s),
-            'selected': list(response.router.selected_model_ids),
+            'total_latency_s': turn_latency,
+            'selected': selected,
         })
-        assert content, f'MT-Bench prompt {case["id"]} produced an empty answer.'
 
-    elapsed = time.perf_counter() - started
-    summary = {
-        'rows': rows,
-        'meta': {
-            'limit': _DEFAULT_LIMIT,
-            'wall_clock_s': elapsed,
-            'mean_score': (
-                sum(r['score'] for r in rows if r.get('score') is not None)
-                / max(1, sum(1 for r in rows if r.get('score') is not None))
-            ),
-        },
-    }
-    out = _report_dir() / f'mtbench-{int(time.time())}.json'
-    out.write_text(json.dumps(summary, indent=2), encoding='utf-8')
-    print(f'\n[bench_mtbench] wrote {out.relative_to(out.parent.parent.parent)} '
-          f'({len(rows)} rows, mean={summary["meta"]["mean_score"]:.2f})')
+        # Incremental checkpoint after every prompt so an aborted run
+        # still has every completed turn on disk.
+        flush()
+
+        # Liveness line. Unbuffered so ``tail -f`` shows it immediately
+        # under ``nohup``.
+        elapsed_min = (time.perf_counter() - started) / 60.0
+        score_str = f'{score:.2f}' if score is not None else 'n/a '
+        status = 'OK' if (content and not pipeline_error) else 'FAIL'
+        print(
+            f'[mtbench {i:>3}/{total}] {status} score={score_str} '
+            f'cat={case["category"]:<14s} '
+            f'lat={turn_latency:5.1f}s elapsed={elapsed_min:5.1f}m',
+            flush=True,
+        )
+
+    # Final write happens inside ``flush`` already, but call it once
+    # more in case the loop body skipped a flush on some edge case.
+    flush()
+    rel = out.relative_to(out.parent.parent.parent)
+    print(f'\n[bench_mtbench] wrote {rel} ({len(rows)} rows)', flush=True)
+
+    # Hard failure only if *every* prompt failed — that's a real
+    # operator signal (Ollama down, broken creds), not noise from
+    # one weird prompt.
+    failures = [r for r in rows if r['pipeline_error']]
+    if len(failures) == len(rows) and rows:
+        raise RuntimeError(
+            f'Every MT-Bench prompt failed in the pipeline ({len(rows)} rows). '
+            f'First error: {failures[0]["pipeline_error"]}'
+        )
