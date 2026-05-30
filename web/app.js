@@ -15,6 +15,7 @@ const state = {
   busy: false,
   attachments: [],       // File objects queued for the next send
   allowVlms: false,      // mirrors the persisted preference; gates image attachments
+  pseudonymize: false,   // mirrors the persisted `enable_pseudonymization`; per-turn slash overrides win
 };
 
 const AUDIO_RX = /\.(wav|mp3|m4a|flac|ogg|opus|aac)$/i;
@@ -65,7 +66,7 @@ function renderMessages() {
         <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
         <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
         <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-          Tip — start a message with <code>/image</code>, <code>/personal</code>, <code>/local</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
+          Tip — start a message with <code>/image</code>, <code>/personal</code>, <code>/local</code>, <code>/pseudo</code>, <code>/cheap 0.001</code>, <code>/k 5</code>, or <code>/help</code>.
         </p>
       </div>`;
     return;
@@ -76,12 +77,19 @@ function renderMessages() {
 
 function messageNode(m) {
   const wrap = document.createElement('div');
-  wrap.className = m.role === 'user' ? 'flex justify-end' : 'flex justify-start';
+  wrap.className = m.role === 'user' ? 'flex flex-col items-end' : 'flex justify-start';
 
   const bubble = document.createElement('div');
   if (m.role === 'user') {
     bubble.className = 'bg-sysblue text-white px-4 py-2.5 max-w-[78%] text-[15px] leading-relaxed shadow-sm whitespace-pre-wrap';
     bubble.textContent = m.content;
+    wrap.appendChild(bubble);
+    // Pseudonymization audit lives on the user bubble (it's the user's
+    // prompt that was rewritten). Show the diff inline so the user can
+    // verify what actually went to remote candidates.
+    if (m.metadata?.pseudonymization) {
+      wrap.appendChild(pseudonymizationNode(m.metadata.pseudonymization));
+    }
   } else {
     bubble.className = 'bg-gray-100 dark:bg-[#2c2c2e] px-4 py-3 max-w-[85%] text-[15px] leading-relaxed shadow-sm prose-msg';
     bubble.innerHTML = marked.parse(m.content || '', {breaks: true, gfm: true});
@@ -94,9 +102,79 @@ function messageNode(m) {
     } else if (m.metadata) {
       bubble.appendChild(metadataNode(m.metadata));
     }
+    wrap.appendChild(bubble);
   }
-  wrap.appendChild(bubble);
   return wrap;
+}
+
+// Audit affordance — collapsible card with the substitution table the
+// pseudonymizer produced. Lives under the user bubble; the user can
+// open it to see exactly what left the box on this turn.
+function pseudonymizationNode(audit) {
+  const det = document.createElement('details');
+  det.className = 'mt-1.5 max-w-[78%] text-[11px] text-gray-500 dark:text-gray-400';
+  const summary = document.createElement('summary');
+  summary.className = 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex items-center gap-1.5';
+  const count = (audit.mappings || []).length;
+  summary.innerHTML = `
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1l3 6 6 .9-4.5 4.3 1 6.3L12 15.8 6.5 18.5l1-6.3L3 7.9 9 7z"/></svg>
+    <span>Pseudonymized · ${count} substitution${count === 1 ? '' : 's'} · view details</span>`;
+  det.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'mt-2 p-3 rounded-[10px] bg-black/5 dark:bg-white/[0.05] space-y-2';
+
+  const sentLabel = document.createElement('div');
+  sentLabel.className = 'text-gray-400';
+  sentLabel.textContent = 'Sent to remote candidates';
+  body.appendChild(sentLabel);
+
+  const sentPre = document.createElement('pre');
+  sentPre.className = 'whitespace-pre-wrap text-gray-700 dark:text-gray-300 text-[12px] leading-relaxed';
+  sentPre.textContent = audit.pseudonymized_prompt || '';
+  body.appendChild(sentPre);
+
+  if (count) {
+    const tableLabel = document.createElement('div');
+    tableLabel.className = 'text-gray-400 mt-2';
+    tableLabel.textContent = 'Substitutions';
+    body.appendChild(tableLabel);
+
+    const table = document.createElement('div');
+    table.className = 'grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-0.5 text-[11px]';
+    for (const mapping of audit.mappings) {
+      const kind = document.createElement('span');
+      kind.className = 'text-gray-400 tabular-nums';
+      kind.textContent = mapping.kind;
+      const original = document.createElement('span');
+      original.className = 'text-gray-700 dark:text-gray-200 truncate';
+      original.textContent = mapping.original;
+      const arrow = document.createElement('span');
+      arrow.className = 'text-gray-400';
+      arrow.textContent = '→';
+      const substitute = document.createElement('span');
+      substitute.className = 'text-sysblue truncate';
+      substitute.textContent = mapping.substitute;
+      table.append(kind, original, arrow, substitute);
+    }
+    body.appendChild(table);
+  } else {
+    const noPii = document.createElement('div');
+    noPii.className = 'italic text-gray-400';
+    noPii.textContent = 'No PII detected — prompt sent unchanged.';
+    body.appendChild(noPii);
+  }
+
+  const timing = document.createElement('div');
+  timing.className = 'text-gray-400 pt-1 border-t border-black/5 dark:border-white/10';
+  const fwd = (audit.forward_latency_s || 0).toFixed(2);
+  const rev = (audit.reverse_latency_s || 0).toFixed(2);
+  const repair = audit.repair_used ? 'repair pass used' : 'literal reverse only';
+  timing.textContent = `${audit.model_id} · forward ${fwd}s · reverse ${rev}s · ${repair}`;
+  body.appendChild(timing);
+
+  det.appendChild(body);
+  return det;
 }
 
 function imageGenNode(imgGen) {
@@ -191,7 +269,11 @@ function setBusy(busy, label) {
   $('sendIcon').classList.toggle('hidden', busy);
   $('sendSpinner').classList.toggle('hidden', !busy);
   $('statusDot').className = `w-1.5 h-1.5 rounded-full ${busy ? 'bg-sysblue animate-pulse' : 'bg-uGreen'}`;
-  $('statusText').textContent = busy ? (label || 'Thinking…') : 'Ready';
+  if (busy) {
+    $('statusText').textContent = label || 'Thinking…';
+  } else {
+    renderStatusPill();
+  }
 }
 
 function showThinking() {
@@ -237,11 +319,24 @@ async function refreshConversations() {
 }
 
 async function refreshPreferences() {
-  // Mirror the server's persisted `enable_vlms` so the local gate matches.
+  // Mirror the server's persisted flags so the local gates + the status
+  // pill match what the backend will do on the next turn.
   try {
     const cur = await apiGet('/api/settings');
     state.allowVlms = !!cur.enable_vlms;
+    state.pseudonymize = !!cur.enable_pseudonymization;
+    renderStatusPill();
   } catch { /* harmless: defaults stay */ }
+}
+
+// Tiny helper: rewrite the header's status line so the user sees
+// at-a-glance which non-default preferences are in effect.
+function renderStatusPill() {
+  const text = $('statusText');
+  if (!text || state.busy) return;
+  const tags = [];
+  if (state.pseudonymize) tags.push('pseudo');
+  text.textContent = tags.length ? `Ready · ${tags.join(' · ')}` : 'Ready';
 }
 
 async function loadConversation(id) {
@@ -453,18 +548,25 @@ async function send() {
       if (state.conversationId) fd.append('conversation_id', state.conversationId);
       fd.append('top_k', '2');
       fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
+      fd.append('pseudonymize', state.pseudonymize ? 'true' : 'false');
       for (const f of files) fd.append('files', f);
       res = await apiPostMultipart('/api/chat/multimodal', fd);
-      finalizeChatResponse(res);
+      finalizeChatResponse(res, prompt);
     } else {
       const payload = {
         prompt,
         conversation_id: state.conversationId,
-        preferences: {raw_power: 0.7, ecofrugality: 0.3, independence: false, allow_vlms: state.allowVlms},
+        preferences: {
+          raw_power: 0.7,
+          ecofrugality: 0.3,
+          independence: false,
+          allow_vlms: state.allowVlms,
+          pseudonymize: state.pseudonymize,
+        },
         top_k: 2,
       };
       res = await apiPost('/api/chat', payload);
-      finalizeChatResponse(res);
+      finalizeChatResponse(res, prompt);
     }
     state.attachments = [];
     renderAttachments();
@@ -484,8 +586,28 @@ async function send() {
 // Push the standard `/api/chat` response into the message list.
 // Extracted so the `/image` and `/speech` branches can take their own
 // shape without forking the whole send() body.
-function finalizeChatResponse(res) {
+//
+// When pseudonymization fired, attach the audit to the most recent
+// user message so the diff renders right under the user bubble. The
+// optional ``originalPrompt`` argument is the un-stripped text the
+// user typed; we use it to identify the message we just pushed in
+// ``send()`` (last user entry).
+function finalizeChatResponse(res, originalPrompt) {
   state.conversationId = res.conversation_id;
+  if (res.pseudonymization) {
+    // Walk backwards to find the matching user bubble. The last user
+    // entry is almost always the one we just pushed; the loop is a
+    // safety net for re-renders triggered by conversation reloads.
+    for (let i = state.messages.length - 1; i >= 0; i--) {
+      if (state.messages[i].role === 'user') {
+        state.messages[i].metadata = {
+          ...(state.messages[i].metadata || {}),
+          pseudonymization: res.pseudonymization,
+        };
+        break;
+      }
+    }
+  }
   state.messages.push({
     role: 'assistant',
     content: res.synthesis?.content || '(no answer)',
@@ -494,6 +616,7 @@ function finalizeChatResponse(res) {
       responses: res.responses,
       synthesis: res.synthesis,
       total_latency_s: res.total_latency_s,
+      pseudonymization: res.pseudonymization || null,
     },
   });
 }
@@ -577,6 +700,10 @@ const SETTINGS_FIELDS = [
   {key: 'ecofrugality_weight',              label: 'Ecofrugality weight (cost + energy)', type: 'number', step: '0.05', min: 0, max: 1},
   {key: 'independence_local_only',          label: 'Local models only',                type: 'checkbox'},
   {key: 'enable_vlms',                      label: 'Allow vision-language',            type: 'checkbox'},
+  // Pseudonymization. The toggle persists; per-turn slash overrides
+  // (``/pseudo``, ``/nopseudo``) win over the persisted default.
+  {key: 'enable_pseudonymization',          label: 'Pseudonymize remote calls (PII swap)', type: 'checkbox'},
+  {key: 'pseudo_model_id',                  label: 'Pseudonymizer model (blank → judge model)', type: 'text', placeholder: 'qwen3:8b'},
 ];
 
 // Live state of the engines panel between open/save. Each entry has
@@ -821,6 +948,8 @@ async function saveSettings(ev) {
   try {
     await apiPost('/api/settings', next);
     state.allowVlms = !!next.enable_vlms;
+    state.pseudonymize = !!next.enable_pseudonymization;
+    renderStatusPill();
     showToast('Saved');
     closeSettings();
   } catch (err) {

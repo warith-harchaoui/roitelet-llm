@@ -47,6 +47,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                             'ecofrugality': {'type': 'number', 'default': 0.3},
                             'independence': {'type': 'boolean', 'default': False},
                             'allow_vlms': {'type': 'boolean', 'default': False},
+                            'pseudonymize': {'type': 'boolean', 'default': False},
                         },
                         'required': ['prompt'],
                     },
@@ -67,6 +68,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                     ecofrugality=float(arguments.get('ecofrugality', 0.3)),
                     independence=bool(arguments.get('independence', False)),
                     allow_vlms=bool(arguments.get('allow_vlms', False)),
+                    pseudonymize=bool(arguments.get('pseudonymize', False)),
                 ),
             )
         )

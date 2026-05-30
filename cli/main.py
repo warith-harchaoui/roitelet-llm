@@ -1,22 +1,43 @@
 """Command-line interface for Roitelet LLM.
 
-Provides terminal access to the Roitelet pipeline. Mirrors gemini-cli's
-shape: a single-shot ``ask`` subcommand and an interactive ``chat``
-REPL.
+Provides terminal access to every Roitelet operation the API and the
+web UI expose. The CLI mirrors gemini-cli's surface plus
+Roitelet-specific subcommands:
+
+* ``roitelet chat``                          — interactive REPL.
+* ``roitelet ask PROMPT``                    — single-shot question.
+* ``roitelet personal SUBCMD``               — knowledge-base management.
+* ``roitelet settings get [KEY]``            — print persisted settings.
+* ``roitelet settings set KEY VALUE``        — edit persisted settings.
+
+Both ``ask`` and ``chat`` honour the same slash commands as the API
+(``/local``, ``/cheap``, ``/k``, ``/personal``, ``/pseudo``,
+``/nopseudo``, ``/help``) so a user can paste a prompt that worked
+in the web UI directly into the terminal. They also expose explicit
+flags (``--top-k``, ``--independence``, ``--ecofrugality``,
+``--max-cost-usd``, ``--pseudonymize`` / ``--no-pseudonymize``) for
+scripted use cases where parsing a slash prefix is awkward — flag
+values override slash overrides override request defaults.
 
 Examples
 --------
 >>> # Run a single-shot question:
->>> #   python -m cli ask "Explain quicksort"
+>>> #   roitelet ask "Explain quicksort"
+>>> # Pseudonymize per turn:
+>>> #   roitelet ask --pseudonymize "Email Marie Dupont in Lyon."
+>>> # Equivalent with a slash:
+>>> #   roitelet ask "/pseudo Email Marie Dupont in Lyon."
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 from pathlib import Path
 
+from core.commands import parse_command, render_help
 from core.personal import (
     build_personal_context,
     inbox_dir,
@@ -26,7 +47,13 @@ from core.personal import (
     wiki_dir,
 )
 from core.pipeline import run_roitelet_chat
-from core.schemas import ChatRequest, RouterPreferences
+from core.schemas import (
+    AppSettingsPayload,
+    ChatRequest,
+    ChatResponse,
+    RouterPreferences,
+)
+from core.storage import get_storage
 
 
 def print_welcome() -> None:
@@ -40,24 +67,151 @@ def print_welcome() -> None:
     print("=======================================")
     print(" Welcome to Roitelet LLM CLI")
     print("=======================================")
+    print("Type /help inside the REPL to see slash commands. 'exit' or 'quit' to end.\n")
 
 
-async def chat_repl() -> None:
+def _build_request_from_args(
+    prompt: str,
+    args: argparse.Namespace,
+) -> ChatRequest:
+    """Compose a :class:`ChatRequest` from a prompt + parsed CLI args.
+
+    Honours the same slash-command catalogue as the API so the CLI is
+    fully at parity. Explicit ``--`` flags win over slash overrides.
+
+    The settings-derived persistent defaults (``enable_pseudonymization``)
+    are read here so the user doesn't have to repeat them on every turn.
+
+    Parameters
+    ----------
+    prompt : str
+        The raw user prompt — may carry leading slash commands.
+    args : argparse.Namespace
+        Output of the ``ask`` or ``chat`` argument parser. The flags
+        ``--top-k``, ``--independence`` / ``--remote``,
+        ``--ecofrugality``, ``--max-cost-usd``, and
+        ``--pseudonymize`` / ``--no-pseudonymize`` are recognised when
+        present.
+
+    Returns
+    -------
+    ChatRequest
+        Ready to be dispatched to :func:`run_roitelet_chat`.
+    """
+    settings = get_storage().load_app_settings()
+
+    parsed = parse_command(prompt)
+    # Personal mode prepends the wiki context block (same logic as the
+    # ``/api/chat`` route in ``api/main.py``).
+    if parsed.personal_override:
+        base = parsed.stripped_prompt or prompt
+        ctx = build_personal_context(base)
+        effective_prompt = f'{ctx}\n## Question\n\n{base}' if ctx else base
+    else:
+        effective_prompt = parsed.stripped_prompt or prompt
+
+    # Default preferences read the persisted settings; CLI flags + slash
+    # overrides then layer on top.
+    prefs = RouterPreferences(
+        raw_power=settings.raw_power_weight,
+        ecofrugality=settings.ecofrugality_weight,
+        independence=settings.independence_local_only,
+        allow_vlms=settings.enable_vlms,
+        pseudonymize=settings.enable_pseudonymization,
+    )
+
+    # Slash overrides (already parsed by parse_command).
+    pref_updates: dict = {}
+    if parsed.independence_override is not None:
+        pref_updates['independence'] = parsed.independence_override
+    if parsed.max_cost_usd_override is not None:
+        pref_updates['max_cost_usd'] = parsed.max_cost_usd_override
+    if parsed.pseudonymize_override is not None:
+        pref_updates['pseudonymize'] = parsed.pseudonymize_override
+
+    # Explicit CLI flags — highest precedence. Use ``getattr`` because
+    # the ``personal ask`` subcommand re-uses this helper but doesn't
+    # carry every flag.
+    if getattr(args, 'independence', None) is True:
+        pref_updates['independence'] = True
+    if getattr(args, 'remote', None) is True:
+        pref_updates['independence'] = False
+    if getattr(args, 'ecofrugality', None) is not None:
+        pref_updates['ecofrugality'] = float(args.ecofrugality)
+    if getattr(args, 'max_cost_usd', None) is not None:
+        pref_updates['max_cost_usd'] = float(args.max_cost_usd)
+    if getattr(args, 'pseudonymize', None) is True:
+        pref_updates['pseudonymize'] = True
+    if getattr(args, 'no_pseudonymize', None) is True:
+        pref_updates['pseudonymize'] = False
+
+    if pref_updates:
+        prefs = prefs.model_copy(update=pref_updates)
+
+    top_k: int = parsed.top_k_override or getattr(args, 'top_k', None) or 2
+
+    return ChatRequest(
+        prompt=effective_prompt,
+        preferences=prefs,
+        top_k=top_k,
+    )
+
+
+def _render_response(response: ChatResponse, verbose: bool) -> None:
+    """Print the synthesis and (optionally) the audit affordances.
+
+    Parameters
+    ----------
+    response : ChatResponse
+        Result of :func:`run_roitelet_chat`.
+    verbose : bool
+        When ``True``, also print the pseudonymization audit (if any)
+        and a one-line router summary so the user can see what
+        actually ran.
+    """
+    print(response.synthesis.content)
+    if not verbose:
+        return
+    if response.pseudonymization is not None:
+        audit = response.pseudonymization
+        print('\n──── pseudonymization audit ────')
+        print(f'model: {audit.model_id}')
+        print(f'sent to remote candidates: {audit.pseudonymized_prompt}')
+        if audit.mappings:
+            print('substitutions (original → substitute):')
+            for mapping in audit.mappings:
+                print(f'  [{mapping.kind:>18s}]  {mapping.original}  →  {mapping.substitute}')
+        else:
+            print('substitutions: none (no PII detected)')
+        print(
+            f'forward {audit.forward_latency_s:.2f}s · '
+            f'reverse {audit.reverse_latency_s:.2f}s · '
+            f"{'repair pass used' if audit.repair_used else 'literal reverse only'}"
+        )
+    if response.router is not None:
+        selected = ', '.join(response.router.selected_model_ids) or '(none)'
+        print(f'\nrouter selected: {selected}  ·  total {response.total_latency_s:.2f}s')
+
+
+async def chat_repl(args: argparse.Namespace) -> None:
     """Run the interactive chat loop until ``exit``/``quit``/EOF.
 
     Each iteration reads a line from stdin, sends it through the
-    Roitelet pipeline with default :class:`RouterPreferences`, and
-    prints the fused synthesis. ``Ctrl+C`` and ``Ctrl+D`` both exit
-    cleanly.
+    Roitelet pipeline with the CLI flags + slash commands applied,
+    and prints the fused synthesis. ``Ctrl+C`` and ``Ctrl+D`` both
+    exit cleanly.
 
     Notes
     -----
-    Exceptions raised by ``run_roitelet_chat`` (provider failures,
-    judge fallback, etc.) are caught per-iteration so a single bad
-    prompt doesn't kill the session. The error is printed to stdout.
+    Conversation IDs are reused turn-to-turn so the session forms a
+    single conversation in the persisted log. Exceptions raised by
+    ``run_roitelet_chat`` (provider failures, judge fallback,
+    pseudonymizer fail-closed, etc.) are caught per-iteration so a
+    single bad prompt doesn't kill the session — the error message
+    is printed and the loop continues.
     """
     print_welcome()
-    print("Type 'exit' or 'quit' to end the session.\n")
+    conversation_id: str | None = None
     while True:
         try:
             prompt = input("You> ")
@@ -67,10 +221,15 @@ async def chat_repl() -> None:
             if not clean_prompt:
                 continue
 
-            request = ChatRequest(prompt=clean_prompt, preferences=RouterPreferences())
+            request = _build_request_from_args(clean_prompt, args)
+            request = request.model_copy(update={'conversation_id': conversation_id})
             response = await run_roitelet_chat(request)
+            conversation_id = response.conversation_id
 
             print(f"\nRoitelet> {response.synthesis.content}\n")
+            if args.verbose and response.pseudonymization is not None:
+                _render_response(response, verbose=True)
+                print()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting...")
             break
@@ -78,49 +237,30 @@ async def chat_repl() -> None:
             print(f"\nError: {exc}\n")
 
 
-async def single_prompt(prompt: str) -> None:
+async def single_prompt(prompt: str, args: argparse.Namespace) -> None:
     """Execute exactly one prompt and exit.
 
     Parameters
     ----------
     prompt : str
-        The user's prompt sent through :func:`run_roitelet_chat` with
-        default preferences. Whitespace is preserved (the caller is
-        responsible for trimming if relevant).
+        The user's prompt sent through :func:`run_roitelet_chat`,
+        after slash-command + CLI-flag layering.
+    args : argparse.Namespace
+        Parsed CLI args (preference flags + ``--verbose``).
 
     Notes
     -----
     On any pipeline failure the error is printed to stdout and the
     process exits with status 1, matching ``ask``-style CLIs.
+    Pseudonymizer fail-closed errors land here too — that is the
+    intended behaviour, never silently send the unredacted prompt.
     """
     try:
-        request = ChatRequest(prompt=prompt, preferences=RouterPreferences())
+        request = _build_request_from_args(prompt, args)
         response = await run_roitelet_chat(request)
-        print(response.synthesis.content)
+        _render_response(response, verbose=args.verbose)
     except Exception as exc:
         print(f"Error processing prompt: {exc}")
-        sys.exit(1)
-
-
-async def personal_ask(prompt: str) -> None:
-    """Run one chat turn with the personal knowledge base injected.
-
-    Parameters
-    ----------
-    prompt : str
-        User question. The personal-mode context block (full wiki for
-        small corpora, top-K retrieval for large ones) is prepended
-        before fan-out.
-    """
-    context = build_personal_context(prompt)
-    augmented = f'{context}\n## Question\n\n{prompt}' if context else prompt
-    try:
-        response = await run_roitelet_chat(
-            ChatRequest(prompt=augmented, preferences=RouterPreferences())
-        )
-        print(response.synthesis.content)
-    except Exception as exc:
-        print(f'Error: {exc}')
         sys.exit(1)
 
 
@@ -131,7 +271,7 @@ def personal_dispatch(args: argparse.Namespace) -> None:
     ----------
     args : argparse.Namespace
         Parsed arguments; ``args.personal_command`` is one of
-        ``'status'``, ``'ingest'``, ``'list'``, ``'ask'``.
+        ``'status'``, ``'ingest'``, ``'list'``, ``'ask'``, ``'viz'``.
     """
     sub = args.personal_command
     if sub == 'status':
@@ -159,7 +299,12 @@ def personal_dispatch(args: argparse.Namespace) -> None:
                 size = path.stat().st_size
                 print(f"  {path.name:40s}  {size:>8d} bytes")
     elif sub == 'ask':
-        asyncio.run(personal_ask(args.prompt))
+        # ``personal ask`` is a thin wrapper around ``ask`` with the
+        # personal-override forced on. Re-uses _build_request_from_args
+        # so all the same flag plumbing applies (--pseudonymize works
+        # here too).
+        prompt = f'/personal {args.prompt}'
+        asyncio.run(single_prompt(prompt, args))
     elif sub == 'viz':
         _personal_viz(args.output)
 
@@ -172,14 +317,10 @@ def _personal_viz(output_path: str) -> None:
     output_path : str
         Destination file. Overwrites if it exists.
     """
-    import json
-
     points = project_chunks_2d()
     if not points:
         print('No wiki chunks to visualise, or embedding model unreachable.')
         return
-    # Embed the points directly into a single-file HTML so the user can
-    # open it without serving anything. Avoids JS deps.
     html = _PERSONAL_VIZ_TEMPLATE.replace('"__POINTS__"', json.dumps(points))
     Path(output_path).write_text(html, encoding='utf-8')
     print(f'Wrote {len(points)} points to {output_path}')
@@ -256,6 +397,83 @@ window.addEventListener('resize', render); render();
 """
 
 
+def settings_dispatch(args: argparse.Namespace) -> None:
+    """Handle the ``settings`` subcommand family.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Parsed arguments; ``args.settings_command`` is one of
+        ``'get'`` or ``'set'``.
+
+    Notes
+    -----
+    Editing the settings via the CLI hits the exact same
+    :class:`AppSettingsPayload` round-trip as the web UI. Secret
+    fields are masked on ``get`` for screenshot / paste safety; pass
+    ``--show-secrets`` to disable masking. ``set`` accepts JSON
+    literals so ``custom_engines`` and other structured fields can be
+    edited too.
+    """
+    sub = args.settings_command
+    storage = get_storage()
+    settings = storage.load_app_settings()
+
+    if sub == 'get':
+        payload = settings if args.show_secrets else settings.masked()
+        if args.key:
+            value = getattr(payload, args.key, None)
+            if value is None and args.key not in payload.model_fields:
+                print(f'Unknown setting: {args.key}', file=sys.stderr)
+                sys.exit(1)
+            print(json.dumps(value, indent=2, ensure_ascii=False, default=str))
+        else:
+            print(json.dumps(payload.model_dump(), indent=2, ensure_ascii=False, default=str))
+        return
+
+    if sub == 'set':
+        if args.key not in AppSettingsPayload.model_fields:
+            print(f'Unknown setting: {args.key}', file=sys.stderr)
+            sys.exit(1)
+        try:
+            parsed_value = json.loads(args.value)
+        except json.JSONDecodeError:
+            # Bare strings, numbers, etc. that the user typed without
+            # JSON quotes — accept them as a string literal.
+            parsed_value = args.value
+        updated = settings.model_copy(update={args.key: parsed_value})
+        # model_validate enforces the field's type even though
+        # model_copy bypasses validation, so we re-validate explicitly.
+        validated = AppSettingsPayload.model_validate(updated.model_dump())
+        storage.save_app_settings(validated)
+        print(f'Saved {args.key} = {json.dumps(parsed_value, ensure_ascii=False, default=str)}')
+
+
+def _add_pref_flags(parser: argparse.ArgumentParser) -> None:
+    """Attach the per-turn preference flags shared by ``ask`` and ``chat``.
+
+    Keeping the flag wiring in one place ensures the two entry points
+    accept identical syntax — a property the docs and the tests both
+    rely on.
+    """
+    parser.add_argument('--top-k', dest='top_k', type=int, default=None,
+                        help='Fan-out width (1–8). Default: persisted setting → 2.')
+    parser.add_argument('--independence', action='store_true', default=None,
+                        help='Local-only mode for this run (drops remote candidates).')
+    parser.add_argument('--remote', action='store_true', default=None,
+                        help='Force-disable local-only mode (override the persisted default).')
+    parser.add_argument('--ecofrugality', type=float, default=None,
+                        help='Ecofrugality weight (0..1) — blends low cost + low energy.')
+    parser.add_argument('--max-cost-usd', dest='max_cost_usd', type=float, default=None,
+                        help='Per-turn budget; candidates above this estimated cost are filtered.')
+    parser.add_argument('--pseudonymize', action='store_true', default=None,
+                        help='Swap PII before remote calls; restore on the way back. See PSEUDO.md.')
+    parser.add_argument('--no-pseudonymize', dest='no_pseudonymize', action='store_true', default=None,
+                        help='Force pseudonymization off for this turn even if the setting is on.')
+    parser.add_argument('--verbose', action='store_true', default=False,
+                        help='Print the router decision + pseudonymization audit alongside the answer.')
+
+
 def main() -> None:
     """Parse argv and dispatch the requested subcommand.
 
@@ -267,18 +485,27 @@ def main() -> None:
         Send one prompt and print the answer (``single_prompt``).
     personal SUBCMD
         Manage the personal knowledge base. Subcommands: ``status``,
-        ``ingest`` (``--force`` re-runs everything), ``list``,
-        ``ask PROMPT``.
+        ``ingest`` (``--force`` re-runs everything), ``list``, ``ask
+        PROMPT``, ``viz``.
+    settings SUBCMD
+        Inspect / edit persisted control-room settings. ``get [KEY]``
+        prints a single field (or every field when KEY is omitted);
+        ``set KEY VALUE`` accepts JSON literals.
     """
-    parser = argparse.ArgumentParser(description="Roitelet LLM CLI")
+    parser = argparse.ArgumentParser(
+        prog='roitelet',
+        description='Roitelet LLM CLI — same operations as the web UI and the JSON API.',
+    )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Interactive mode.
-    subparsers.add_parser("chat", help="Start an interactive chat REPL session")
+    chat_parser = subparsers.add_parser("chat", help="Start an interactive chat REPL session")
+    _add_pref_flags(chat_parser)
 
     # Single execution mode.
     ask_parser = subparsers.add_parser("ask", help="Send a single question and get an answer")
     ask_parser.add_argument("prompt", help="The string prompt to evaluate")
+    _add_pref_flags(ask_parser)
 
     # Personal mode.
     personal_parser = subparsers.add_parser(
@@ -294,6 +521,7 @@ def main() -> None:
         "ask", help="Ask a question with the personal knowledge base injected"
     )
     personal_ask_parser.add_argument("prompt", help="The question")
+    _add_pref_flags(personal_ask_parser)
     viz_parser = personal_sub.add_parser(
         "viz", help="Write a Karpathy-style 2-D embedding scatter to a standalone HTML file",
     )
@@ -302,17 +530,40 @@ def main() -> None:
         help="HTML file to write (default: personal-viz.html in the cwd)",
     )
 
+    # Settings management — full parity with the GUI Settings sheet.
+    settings_parser = subparsers.add_parser(
+        "settings", help="Inspect or edit persisted control-room settings"
+    )
+    settings_sub = settings_parser.add_subparsers(dest="settings_command")
+    get_parser = settings_sub.add_parser("get", help="Print a setting (KEY) or every setting (no KEY)")
+    get_parser.add_argument("key", nargs='?', default=None, help="Setting name (omit for all)")
+    get_parser.add_argument("--show-secrets", action='store_true',
+                            help="Print API keys in clear text (default: masked)")
+    set_parser = settings_sub.add_parser("set", help="Edit one setting; value is a JSON literal or bare string")
+    set_parser.add_argument("key", help="Setting name (e.g. enable_pseudonymization)")
+    set_parser.add_argument("value", help="JSON literal: true / 0.5 / \"qwen3:8b\" / [\"a\",\"b\"]")
+
+    # Convenience: print the slash-command catalogue without spawning a turn.
+    subparsers.add_parser("help-slash", help="Print the slash-command catalogue (same as /help in chat).")
+
     args = parser.parse_args()
 
     if args.command == "chat":
-        asyncio.run(chat_repl())
+        asyncio.run(chat_repl(args))
     elif args.command == "ask":
-        asyncio.run(single_prompt(args.prompt))
+        asyncio.run(single_prompt(args.prompt, args))
     elif args.command == "personal":
         if not args.personal_command:
             personal_parser.print_help()
         else:
             personal_dispatch(args)
+    elif args.command == "settings":
+        if not args.settings_command:
+            settings_parser.print_help()
+        else:
+            settings_dispatch(args)
+    elif args.command == "help-slash":
+        print(render_help())
     else:
         parser.print_help()
 

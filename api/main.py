@@ -373,6 +373,7 @@ async def roitelet_chat_multimodal(
     conversation_id: str | None = Form(None),
     top_k: int = Form(2),
     allow_vlms: bool = Form(False),
+    pseudonymize: bool = Form(False),
     files: list[UploadFile] = File(default_factory=list),
 ):
     """Run one chat turn with attached audio, image, or PDF files.
@@ -457,7 +458,7 @@ async def roitelet_chat_multimodal(
             prompt=augmented,
             conversation_id=conversation_id,
             top_k=top_k,
-            preferences=RouterPreferences(allow_vlms=allow_vlms),
+            preferences=RouterPreferences(allow_vlms=allow_vlms, pseudonymize=pseudonymize),
         )
     )
     return response.model_dump()

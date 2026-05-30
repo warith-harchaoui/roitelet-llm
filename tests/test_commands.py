@@ -121,6 +121,32 @@ class TestParseCommand:
         assert parsed.max_cost_usd_override is None
         assert parsed.stripped_prompt == '/cheap rent in this neighborhood'
 
+    def test_pseudo_forces_on(self):
+        """``/pseudo PROMPT`` forces pseudonymization on for the turn."""
+        from core.commands import parse_command
+
+        parsed = parse_command('/pseudo email Marie about Lyon')
+        assert parsed.pseudonymize_override is True
+        assert parsed.stripped_prompt == 'email Marie about Lyon'
+        assert parsed.matched_commands == ['/pseudo']
+
+    def test_nopseudo_forces_off(self):
+        """``/nopseudo`` overrides a persisted ON setting for one turn."""
+        from core.commands import parse_command
+
+        parsed = parse_command('/nopseudo what did Napoleon do in 1812?')
+        assert parsed.pseudonymize_override is False
+        assert parsed.stripped_prompt == 'what did Napoleon do in 1812?'
+
+    def test_pseudo_composes_with_local(self):
+        """``/local /pseudo PROMPT`` keeps both overrides."""
+        from core.commands import parse_command
+
+        parsed = parse_command('/local /pseudo draft the contract')
+        assert parsed.independence_override is True
+        assert parsed.pseudonymize_override is True
+        assert parsed.stripped_prompt == 'draft the contract'
+
 
 class TestRenderHelp:
     def test_help_is_non_empty_markdown(self):
@@ -217,3 +243,10 @@ class TestApiIntegration:
         data = response.json()
         joined = ' '.join(data['router']['reasoning'])
         assert 'top_k=5' in joined
+
+    def test_pseudo_override_flows_to_preferences(self, api_client):
+        response = api_client.post('/api/chat', json={'prompt': '/pseudo hello there'})
+        assert response.status_code == 200
+        data = response.json()
+        joined = ' '.join(data['router']['reasoning'])
+        assert "'pseudonymize': True" in joined

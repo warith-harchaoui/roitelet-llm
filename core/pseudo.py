@@ -345,7 +345,7 @@ def _validate_forward(
 
 
 def _parse_json_object(raw: str) -> dict:
-    """Best-effort JSON object extraction from a model's reply.
+    r"""Best-effort JSON object extraction from a model's reply.
 
     Some local models wrap structured output in ``\`\`\`json ... \`\`\```
     fences despite the prompt telling them not to. Strip those before
