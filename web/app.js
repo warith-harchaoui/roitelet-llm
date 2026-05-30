@@ -3,9 +3,15 @@
  * Vanilla JS, no build step. Talks to the FastAPI backend over its native
  * endpoints (no SSE — the OpenAI-compat streaming chunks an already-complete
  * answer, so honest loading state beats fake typing).
+ *
+ * All visible strings flow through `window.RoiteletI18n.t(key, vars)` so
+ * the EN / FR toggle in the sidebar can re-render the whole UI without
+ * a reload. Static elements in index.html carry `data-i18n` attributes;
+ * dynamic strings here pull from `t()` directly.
  */
 
 const $ = (id) => document.getElementById(id);
+const t = (key, vars) => window.RoiteletI18n.t(key, vars);
 const escapeHtml = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const state = {
@@ -132,9 +138,14 @@ function pseudonymizationNode(audit) {
   const summary = document.createElement('summary');
   summary.className = 'cursor-pointer select-none hover:text-gray-700 dark:hover:text-gray-200 transition-colors flex items-center gap-1.5';
   const count = (audit.mappings || []).length;
-  summary.innerHTML = `
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1l3 6 6 .9-4.5 4.3 1 6.3L12 15.8 6.5 18.5l1-6.3L3 7.9 9 7z"/></svg>
-    <span>Pseudonymized · ${count} substitution${count === 1 ? '' : 's'} · view details</span>`;
+  let summaryKey;
+  if (count === 0) summaryKey = 'audit.summary.zero';
+  else if (count === 1) summaryKey = 'audit.summary';
+  else summaryKey = 'audit.summary.plural';
+  const summaryText = document.createElement('span');
+  summaryText.textContent = t(summaryKey, {count});
+  summary.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1l3 6 6 .9-4.5 4.3 1 6.3L12 15.8 6.5 18.5l1-6.3L3 7.9 9 7z"/></svg>`;
+  summary.appendChild(summaryText);
   det.appendChild(summary);
 
   const body = document.createElement('div');
@@ -142,7 +153,7 @@ function pseudonymizationNode(audit) {
 
   const sentLabel = document.createElement('div');
   sentLabel.className = 'text-gray-400';
-  sentLabel.textContent = 'Sent to remote candidates';
+  sentLabel.textContent = t('audit.sentLabel');
   body.appendChild(sentLabel);
 
   const sentPre = document.createElement('pre');
@@ -153,7 +164,7 @@ function pseudonymizationNode(audit) {
   if (count) {
     const tableLabel = document.createElement('div');
     tableLabel.className = 'text-gray-400 mt-2';
-    tableLabel.textContent = 'Substitutions';
+    tableLabel.textContent = t('audit.tableLabel');
     body.appendChild(tableLabel);
 
     const table = document.createElement('div');
@@ -177,16 +188,18 @@ function pseudonymizationNode(audit) {
   } else {
     const noPii = document.createElement('div');
     noPii.className = 'italic text-gray-400';
-    noPii.textContent = 'No PII detected — prompt sent unchanged.';
+    noPii.textContent = t('audit.empty');
     body.appendChild(noPii);
   }
 
   const timing = document.createElement('div');
   timing.className = 'text-gray-400 pt-1 border-t border-black/5 dark:border-white/10';
-  const fwd = (audit.forward_latency_s || 0).toFixed(2);
-  const rev = (audit.reverse_latency_s || 0).toFixed(2);
-  const repair = audit.repair_used ? 'repair pass used' : 'literal reverse only';
-  timing.textContent = `${audit.model_id} · forward ${fwd}s · reverse ${rev}s · ${repair}`;
+  timing.textContent = t('audit.timing', {
+    model: audit.model_id,
+    fwd: (audit.forward_latency_s || 0).toFixed(2),
+    rev: (audit.reverse_latency_s || 0).toFixed(2),
+    repair: audit.repair_used ? t('audit.repair.used') : t('audit.repair.skipped'),
+  });
   body.appendChild(timing);
 
   det.appendChild(body);
@@ -272,7 +285,7 @@ function renderConversationList() {
         ? 'bg-black/[0.06] dark:bg-white/[0.1] text-gray-900 dark:text-white'
         : 'text-gray-700 dark:text-gray-300 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]'
     }`;
-    a.textContent = c.title || 'Untitled';
+    a.textContent = c.title || t('misc.untitled');
     a.onclick = () => loadConversation(c.conversation_id);
     list.appendChild(a);
   }
@@ -286,7 +299,7 @@ function setBusy(busy, label) {
   $('sendSpinner').classList.toggle('hidden', !busy);
   $('statusDot').className = `w-1.5 h-1.5 rounded-full ${busy ? 'bg-sysblue animate-pulse' : 'bg-uGreen'}`;
   if (busy) {
-    $('statusText').textContent = label || 'Thinking…';
+    $('statusText').textContent = label || t('header.status.thinking');
   } else {
     renderStatusPill();
   }
@@ -330,7 +343,7 @@ async function refreshConversations() {
     state.conversations = await apiGet('/api/conversations');
     renderConversationList();
   } catch (err) {
-    showToast('Could not load conversations: ' + err.message);
+    showToast(t('toast.loadFailed', {message: err.message}));
   }
 }
 
@@ -351,14 +364,17 @@ async function refreshPreferences() {
 }
 
 // Tiny helper: rewrite the header's status line so the user sees
-// at-a-glance which non-default preferences are in effect.
+// at-a-glance which non-default preferences are in effect. Each tag is
+// a plain-language phrase, not a code shorthand.
 function renderStatusPill() {
   const text = $('statusText');
   if (!text || state.busy) return;
   const tags = [];
-  if (state.prefs.pseudonymize) tags.push('pseudo');
-  if (state.prefs.independence) tags.push('local');
-  text.textContent = tags.length ? `Ready · ${tags.join(' · ')}` : 'Ready';
+  if (state.prefs.pseudonymize) tags.push(t('header.status.tag.pseudo'));
+  if (state.prefs.independence) tags.push(t('header.status.tag.local'));
+  text.textContent = tags.length
+    ? `${t('header.status.ready')} · ${tags.join(' · ')}`
+    : t('header.status.ready');
 }
 
 // Show a blue dot on the sliders icon whenever the per-turn prefs
@@ -456,7 +472,7 @@ async function loadConversation(id) {
     renderMessages();
     renderConversationList();
   } catch (err) {
-    showToast('Could not load conversation: ' + err.message);
+    showToast(t('toast.convoFailed', {message: err.message}));
   } finally {
     setBusy(false);
   }
@@ -528,10 +544,10 @@ const VIZ_PALETTE = [
 async function openPersonalViz() {
   let payload;
   try { payload = await apiGet('/api/personal/embeddings'); }
-  catch (err) { showToast('Could not fetch embeddings: ' + err.message); return; }
+  catch (err) { showToast(t('personal.viz.fetchFailed', {message: err.message})); return; }
   const points = payload?.points || [];
   if (!points.length) {
-    showToast('No wiki chunks to visualise, or embedding model unreachable.');
+    showToast(t('personal.viz.empty'));
     return;
   }
   renderVizModal(points);
@@ -620,7 +636,7 @@ async function send() {
   const speechMatch = prompt.match(SPEECH_CMD_RX);
 
   const fileLabel = files.length ? files.map(f => `📎 ${f.name}`).join('\n') : '';
-  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || '(attachment only)';
+  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || t('misc.attachmentOnly');
   state.messages.push({role: 'user', content: userBubble});
   $('prompt').value = '';
   renderMessages();
@@ -688,7 +704,7 @@ async function send() {
     await refreshConversations();
   } catch (err) {
     hideThinking();
-    showToast('Pipeline error: ' + err.message);
+    showToast(t('toast.pipelineError', {message: err.message}));
     // Keep the user's message visible; don't auto-rewind.
   } finally {
     setBusy(false);
@@ -723,7 +739,7 @@ function finalizeChatResponse(res, originalPrompt) {
   }
   state.messages.push({
     role: 'assistant',
-    content: res.synthesis?.content || '(no answer)',
+    content: res.synthesis?.content || t('misc.noAnswer'),
     metadata: {
       router: res.router,
       responses: res.responses,
@@ -763,11 +779,11 @@ function onFilesPicked(fileList) {
   for (const f of fileList) {
     const kind = classifyFile(f);
     if (!kind) {
-      showToast(`Skipped ${f.name} — only audio, image, or PDF.`);
+      showToast(t('toast.skippedAttachment', {name: f.name}));
       continue;
     }
     if (kind === 'image' && !state.allowVlms) {
-      showToast(`Skipped ${f.name} — enable "Allow vision-language" in Settings to attach images.`);
+      showToast(t('toast.skippedVision', {name: f.name}));
       continue;
     }
     state.attachments.push(f);
@@ -898,7 +914,7 @@ function renderEngineList() {
 async function openSettings() {
   let current = {};
   try { current = await apiGet('/api/settings'); }
-  catch (err) { showToast('Could not load settings: ' + err.message); return; }
+  catch (err) { showToast(t('toast.settingsLoadFailed', {message: err.message})); return; }
 
   const form = $('settingsForm');
   form.innerHTML = '';
@@ -944,10 +960,10 @@ async function openSettings() {
     try {
       const res = await triggerPersonalIngest(false);
       const added = (res.results || []).filter(r => r.wiki_path && !r.error).length;
-      showToast(`Ingested ${added} file(s). Wiki now has ${res.status?.wiki ?? '?'} entries.`);
+      showToast(t('personal.ingested', {added, wiki: res.status?.wiki ?? '?'}));
       refreshPersonalSummary();
     } catch (err) {
-      showToast('Ingest failed: ' + err.message);
+      showToast(t('personal.ingest.failed', {message: err.message}));
     } finally {
       btn.disabled = false;
       btn.textContent = 'Ingest inbox';
@@ -1067,10 +1083,10 @@ async function saveSettings(ev) {
     state.prefs.pseudonymize = state.prefDefaults.pseudonymize;
     renderStatusPill();
     renderPrefsDot();
-    showToast('Saved');
+    showToast(t('toast.saved'));
     closeSettings();
   } catch (err) {
-    showToast('Save failed: ' + err.message);
+    showToast(t('toast.saveFailed', {message: err.message}));
   }
 }
 

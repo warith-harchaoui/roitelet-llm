@@ -101,14 +101,22 @@
 
     <!-- ───── Sidebar ─────────────────────────────────────────────── -->
     <aside class="hidden md:flex md:w-[260px] flex-col border-r border-gray-200/80 dark:border-white/[0.08] bg-[#fbfbfd]/80 dark:bg-black/30 backdrop-blur-xl">
-      <div class="px-3 py-3 flex items-center justify-between">
-        <div class="flex items-center gap-2 px-2">
+      <div class="px-3 py-3 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 px-2 min-w-0">
           <img src="/assets/roitelet.png" alt="Roitelet" width="22" height="22" class="rounded-[10px]">
           <span class="text-[13px] font-semibold tracking-tight">Roitelet</span>
         </div>
-        <button id="newChatBtn" class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" title="New chat — ⌘N" aria-label="New chat">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        </button>
+        <div class="flex items-center gap-0.5">
+          <!-- Language toggle. Two letters so it stays compact in the
+               sidebar; localized title reveals the action. Click flips
+               EN ↔ FR and re-renders every annotated element. -->
+          <button id="langToggle" data-i18n-title="sidebar.language.toggle"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-semibold tracking-wider text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">FR</button>
+          <button id="newChatBtn" data-i18n-title="sidebar.newChat.tooltip"
+            class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="New chat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
       </div>
 
       <div id="conversationList" class="flex-1 overflow-y-auto scrollbar-thin px-2 py-1 space-y-0.5">
@@ -118,7 +126,7 @@
       <div class="border-t border-gray-200/80 dark:border-white/[0.08] p-2">
         <button id="settingsBtn" class="w-full flex items-center gap-2.5 px-2.5 py-2 text-[13px] text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          Settings
+          <span data-i18n="sidebar.settings">Settings</span>
         </button>
       </div>
     </aside>
@@ -129,14 +137,14 @@
       <!-- Sticky header with subtle translucency. -->
       <header class="sticky top-0 z-10 h-12 px-5 flex items-center justify-between bg-white/70 dark:bg-black/30 backdrop-blur-xl border-b border-gray-200/80 dark:border-white/[0.08]">
         <div class="flex items-center gap-2 min-w-0">
-          <button id="mobileSidebarBtn" class="md:hidden w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Open menu">
+          <button id="mobileSidebarBtn" data-i18n-title="sidebar.openMenu" class="md:hidden w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Open menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
           </button>
           <h1 id="conversationTitle" class="text-[14px] font-semibold tracking-tight truncate">New chat</h1>
         </div>
         <div class="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
           <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span id="statusText">Ready</span>
+          <span id="statusText" data-i18n="header.status.ready">Ready</span>
         </div>
       </header>
 
@@ -145,11 +153,9 @@
         <div id="messagesInner" class="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-4">
           <div id="welcome" class="text-center py-24">
             <img src="/assets/roitelet.png" alt="Roitelet" width="72" height="72" class="mx-auto mb-5 rounded-[10px] shadow-lg">
-            <h2 class="text-[22px] font-semibold tracking-tight">Ask any question.</h2>
-            <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed">Top-K models answer in parallel. A local model fuses the best.</p>
-            <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed">
-              Tip — start a message with <code>/image</code>, <code>/personal</code>, or <code>/help</code> to switch routes. Use the sliders icon below for per-turn preferences.
-            </p>
+            <h2 class="text-[22px] font-semibold tracking-tight" data-i18n="welcome.title">Ask anything.</h2>
+            <p class="text-[14px] text-gray-500 dark:text-gray-400 mt-2 max-w-md mx-auto leading-relaxed" data-i18n="welcome.subtitle">Several AI models answer your question at the same time, and a local model picks the best parts of each answer for you.</p>
+            <p class="text-[12px] text-gray-400 dark:text-gray-500 mt-4 max-w-md mx-auto leading-relaxed" data-i18n-html="welcome.tip"></p>
           </div>
         </div>
       </div>
@@ -159,12 +165,12 @@
         <div class="max-w-3xl mx-auto px-4 sm:px-6 py-3.5">
           <div id="attachmentChips" class="hidden flex-wrap gap-1.5 mb-2"></div>
           <form id="composer" class="flex items-end gap-2.5">
-            <button type="button" id="attachBtn" title="Attach audio, image, or PDF"
+            <button type="button" id="attachBtn" data-i18n-title="composer.attach" aria-label="Attach a file"
               class="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sysblue dark:hover:text-sysblue hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
             </button>
             <input id="fileInput" type="file" multiple accept="audio/*,image/*,application/pdf" class="hidden">
-            <button type="button" id="prefsBtn" title="Per-turn preferences (top-K, local-only, pseudonymize, budget)"
+            <button type="button" id="prefsBtn" data-i18n-title="composer.prefs.tooltip" aria-label="Per-message options"
               class="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-sysblue dark:hover:text-sysblue hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50 relative">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="4" y1="6" x2="13" y2="6"/><circle cx="17" cy="6" r="2.2"/>
@@ -174,18 +180,16 @@
               <span id="prefsDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sysblue"></span>
             </button>
             <div class="flex-1 border border-gray-300/80 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus-within:border-sysblue dark:focus-within:border-sysblue focus-within:ring-2 focus-within:ring-sysblue/20 transition-all">
-              <textarea id="prompt" rows="1" placeholder="Message Roitelet…"
+              <textarea id="prompt" rows="1" data-i18n-placeholder="composer.placeholder"
                 class="w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-[1.4] focus:outline-none placeholder-gray-400 max-h-[200px]"></textarea>
             </div>
-            <button type="submit" id="sendBtn" aria-label="Send"
+            <button type="submit" id="sendBtn" data-i18n-title="composer.send" aria-label="Send"
               class="shrink-0 w-11 h-11 rounded-full bg-sysblue hover:bg-sysblueHover text-white flex items-center justify-center shadow-sm active:scale-95 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100">
               <svg id="sendIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
               <span id="sendSpinner" class="hidden w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></span>
             </button>
           </form>
-          <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2 text-center select-none">
-            <kbd class="kbd">⌘↵</kbd> send · <kbd class="kbd">⌘N</kbd> new chat
-          </p>
+          <p class="text-[11px] text-gray-400 dark:text-gray-500 mt-2 text-center select-none" data-i18n-html="composer.shortcuts"></p>
         </div>
       </div>
     </main>
@@ -197,8 +201,8 @@
     <div class="absolute inset-x-0 bottom-0 md:inset-0 md:flex md:items-center md:justify-center md:p-6">
       <div class="bg-white dark:bg-[#1c1c1e] shadow-2xl w-full md:max-w-lg max-h-[90vh] md:max-h-[80vh] flex flex-col overflow-hidden">
         <div class="px-5 py-3.5 border-b border-gray-200 dark:border-white/[0.08] flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold tracking-tight">Settings</h2>
-          <button id="closeSettingsBtn" class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Close settings">
+          <h2 class="text-[15px] font-semibold tracking-tight" data-i18n="settings.title">Settings</h2>
+          <button id="closeSettingsBtn" data-i18n-title="settings.close" class="w-11 h-11 rounded-full flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50" aria-label="Close settings">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
@@ -206,8 +210,8 @@
           <!-- injected by JS -->
         </form>
         <div class="px-5 py-3 border-t border-gray-200 dark:border-white/[0.08] flex justify-end gap-2">
-          <button type="button" id="cancelSettingsBtn" class="min-h-[36px] px-4 py-1.5 text-[13px] font-medium hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">Cancel</button>
-          <button type="submit" form="settingsForm" class="min-h-[36px] px-4 py-1.5 text-[13px] font-semibold bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">Save</button>
+          <button type="button" id="cancelSettingsBtn" data-i18n="settings.cancel" class="min-h-[36px] px-4 py-1.5 text-[13px] font-medium hover:bg-black/5 dark:hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/50">Cancel</button>
+          <button type="submit" form="settingsForm" data-i18n="settings.save" class="min-h-[36px] px-4 py-1.5 text-[13px] font-semibold bg-sysblue text-white hover:bg-sysblueHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sysblue/60">Save</button>
         </div>
       </div>
     </div>
@@ -217,32 +221,28 @@
        Lives inside <body> rather than the composer so its absolute position
        doesn't get clipped by the composer's overflow. JS positions it
        above the sliders button on open. -->
-  <div id="prefsPopover" class="fixed hidden z-40 w-[280px]">
+  <div id="prefsPopover" class="fixed hidden z-40 w-[300px]">
     <div class="bg-white dark:bg-[#1c1c1e] border border-gray-200 dark:border-white/[0.08] shadow-2xl rounded-[10px] p-4 space-y-3">
-      <div class="text-[12px] font-semibold text-gray-700 dark:text-gray-300 pb-1 border-b border-gray-100 dark:border-white/[0.06]">
-        This turn only
-      </div>
-      <label class="flex items-center justify-between text-[13px]">
-        <span>Local models only</span>
-        <input type="checkbox" id="prefIndependence" class="w-5 h-5 accent-sysblue">
+      <div class="text-[12px] font-semibold text-gray-700 dark:text-gray-300 pb-1 border-b border-gray-100 dark:border-white/[0.06]" data-i18n="prefs.title">For this message only</div>
+      <label class="flex items-center justify-between text-[13px] gap-2">
+        <span data-i18n="prefs.independence">Stay offline (only models on my computer)</span>
+        <input type="checkbox" id="prefIndependence" class="w-5 h-5 accent-sysblue shrink-0">
       </label>
-      <label class="flex items-center justify-between text-[13px]">
-        <span>Pseudonymize remote calls</span>
-        <input type="checkbox" id="prefPseudonymize" class="w-5 h-5 accent-sysblue">
+      <label class="flex items-center justify-between text-[13px] gap-2">
+        <span data-i18n="prefs.pseudonymize">Hide my personal info before sending</span>
+        <input type="checkbox" id="prefPseudonymize" class="w-5 h-5 accent-sysblue shrink-0">
       </label>
       <label class="flex items-center justify-between gap-2 text-[13px]">
-        <span class="whitespace-nowrap">Top-K fan-out</span>
+        <span class="flex-1" data-i18n="prefs.topK">How many AIs should answer</span>
         <input type="number" id="prefTopK" min="1" max="8" step="1"
           class="w-16 px-2 py-1 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 text-right">
       </label>
       <label class="flex items-center justify-between gap-2 text-[13px]">
-        <span class="whitespace-nowrap">Max cost (USD)</span>
-        <input type="number" id="prefMaxCost" min="0" step="0.001" placeholder="∞"
-          class="w-20 px-2 py-1 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 text-right">
+        <span class="flex-1" data-i18n="prefs.maxCost">Spending limit (US dollars)</span>
+        <input type="number" id="prefMaxCost" min="0" step="0.001" data-i18n-placeholder="prefs.maxCost.placeholder"
+          class="w-24 px-2 py-1 text-[13px] border border-gray-300 dark:border-white/[0.12] bg-white dark:bg-[#2c2c2e] focus:outline-none focus:border-sysblue focus:ring-2 focus:ring-sysblue/20 text-right">
       </label>
-      <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed pt-1 border-t border-gray-100 dark:border-white/[0.06]">
-        Persistent defaults live in <button type="button" id="prefsToSettings" class="text-sysblue hover:underline">Settings</button>.
-      </p>
+      <p class="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed pt-1 border-t border-gray-100 dark:border-white/[0.06]" data-i18n-html="prefs.footer"></p>
     </div>
   </div>
 
@@ -253,6 +253,7 @@
     </div>
   </div>
 
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
