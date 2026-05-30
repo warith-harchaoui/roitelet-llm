@@ -129,7 +129,7 @@ def test_default_local_first_surfaces_are_reachable_without_auth():
 
     models = client.get('/v1/models').json()
     assert models['object'] == 'list'
-    assert any(m['id'] == 'roitelet-llm' for m in models['data'])
+    assert any(m['id'] == 'roitelet' for m in models['data'])
 
 
 def test_auth_gate_rejects_missing_or_wrong_token_and_accepts_the_right_one(auth_required):
@@ -190,7 +190,7 @@ def test_mcp_handshake_lists_one_tool_and_rejects_unknown_methods():
     init = client.post('/mcp', json={
         'jsonrpc': '2.0', 'id': 'init-1', 'method': 'initialize', 'params': {},
     }).json()
-    assert init['result']['serverInfo']['name'] == 'roitelet-llm'
+    assert init['result']['serverInfo']['name'] == 'roitelet'
     assert 'protocolVersion' in init['result']
 
     # tools/list — exactly one tool, with ``prompt`` required.
@@ -228,13 +228,13 @@ def test_chat_endpoints_handle_streaming_and_non_streaming_responses(stub_pipeli
     """
     # 1. OpenAI non-streaming.
     plain = client.post('/v1/chat/completions', json={
-        'model': 'roitelet-llm', 'messages': [{'role': 'user', 'content': 'hi'}],
+        'model': 'roitelet', 'messages': [{'role': 'user', 'content': 'hi'}],
     }).json()
     assert plain['choices'][0]['message']['content'] == 'Stub synthesis answer.'
 
     # 2. OpenAI streaming — SSE with [DONE] sentinel.
     with client.stream('POST', '/v1/chat/completions', json={
-        'model': 'roitelet-llm', 'messages': [{'role': 'user', 'content': 'hi'}],
+        'model': 'roitelet', 'messages': [{'role': 'user', 'content': 'hi'}],
         'stream': True,
     }) as response:
         assert response.headers['content-type'].startswith('text/event-stream')

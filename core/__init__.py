@@ -1,7 +1,7 @@
-"""Roitelet LLM — local-first adaptive router.
+"""Roitelet — local-first adaptive router.
 
 This package contains the routing, orchestration, monitoring, storage, and
-HTTP serving logic for the Roitelet LLM project.
+HTTP serving logic for the Roitelet project.
 """
 
 from __future__ import annotations

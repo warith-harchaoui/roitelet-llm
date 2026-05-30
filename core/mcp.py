@@ -29,7 +29,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
     if payload.method == 'initialize':
         result = {
             'protocolVersion': '2025-03-26',
-            'serverInfo': {'name': 'roitelet-llm', 'version': '0.1.0'},
+            'serverInfo': {'name': 'roitelet', 'version': '0.1.0'},
             'capabilities': {'tools': {}},
         }
     elif payload.method == 'tools/list':

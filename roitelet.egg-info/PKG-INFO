@@ -1,3 +1,44 @@
+Metadata-Version: 2.4
+Name: roitelet
+Version: 0.1.0
+Summary: Local-first adaptive LLM router with parallel inference and local synthesis.
+Author: Warith Harchaoui
+License: BSD-3-Clause
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn[standard]>=0.32.0
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: httpx>=0.28.1
+Requires-Dist: pydantic>=2.10.6
+Requires-Dist: pydantic-settings>=2.8.1
+Requires-Dist: pandas>=2.2.3
+Requires-Dist: numpy>=2.2.4
+Requires-Dist: orjson>=3.10.15
+Requires-Dist: scikit-learn>=1.6.1
+Requires-Dist: python-multipart>=0.0.20
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
+Requires-Dist: httpx>=0.28.1; extra == "dev"
+Requires-Dist: ruff>=0.4.0; extra == "dev"
+Provides-Extra: eval
+Requires-Dist: deepeval<4.0,>=3.0; extra == "eval"
+Requires-Dist: datasets>=2.18; extra == "eval"
+Provides-Extra: multimodal
+Requires-Dist: pywhispercpp>=1.4; extra == "multimodal"
+Requires-Dist: nemo-toolkit[asr]>=2.1; extra == "multimodal"
+Requires-Dist: soundfile>=0.12; extra == "multimodal"
+Requires-Dist: audio-helper>=0.1; extra == "multimodal"
+Requires-Dist: kreuzberg>=3.0; extra == "multimodal"
+Requires-Dist: firecrawl-py>=2.0; extra == "multimodal"
+Provides-Extra: personal
+Requires-Dist: turbovec>=0.5; extra == "personal"
+Provides-Extra: scale
+Requires-Dist: pymongo>=4.6; extra == "scale"
+Dynamic: license-file
+
 # Roitelet
 
 > **Ask one question — several AI models answer at the same time — a

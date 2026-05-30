@@ -1,4 +1,4 @@
-# Roitelet LLM
+# Roitelet
 
 > **Posez une question — plusieurs IA répondent en même temps — un
 > petit modèle sur votre ordinateur sélectionne les meilleurs morceaux
@@ -25,7 +25,7 @@ d'un petit battement d'ailes supplémentaire, lui rafla la couronne.
 Ce n'est pas que le roitelet soit l'oiseau le plus fort — il ne
 l'est pas. Ce qui compte, c'est ce que de petits battements d'ailes,
 bien placés, peuvent ajouter par-dessus de bien plus grandes forces.
-Roitelet LLM est bâti sur la même idée : une petite
+Roitelet est bâti sur la même idée : une petite
 pipeline locale qui se pose sur les grands modèles de langage — les
 compose, compare leurs réponses, et passe une couche de synthèse
 locale par-dessus.
@@ -65,8 +65,8 @@ ollama pull qwen3:8b
 ollama pull nomic-embed-text     # minuscule — utilisé par le mode personnel
 
 # 3. Installer Roitelet.
-git clone https://github.com/<votre-fork>/roitelet-llm.git
-cd roitelet-llm
+git clone https://github.com/<votre-fork>/roitelet.git
+cd roitelet
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 

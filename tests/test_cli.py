@@ -92,7 +92,7 @@ def test_chat_repl_dispatches_non_blank_prompts_until_exit(monkeypatch, capsys):
     assert invocations == ['real prompt']
 
     out = capsys.readouterr().out
-    assert 'Welcome to Roitelet LLM CLI' in out
+    assert 'Welcome to Roitelet CLI' in out
     assert 'echo: real prompt' in out
 
     # EOF (Ctrl-D) exits cleanly without raising.

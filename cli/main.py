@@ -1,4 +1,4 @@
-"""Command-line interface for Roitelet LLM.
+"""Command-line interface for Roitelet.
 
 Provides terminal access to every Roitelet operation the API and the
 web UI expose. The CLI mirrors gemini-cli's surface plus
@@ -63,7 +63,7 @@ def print_welcome() -> None:
     behaviour gates on this output.
     """
     print("=======================================")
-    print(" Welcome to Roitelet LLM CLI")
+    print(" Welcome to Roitelet CLI")
     print("=======================================")
     print("Type /help inside the REPL to see slash commands. 'exit' or 'quit' to end.\n")
 
@@ -562,7 +562,7 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(
         prog='roitelet',
-        description='Roitelet LLM CLI — same operations as the web UI and the JSON API.',
+        description='Roitelet CLI — same operations as the web UI and the JSON API.',
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 

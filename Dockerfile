@@ -23,7 +23,7 @@ RUN pip install --upgrade pip \
 # ─────────────────────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-LABEL org.opencontainers.image.title="Roitelet LLM" \
+LABEL org.opencontainers.image.title="Roitelet" \
       org.opencontainers.image.description="Local-first LLM routing and fusion workbench" \
       org.opencontainers.image.authors="Warith Harchaoui" \
       org.opencontainers.image.source="https://github.com/warithharchaoui/roitelet-llm" \

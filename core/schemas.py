@@ -550,7 +550,7 @@ class OpenAIChatMessage(BaseModel):
 class OpenAIChatCompletionRequest(BaseModel):
     """Subset of the OpenAI Chat Completions API accepted by Roitelet."""
 
-    model: str = 'roitelet-llm'
+    model: str = 'roitelet'
     messages: list[OpenAIChatMessage]
     stream: bool = False
     temperature: float | None = None

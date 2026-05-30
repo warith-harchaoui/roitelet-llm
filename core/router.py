@@ -1,4 +1,4 @@
-"""Adaptive top-K router for Roitelet LLM.
+"""Adaptive top-K router for Roitelet.
 
 This router scores each candidate model with a blend of:
 

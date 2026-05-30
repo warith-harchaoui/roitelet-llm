@@ -18,6 +18,7 @@ ruff>=0.4.0
 
 [eval]
 deepeval<4.0,>=3.0
+datasets>=2.18
 
 [multimodal]
 pywhispercpp>=1.4
@@ -25,6 +26,10 @@ nemo-toolkit[asr]>=2.1
 soundfile>=0.12
 audio-helper>=0.1
 kreuzberg>=3.0
+firecrawl-py>=2.0
 
 [personal]
 turbovec>=0.5
+
+[scale]
+pymongo>=4.6

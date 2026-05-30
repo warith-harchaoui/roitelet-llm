@@ -1,4 +1,4 @@
-# INSTALL — Roitelet LLM
+# INSTALL — Roitelet
 
 Complete installation guide for every supported setup path.
 
@@ -34,7 +34,7 @@ Complete installation guide for every supported setup path.
 
 ```bash
 conda env create -f environment.yaml
-conda activate roitelet-llm
+conda activate roitelet
 ```
 
 The `environment.yaml` file pins Python 3.11 and delegates all package
@@ -43,8 +43,8 @@ installation to `requirements.txt` via pip.
 ### A2. Manual creation (equivalent)
 
 ```bash
-conda create -n roitelet-llm python=3.11 -y
-conda activate roitelet-llm
+conda create -n roitelet python=3.11 -y
+conda activate roitelet
 pip install -r requirements.txt
 ```
 
@@ -197,7 +197,7 @@ curl -X POST http://localhost:8000/api/chat \
 
 Expected health response:
 ```json
-{"status": "ok", "service": "roitelet-llm", "base_url": "http://localhost:8000"}
+{"status": "ok", "service": "roitelet", "base_url": "http://localhost:8000"}
 ```
 
 ---
@@ -257,7 +257,7 @@ docker compose up -d
 ## Folder layout
 
 ```text
-roitelet-llm/
+roitelet/
 ├── core/               # router, registry, judge, pipeline, capabilities
 │   ├── providers/      # ollama, openai-compatible (OpenRouter, OpenAI, ...)
 │   └── multimodal/     # audio (whisper.cpp + NeMo), image (Ollama VLM), pdf (kreuzberg)

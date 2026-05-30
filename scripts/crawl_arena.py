@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Autonomous Elo / Capabilities Extractor for Roitelet LLM.
+"""Autonomous Elo / Capabilities Extractor for Roitelet.
 
 This script fetches raw leaderboard text (or HTML) from a given URL, uses the local
 Ollama synthesis model to parse the unstructured data into a structured JSON
@@ -33,7 +33,7 @@ ELO_MAX = 1300.0
 ROITELET_MAX = 1.5
 
 # System prompt for the local LLM
-EXTRACTION_PROMPT = """You are an autonomous data extraction agent for the Roitelet LLM routing engine.
+EXTRACTION_PROMPT = """You are an autonomous data extraction agent for the Roitelet routing engine.
 Your goal is to read the raw leaderboard text below and extract the Large Language Models and their Elo ratings.
 
 Rules:

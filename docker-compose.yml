@@ -1,11 +1,11 @@
 services:
-  roitelet-llm:
+  roitelet:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    image: roitelet-llm:latest
-    container_name: roitelet-llm
+    image: roitelet:latest
+    container_name: roitelet
     ports:
       # Roitelet exposes a single port (FastAPI serves the JSON API and
       # the static SPA on the same listener). No Streamlit; no second

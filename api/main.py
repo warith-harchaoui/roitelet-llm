@@ -1,4 +1,4 @@
-"""FastAPI application for Roitelet LLM.
+"""FastAPI application for Roitelet.
 
 The API exposes three access styles:
 1. a native Roitelet JSON API,
@@ -9,7 +9,7 @@ Examples
 --------
 >>> from api.main import app
 >>> app.title
-'Roitelet LLM API'
+'Roitelet API'
 """
 
 from __future__ import annotations
@@ -58,9 +58,9 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     runtime = get_storage().load_app_settings()
     ollama_url = runtime.ollama_base_url or settings.local_llm_base_url
     warm_ollama_cache(ollama_url, force=True)
-    logger.info('Roitelet LLM API ready — Ollama at %s', ollama_url)
+    logger.info('Roitelet API ready — Ollama at %s', ollama_url)
     yield
-    logger.info('Roitelet LLM API shutting down.')
+    logger.info('Roitelet API shutting down.')
 
 
 async def require_api_token(authorization: str | None = Header(default=None)) -> None:
@@ -80,7 +80,7 @@ async def require_api_token(authorization: str | None = Header(default=None)) ->
         raise HTTPException(status_code=401, detail='Invalid bearer token')
 
 
-app = FastAPI(title='Roitelet LLM API', version='0.1.0', lifespan=lifespan)
+app = FastAPI(title='Roitelet API', version='0.1.0', lifespan=lifespan)
 
 _cors_raw = settings.cors_allowed_origins.strip()
 _cors_origins = ['*'] if _cors_raw == '*' else [
@@ -110,7 +110,7 @@ async def health() -> dict[str, Any]:
     Dict[str, Any]
         A dictionary containing the status, service name, and public base URL.
     """
-    return {'status': 'ok', 'service': 'roitelet-llm', 'base_url': settings.public_base_url}
+    return {'status': 'ok', 'service': 'roitelet', 'base_url': settings.public_base_url}
 
 
 @app.get('/api/settings', dependencies=[Depends(require_api_token)])
@@ -485,17 +485,17 @@ async def roitelet_chat_multimodal(
 async def list_models() -> dict[str, Any]:
     """Expose the local OpenAI-compatible model inventory.
 
-    Returns the meta-model id ``roitelet-llm`` (the entry point that
+    Returns the meta-model id ``roitelet`` (the entry point that
     routes + fuses), plus every concrete model id the registry knows
     about (local Ollama + any configured remote candidate). OpenAI
     clients that filter by id can pick a concrete one, or stick with
-    ``roitelet-llm`` and let the router decide.
+    ``roitelet`` and let the router decide.
     """
     data: list[dict[str, Any]] = [
         {
-            'id': 'roitelet-llm',
+            'id': 'roitelet',
             'object': 'model',
-            'owned_by': 'roitelet-llm',
+            'owned_by': 'roitelet',
             'description': 'Roitelet router — fans out across registered models, fuses with a local judge.',
         }
     ]
@@ -594,7 +594,7 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
     Drop-in target for any client that already speaks the OpenAI
     Chat Completions wire format: the official ``openai`` SDK,
     LiteLLM, Continue.dev, Cline, etc. Just point them at
-    ``http://localhost:8000/v1`` and set ``model: "roitelet-llm"``.
+    ``http://localhost:8000/v1`` and set ``model: "roitelet"``.
 
     Roitelet-specific knobs (pseudonymization, local-only mode,
     top-K, cost budget, …) ride on ``metadata.roitelet`` — see
@@ -638,7 +638,7 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
                     'id': completion_id,
                     'object': 'chat.completion.chunk',
                     'created': int(time.time()),
-                    'model': 'roitelet-llm',
+                    'model': 'roitelet',
                     'choices': [{'index': 0, 'delta': {'content': token}, 'finish_reason': None}],
                 }
                 yield _sse(chunk)
@@ -646,7 +646,7 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
                 'id': completion_id,
                 'object': 'chat.completion.chunk',
                 'created': int(time.time()),
-                'model': 'roitelet-llm',
+                'model': 'roitelet',
                 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}],
             }
             yield _sse(done)
@@ -658,7 +658,7 @@ async def openai_chat_completions(payload: OpenAIChatCompletionRequest):
         'id': f'chatcmpl-{uuid.uuid4().hex}',
         'object': 'chat.completion',
         'created': int(time.time()),
-        'model': 'roitelet-llm',
+        'model': 'roitelet',
         'choices': [
             {
                 'index': 0,

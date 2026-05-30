@@ -1,4 +1,4 @@
-"""Application configuration for Roitelet LLM.
+"""Application configuration for Roitelet.
 
 This module centralizes environment-backed settings for the API server,
 local synthesis model, routing preferences, and monitoring defaults.
