@@ -403,6 +403,27 @@ class LearnedMFRouter:
             )
 
         candidates.sort(key=lambda item: item.score, reverse=True)
+        # Reuse the heuristic router's quality-probability normaliser so
+        # both router implementations expose the same operating-point
+        # knob. Threshold filtering is identical.
+        from .router import _attach_quality_probability
+        _attach_quality_probability(candidates)
+        if preferences.quality_threshold > 0.0 and candidates:
+            survivors = [c for c in candidates if c.quality_probability >= preferences.quality_threshold]
+            if survivors:
+                pruned = len(candidates) - len(survivors)
+                if pruned:
+                    reasoning.append(
+                        f'Quality-threshold filter ({preferences.quality_threshold:.2f}): '
+                        f'dropped {pruned} candidate(s) below the floor.'
+                    )
+                candidates = survivors
+            else:
+                reasoning.append(
+                    f'Quality-threshold {preferences.quality_threshold:.2f} excluded every '
+                    f'candidate; falling back to the single best.'
+                )
+                candidates = candidates[:1]
         selected_model_ids = [c.model_id for c in candidates[: max(1, top_k)]]
         for candidate in candidates:
             candidate.selected = candidate.model_id in selected_model_ids

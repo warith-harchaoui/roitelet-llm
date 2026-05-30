@@ -48,6 +48,15 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                             'independence': {'type': 'boolean', 'default': False},
                             'allow_vlms': {'type': 'boolean', 'default': False},
                             'pseudonymize': {'type': 'boolean', 'default': False},
+                            'urls': {
+                                'type': 'array',
+                                'items': {'type': 'string'},
+                                'description': (
+                                    'Website URLs scraped via Firecrawl and prepended '
+                                    'to the prompt as [Website: ...] blocks.'
+                                ),
+                                'default': [],
+                            },
                         },
                         'required': ['prompt'],
                     },
@@ -59,9 +68,39 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
         if params.get('name') != 'roitelet.chat':
             raise ValueError(f"Unknown tool: {params.get('name')}")
         arguments = params.get('arguments', {})
+
+        # Optional website attachments — Firecrawl-scraped and
+        # prepended to the prompt before the router runs. Mirrors the
+        # ``urls`` Form field on POST /api/chat/multimodal.
+        prompt = arguments['prompt']
+        urls = arguments.get('urls') or []
+        if urls:
+            from core.multimodal.website import fetch_website
+            blocks: list[str] = []
+            skipped: list[str] = []
+            for raw_url in urls:
+                url = (raw_url or '').strip()
+                if not url:
+                    continue
+                try:
+                    text = await fetch_website(url)
+                except ImportError:
+                    raise
+                except RuntimeError as exc:
+                    skipped.append(f'{url} ({exc})')
+                    continue
+                if text:
+                    blocks.append(f'[Website: {url}]\n{text}')
+                else:
+                    skipped.append(f'{url} (empty scrape)')
+            if skipped:
+                blocks.append('[Note] Skipped: ' + ', '.join(skipped))
+            if blocks:
+                prompt = '\n\n'.join([*blocks, prompt]).strip()
+
         response = await run_roitelet_chat(
             ChatRequest(
-                prompt=arguments['prompt'],
+                prompt=prompt,
                 top_k=int(arguments.get('top_k', 2)),
                 preferences=RouterPreferences(
                     raw_power=float(arguments.get('raw_power', 0.7)),

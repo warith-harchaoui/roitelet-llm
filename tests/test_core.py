@@ -211,6 +211,53 @@ class TestRouterPreferences:
         loaded = RouterPreferences.model_validate(dumped)
         assert loaded == prefs
 
+    def test_quality_threshold_default_is_zero(self):
+        """quality_threshold defaults to 0 so existing behaviour is unchanged."""
+        assert RouterPreferences().quality_threshold == 0.0
+
+
+class TestQualityProbabilityNormaliser:
+    """The Elo→probability normaliser is what makes a single threshold knob work.
+
+    Without it, ``quality_threshold`` would compare apples to oranges
+    across turns (raw score units depend on how many candidates the
+    weighted blend ran over). The normaliser maps every turn's pool
+    to [0, 1] with the best candidate at 1.0 — same shape as
+    RouteLLM's threshold knob, even though derived from rolling Elo
+    + capability priors rather than a preference-trained classifier.
+    """
+
+    def test_best_candidate_is_one_worst_is_zero(self):
+        from core.router import _attach_quality_probability
+        from core.schemas import ModelCandidate
+
+        candidates = [
+            ModelCandidate(model_id='a', provider='x', score=1.0),
+            ModelCandidate(model_id='b', provider='x', score=0.6),
+            ModelCandidate(model_id='c', provider='x', score=0.2),
+        ]
+        _attach_quality_probability(candidates)
+        assert candidates[0].quality_probability == 1.0
+        assert candidates[-1].quality_probability == 0.0
+        assert 0.0 < candidates[1].quality_probability < 1.0
+
+    def test_tied_pool_all_get_one(self):
+        """If everyone ties, no candidate should be dropped by a threshold filter."""
+        from core.router import _attach_quality_probability
+        from core.schemas import ModelCandidate
+
+        candidates = [
+            ModelCandidate(model_id='a', provider='x', score=0.5),
+            ModelCandidate(model_id='b', provider='x', score=0.5),
+        ]
+        _attach_quality_probability(candidates)
+        assert all(c.quality_probability == 1.0 for c in candidates)
+
+    def test_empty_pool_is_noop(self):
+        from core.router import _attach_quality_probability
+
+        _attach_quality_probability([])  # must not raise
+
 
 # ---------------------------------------------------------------------------
 # Regime detection: hybrid routing math

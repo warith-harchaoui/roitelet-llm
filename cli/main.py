@@ -128,6 +128,8 @@ def _build_request_from_args(
         pref_updates['ecofrugality'] = float(args.ecofrugality)
     if getattr(args, 'max_cost_usd', None) is not None:
         pref_updates['max_cost_usd'] = float(args.max_cost_usd)
+    if getattr(args, 'quality_threshold', None) is not None:
+        pref_updates['quality_threshold'] = float(args.quality_threshold)
     if getattr(args, 'pseudonymize', None) is True:
         pref_updates['pseudonymize'] = True
     if getattr(args, 'no_pseudonymize', None) is True:
@@ -200,6 +202,12 @@ async def chat_repl(args: argparse.Namespace) -> None:
     """
     print_welcome()
     conversation_id: str | None = None
+    # Scrape ``--url`` attachments once at session start; the markdown
+    # is reused for every prompt in the REPL so the session can
+    # follow up on the same article without re-fetching.
+    url_prefix, _ = await _scrape_urls_for_cli(getattr(args, 'urls', None) or [])
+    if url_prefix:
+        print(f'[attached {len(args.urls or [])} website(s); each prompt is augmented with the scraped markdown]\n')
     while True:
         try:
             prompt = input("You> ")
@@ -209,7 +217,8 @@ async def chat_repl(args: argparse.Namespace) -> None:
             if not clean_prompt:
                 continue
 
-            request = _build_request_from_args(clean_prompt, args)
+            effective = f'{url_prefix}\n\n{clean_prompt}'.strip() if url_prefix else clean_prompt
+            request = _build_request_from_args(effective, args)
             request = request.model_copy(update={'conversation_id': conversation_id})
             response = await run_roitelet_chat(request)
             conversation_id = response.conversation_id
@@ -225,6 +234,40 @@ async def chat_repl(args: argparse.Namespace) -> None:
             print(f"\nError: {exc}\n")
 
 
+async def _scrape_urls_for_cli(urls: list[str]) -> tuple[str, list[str]]:
+    r"""Fetch each ``--url`` value via Firecrawl and return the augmented prefix.
+
+    Mirrors the shape used by the API's multimodal endpoint so the
+    CLI and the GUI produce identical augmented prompts. Returns the
+    concatenated ``[Website: …]\n<markdown>`` blocks plus a list of
+    URLs that were skipped with their reason — the caller decides
+    whether to abort or proceed.
+    """
+    if not urls:
+        return '', []
+    from core.multimodal.website import fetch_website
+    blocks: list[str] = []
+    skipped: list[str] = []
+    for url in urls:
+        if not url:
+            continue
+        try:
+            text = await fetch_website(url)
+        except ImportError as exc:
+            skipped.append(f'{url} (missing dep: {exc})')
+            continue
+        except RuntimeError as exc:
+            skipped.append(f'{url} ({exc})')
+            continue
+        if text:
+            blocks.append(f'[Website: {url}]\n{text}')
+        else:
+            skipped.append(f'{url} (empty scrape)')
+    if skipped:
+        blocks.append('[Note] Skipped: ' + ', '.join(skipped))
+    return '\n\n'.join(blocks), skipped
+
+
 async def single_prompt(prompt: str, args: argparse.Namespace) -> None:
     """Execute exactly one prompt and exit.
 
@@ -232,9 +275,10 @@ async def single_prompt(prompt: str, args: argparse.Namespace) -> None:
     ----------
     prompt : str
         The user's prompt sent through :func:`run_roitelet_chat`,
-        after slash-command + CLI-flag layering.
+        after slash-command + CLI-flag layering. ``--url`` values
+        are scraped via Firecrawl and prepended before the prompt.
     args : argparse.Namespace
-        Parsed CLI args (preference flags + ``--verbose``).
+        Parsed CLI args (preference flags + ``--verbose`` + ``--url``).
 
     Notes
     -----
@@ -244,7 +288,9 @@ async def single_prompt(prompt: str, args: argparse.Namespace) -> None:
     intended behaviour, never silently send the unredacted prompt.
     """
     try:
-        request = _build_request_from_args(prompt, args)
+        prefix, _ = await _scrape_urls_for_cli(getattr(args, 'urls', None) or [])
+        full_prompt = f'{prefix}\n\n{prompt}'.strip() if prefix else prompt
+        request = _build_request_from_args(full_prompt, args)
         response = await run_roitelet_chat(request)
         _render_response(response, verbose=args.verbose)
     except Exception as exc:
@@ -454,10 +500,16 @@ def _add_pref_flags(parser: argparse.ArgumentParser) -> None:
                         help='Ecofrugality weight (0..1) — blends low cost + low energy.')
     parser.add_argument('--max-cost-usd', dest='max_cost_usd', type=float, default=None,
                         help='Per-turn budget; candidates above this estimated cost are filtered.')
+    parser.add_argument(
+        '--quality-threshold', dest='quality_threshold', type=float, default=None,
+        help='Quality floor [0..1]: candidates below this normalised quality are dropped.',
+    )
     parser.add_argument('--pseudonymize', action='store_true', default=None,
                         help='Swap PII before remote calls; restore on the way back. See PSEUDO.md.')
     parser.add_argument('--no-pseudonymize', dest='no_pseudonymize', action='store_true', default=None,
                         help='Force pseudonymization off for this turn even if the setting is on.')
+    parser.add_argument('--url', dest='urls', action='append', default=None,
+                        help='Attach a website (Firecrawl-scraped). Pass multiple times for several URLs.')
     parser.add_argument('--verbose', action='store_true', default=False,
                         help='Print the router decision + pseudonymization audit alongside the answer.')
 

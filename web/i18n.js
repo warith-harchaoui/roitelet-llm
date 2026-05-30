@@ -45,6 +45,8 @@ const TRANSLATIONS = {
     'composer.placeholder': 'Ask Roitelet anything…',
     'composer.send': 'Send',
     'composer.attach': 'Attach a file (audio, image, or PDF)',
+    'composer.attachUrl': 'Attach a website (Firecrawl scrape)',
+    'composer.urlPrompt': 'Paste a URL to attach (https://…)',
     'composer.prefs.tooltip': 'Choose what to do for this message only',
     'composer.shortcuts': '<kbd class="kbd">⌘↵</kbd> to send · <kbd class="kbd">⌘N</kbd> for a new chat',
 
@@ -168,6 +170,8 @@ const TRANSLATIONS = {
     'composer.placeholder': 'Demandez n\'importe quoi à Roitelet…',
     'composer.send': 'Envoyer',
     'composer.attach': 'Joindre un fichier (audio, image ou PDF)',
+    'composer.attachUrl': 'Joindre un site web (extraction Firecrawl)',
+    'composer.urlPrompt': 'Collez une URL à joindre (https://…)',
     'composer.prefs.tooltip': 'Choisir ce qu\'on fait pour ce message uniquement',
     'composer.shortcuts': '<kbd class="kbd">⌘↵</kbd> pour envoyer · <kbd class="kbd">⌘N</kbd> pour une nouvelle conversation',
 

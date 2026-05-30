@@ -23,6 +23,7 @@ const state = {
   conversations: [],
   busy: false,
   attachments: [],       // File objects queued for the next send
+  urlAttachments: [],    // string URLs queued for Firecrawl scrape on send
   allowVlms: false,      // mirrors the persisted preference; gates image attachments
   // Per-turn preferences. These start at the persisted-settings defaults
   // and the user adjusts them via the sliders popover next to the send
@@ -487,6 +488,7 @@ function newChat() {
   state.conversationId = null;
   state.messages = [];
   state.attachments = [];
+  state.urlAttachments = [];
   // Reset per-turn prefs to the persisted defaults — a new chat
   // shouldn't inherit the previous chat's one-off overrides.
   state.prefs.independence = state.prefDefaults.independence;
@@ -635,13 +637,15 @@ function renderVizModal(points) {
 async function send() {
   const prompt = $('prompt').value.trim();
   const files = state.attachments;
-  if ((!prompt && files.length === 0) || state.busy) return;
+  const urls = state.urlAttachments;
+  if ((!prompt && files.length === 0 && urls.length === 0) || state.busy) return;
 
   const imageMatch  = prompt.match(IMAGE_CMD_RX);
   const speechMatch = prompt.match(SPEECH_CMD_RX);
 
   const fileLabel = files.length ? files.map(f => `📎 ${f.name}`).join('\n') : '';
-  const userBubble = [fileLabel, prompt].filter(Boolean).join('\n\n') || t('misc.attachmentOnly');
+  const urlLabel  = urls.length  ? urls.map(u => `🔗 ${u}`).join('\n')  : '';
+  const userBubble = [urlLabel, fileLabel, prompt].filter(Boolean).join('\n\n') || t('misc.attachmentOnly');
   state.messages.push({role: 'user', content: userBubble});
   $('prompt').value = '';
   renderMessages();
@@ -671,10 +675,10 @@ async function send() {
     } else if (speechMatch && !files.length) {
       // `/speech` without an attachment is meaningless — explain.
       throw new Error(t('toast.speechNeedsAudio'));
-    } else if (files.length) {
+    } else if (files.length || urls.length) {
+      // Route through the multimodal endpoint when there's any
+      // attachment — files OR website URLs (Firecrawl-scraped).
       const fd = new FormData();
-      // Strip the leading slash command before forwarding to the
-      // multimodal endpoint so the inner pipeline sees a clean prompt.
       const stripped = speechMatch ? prompt.slice(speechMatch[0].length).trim() : prompt;
       fd.append('prompt', stripped);
       if (state.conversationId) fd.append('conversation_id', state.conversationId);
@@ -682,6 +686,7 @@ async function send() {
       fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
       fd.append('pseudonymize', state.prefs.pseudonymize ? 'true' : 'false');
       for (const f of files) fd.append('files', f);
+      for (const u of urls)  fd.append('urls',  u);
       res = await apiPostMultipart('/api/chat/multimodal', fd);
       finalizeChatResponse(res, prompt);
     } else {
@@ -703,6 +708,7 @@ async function send() {
       finalizeChatResponse(res, prompt);
     }
     state.attachments = [];
+    state.urlAttachments = [];
     renderAttachments();
     hideThinking();
     renderMessages();
@@ -759,22 +765,36 @@ function finalizeChatResponse(res, originalPrompt) {
 
 function renderAttachments() {
   const box = $('attachmentChips');
-  if (!state.attachments.length) {
+  const hasAny = state.attachments.length || state.urlAttachments.length;
+  if (!hasAny) {
     box.classList.add('hidden');
     box.innerHTML = '';
     return;
   }
   box.classList.remove('hidden');
   box.classList.add('flex');
-  box.innerHTML = state.attachments.map((f, i) => `
+  const fileChips = state.attachments.map((f, i) => `
     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       <span class="truncate max-w-[180px]">${escapeHtml(f.name)}</span>
-      <button data-i="${i}" class="attachRm text-gray-400 hover:text-red-500" title="Remove">×</button>
+      <button data-rm-file="${i}" class="text-gray-400 hover:text-red-500" title="Remove">×</button>
     </span>`).join('');
-  for (const btn of box.querySelectorAll('.attachRm')) {
+  const urlChips = state.urlAttachments.map((u, i) => `
+    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.7-1.7"/></svg>
+      <span class="truncate max-w-[260px]">${escapeHtml(u)}</span>
+      <button data-rm-url="${i}" class="text-gray-400 hover:text-red-500" title="Remove">×</button>
+    </span>`).join('');
+  box.innerHTML = fileChips + urlChips;
+  for (const btn of box.querySelectorAll('button[data-rm-file]')) {
     btn.addEventListener('click', () => {
-      state.attachments.splice(parseInt(btn.dataset.i, 10), 1);
+      state.attachments.splice(parseInt(btn.dataset.rmFile, 10), 1);
+      renderAttachments();
+    });
+  }
+  for (const btn of box.querySelectorAll('button[data-rm-url]')) {
+    btn.addEventListener('click', () => {
+      state.urlAttachments.splice(parseInt(btn.dataset.rmUrl, 10), 1);
       renderAttachments();
     });
   }
@@ -1177,6 +1197,19 @@ document.addEventListener('DOMContentLoaded', () => {
   $('composer').addEventListener('submit', (e) => { e.preventDefault(); send(); });
   $('attachBtn').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', (e) => { onFilesPicked(e.target.files); e.target.value = ''; });
+  $('attachUrlBtn')?.addEventListener('click', () => {
+    // Native prompt is simple and works in both desktop + mobile; the
+    // GUI design language doesn't require a custom modal for one input.
+    const raw = window.prompt(t('composer.urlPrompt'));
+    const url = (raw || '').trim();
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) {
+      showToast(t('toast.skippedAttachment', {name: url}));
+      return;
+    }
+    state.urlAttachments.push(url);
+    renderAttachments();
+  });
   $('newChatBtn').addEventListener('click', newChat);
   $('settingsBtn').addEventListener('click', openSettings);
   $('closeSettingsBtn').addEventListener('click', closeSettings);

@@ -58,6 +58,10 @@ multimodal = [
     "soundfile>=0.12",
     "audio-helper>=0.1",
     "kreuzberg>=3.0",
+    # Website ingestion. ``firecrawl-py`` calls Firecrawl Cloud by
+    # default (FIRECRAWL_API_KEY) or a self-hosted instance
+    # (FIRECRAWL_API_URL). See core/multimodal/website.py.
+    "firecrawl-py>=2.0",
 ]
 # Personal-mode ANN retrieval. The base install ships a pure-numpy
 # brute-force scan that's perfectly adequate up to a few thousand

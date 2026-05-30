@@ -362,6 +362,7 @@ async def roitelet_chat_multimodal(
     top_k: int = Form(2),
     allow_vlms: bool = Form(False),
     pseudonymize: bool = Form(False),
+    urls: list[str] = Form(default_factory=list),
     files: list[UploadFile] = File(default_factory=list),
 ):
     """Run one chat turn with attached audio, image, or PDF files.
@@ -373,6 +374,7 @@ async def roitelet_chat_multimodal(
     * ``audio/*`` → whisper.cpp transcription + NeMo Sortformer diarization
     * ``image/*`` → local Ollama VLM caption (gated on ``allow_vlms``)
     * ``application/pdf`` → kreuzberg text extraction (with OCR fallback)
+    * ``urls`` (form field) → Firecrawl scrape → markdown body
 
     Unknown file types are skipped with a note in the augmented prompt so
     the user can see what was ignored.
@@ -381,6 +383,31 @@ async def roitelet_chat_multimodal(
 
     augmentations: list[str] = []
     skipped: list[str] = []
+
+    # Website attachments — process before files so the augmented
+    # prompt reads "[Website: …]\n[PDF: …]\n<user prompt>".
+    for raw_url in urls:
+        url = (raw_url or '').strip()
+        if not url:
+            continue
+        try:
+            from core.multimodal.website import fetch_website
+            text = await fetch_website(url)
+        except ImportError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    f"website attachment requires an optional dependency that "
+                    f"is not installed: {exc}"
+                ),
+            ) from exc
+        except RuntimeError as exc:
+            skipped.append(f'{url} ({exc})')
+            continue
+        if text:
+            augmentations.append(f'[Website: {url}]\n{text}')
+        else:
+            skipped.append(f'{url} (empty scrape)')
 
     for upload in files:
         if not upload.filename:
