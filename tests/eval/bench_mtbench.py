@@ -201,7 +201,11 @@ def test_mtbench_first_turn(mtbench_prompts, mtbench_correctness):
         prompt = case['prompt']
         prompt_start = time.perf_counter()
         try:
-            response = asyncio.get_event_loop().run_until_complete(
+            # ``asyncio.run`` creates a fresh event loop for each turn;
+            # safe + non-deprecated (vs ``get_event_loop()``). The
+            # per-turn cost is dominated by the LLM calls, so event-loop
+            # construction is noise.
+            response = asyncio.run(
                 run_roitelet_chat(
                     ChatRequest(prompt=prompt, preferences=RouterPreferences()),
                 ),
