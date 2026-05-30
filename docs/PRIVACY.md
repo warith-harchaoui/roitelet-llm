@@ -175,5 +175,5 @@ a deliberate choice, not just trust in a label.
   embeddings, no remote retrieval).
 - [`docs/EVALUATION.md`](EVALUATION.md) — the "privacy exposure
   level" metric in the ablation matrix uses the definitions above.
-- [`MECHANISM.md`](../MECHANISM.md) — full data-flow diagram showing
+- [`MECHANISM.md`](ARCHITECTURE.md) — full data-flow diagram showing
   where the network boundaries are.

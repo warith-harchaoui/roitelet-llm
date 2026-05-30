@@ -97,7 +97,7 @@ today.
 ## Architecture map
 
 Roitelet's routing pool is the union of these sources (see
-[MECHANISM.md](../MECHANISM.md) §4):
+[MECHANISM.md](ARCHITECTURE.md) §4):
 
 1. **Bootstrap priors** — `data/bootstrap/model_priors.json`.
 2. **User-configured models** — three sources in `AppSettingsPayload`:
@@ -197,4 +197,4 @@ token; see `.env.example`.
 
 - **[ADDING_LOCAL_LLM.md](ADDING_LOCAL_LLM.md)** — bring your own GGUF
   file, either through Ollama or through `llama-server`.
-- **[MECHANISM.md](../MECHANISM.md)** — the full architecture deep-dive.
+- **[MECHANISM.md](ARCHITECTURE.md)** — the full architecture deep-dive.

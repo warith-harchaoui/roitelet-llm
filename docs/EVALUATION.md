@@ -504,5 +504,5 @@ not to publish numbers that look good.
   the ablation runner can flip per prompt.
 - [`docs/PRIVACY.md`](PRIVACY.md) — definitions for the "privacy
   exposure level" metric above.
-- [`MECHANISM.md`](../MECHANISM.md) — the routing + fusion pipeline
+- [`MECHANISM.md`](ARCHITECTURE.md) — the routing + fusion pipeline
   the ablations are measuring.

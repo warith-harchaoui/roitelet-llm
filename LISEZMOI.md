@@ -378,7 +378,7 @@ roitelet-llm/
 ├── requirements.txt    # Dépendances natives Python (pip)
 ├── INSTALLER.md        # Guide d'installation (FR)
 ├── INSTALL.md          # Guide d'installation (EN)
-├── MECHANISM.md        # Architecture détaillée (Mermaid) — contributeurs
+├── docs/ARCHITECTURE.md        # Architecture détaillée (Mermaid) — contributeurs
 └── .env.example
 ```
 
@@ -419,7 +419,7 @@ correspond à ce que vous voulez faire.
   quelles métriques, ce qui a été exécuté, ce qui reste planifié.
 
 ### Niveau 3 — Contributeurs (vous voulez *modifier* Roitelet)
-- **[MECHANISM.md](MECHANISM.md)** — visite architecturale complète
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — visite architecturale complète
   avec diagrammes Mermaid. Maths de routage, régimes, boucle Elo,
   les deux routeurs, les deux détecteurs de capacité, pipeline
   image-gen.

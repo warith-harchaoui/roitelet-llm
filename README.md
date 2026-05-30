@@ -445,7 +445,7 @@ roitelet-llm/
 ├── INSTALL.md          # English install guide
 ├── INSTALLER.md        # French install guide
 ├── LISEZMOI.md         # French README mirror
-├── MECHANISM.md        # Architecture deep-dive (Mermaid diagrams) — contributors
+├── docs/ARCHITECTURE.md        # Architecture deep-dive (Mermaid diagrams) — contributors
 └── .env.example
 ```
 
@@ -486,7 +486,7 @@ you're trying to do.
   been run, what's planned.
 
 ### Tier 3 — Contributors (you want to *modify* Roitelet)
-- **[MECHANISM.md](MECHANISM.md)** — full architectural walk-through
+- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — full architectural walk-through
   with Mermaid diagrams. Routing math, regimes, Elo loop, the two
   routers, the two capability detectors, image-gen pipeline.
 

@@ -174,5 +174,5 @@ provider. The only practical difference is the base URL.
 
 - **[ADDING_PAID_LLM.md](ADDING_PAID_LLM.md)** — same pattern, applied to
   paid LLMs.
-- **[MECHANISM.md](../MECHANISM.md)** — full architecture overview, including
+- **[MECHANISM.md](ARCHITECTURE.md)** — full architecture overview, including
   the model-source merge order in §4.

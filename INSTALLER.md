@@ -276,6 +276,6 @@ roitelet-llm/
 ├── environment.yaml    # environnement conda
 ├── requirements.txt    # dépendances pip
 ├── pyproject.toml      # build + extras optionnels (dev / eval / multimodal / personal)
-├── MECHANISM.md        # Architecture détaillée (diagrammes Mermaid)
+├── docs/ARCHITECTURE.md        # Architecture détaillée (diagrammes Mermaid)
 └── .env.example        # modèle de variables d'environnement
 ```
