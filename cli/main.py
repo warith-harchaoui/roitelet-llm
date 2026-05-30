@@ -205,7 +205,11 @@ async def chat_repl(args: argparse.Namespace) -> None:
     # Scrape ``--url`` attachments once at session start; the markdown
     # is reused for every prompt in the REPL so the session can
     # follow up on the same article without re-fetching.
-    url_prefix, _ = await _scrape_urls_for_cli(getattr(args, 'urls', None) or [])
+    url_prefix, _ = await _scrape_urls_for_cli(
+        getattr(args, 'urls', None) or [],
+        recursive=getattr(args, 'url_recursive', False),
+        limit=getattr(args, 'url_limit', 10),
+    )
     if url_prefix:
         print(f'[attached {len(args.urls or [])} website(s); each prompt is augmented with the scraped markdown]\n')
     while True:
@@ -234,7 +238,12 @@ async def chat_repl(args: argparse.Namespace) -> None:
             print(f"\nError: {exc}\n")
 
 
-async def _scrape_urls_for_cli(urls: list[str]) -> tuple[str, list[str]]:
+async def _scrape_urls_for_cli(
+    urls: list[str],
+    *,
+    recursive: bool = False,
+    limit: int = 10,
+) -> tuple[str, list[str]]:
     r"""Fetch each ``--url`` value via Firecrawl and return the augmented prefix.
 
     Mirrors the shape used by the API's multimodal endpoint so the
@@ -242,6 +251,17 @@ async def _scrape_urls_for_cli(urls: list[str]) -> tuple[str, list[str]]:
     concatenated ``[Website: …]\n<markdown>`` blocks plus a list of
     URLs that were skipped with their reason — the caller decides
     whether to abort or proceed.
+
+    Parameters
+    ----------
+    urls:
+        URLs to scrape.
+    recursive:
+        Pass through to :func:`core.multimodal.website.fetch_website`.
+        When True, Firecrawl follows links rather than just scraping
+        the seed URL.
+    limit:
+        Maximum pages per URL when ``recursive`` is on.
     """
     if not urls:
         return '', []
@@ -252,7 +272,7 @@ async def _scrape_urls_for_cli(urls: list[str]) -> tuple[str, list[str]]:
         if not url:
             continue
         try:
-            text = await fetch_website(url)
+            text = await fetch_website(url, recursive=recursive, limit=limit)
         except ImportError as exc:
             skipped.append(f'{url} (missing dep: {exc})')
             continue
@@ -288,7 +308,11 @@ async def single_prompt(prompt: str, args: argparse.Namespace) -> None:
     intended behaviour, never silently send the unredacted prompt.
     """
     try:
-        prefix, _ = await _scrape_urls_for_cli(getattr(args, 'urls', None) or [])
+        prefix, _ = await _scrape_urls_for_cli(
+            getattr(args, 'urls', None) or [],
+            recursive=getattr(args, 'url_recursive', False),
+            limit=getattr(args, 'url_limit', 10),
+        )
         full_prompt = f'{prefix}\n\n{prompt}'.strip() if prefix else prompt
         request = _build_request_from_args(full_prompt, args)
         response = await run_roitelet_chat(request)
@@ -510,6 +534,10 @@ def _add_pref_flags(parser: argparse.ArgumentParser) -> None:
                         help='Force pseudonymization off for this turn even if the setting is on.')
     parser.add_argument('--url', dest='urls', action='append', default=None,
                         help='Attach a website (Firecrawl-scraped). Pass multiple times for several URLs.')
+    parser.add_argument('--url-recursive', dest='url_recursive', action='store_true', default=False,
+                        help='Follow links from each --url (Firecrawl crawl mode). Off by default.')
+    parser.add_argument('--url-limit', dest='url_limit', type=int, default=10,
+                        help='Max pages per --url when --url-recursive is on (default 10).')
     parser.add_argument('--verbose', action='store_true', default=False,
                         help='Print the router decision + pseudonymization audit alongside the answer.')
 

@@ -644,7 +644,7 @@ async function send() {
   const speechMatch = prompt.match(SPEECH_CMD_RX);
 
   const fileLabel = files.length ? files.map(f => `📎 ${f.name}`).join('\n') : '';
-  const urlLabel  = urls.length  ? urls.map(u => `🔗 ${u}`).join('\n')  : '';
+  const urlLabel  = urls.length  ? urls.map(u => `🔗 ${u.url}${u.recursive ? ' (recursive)' : ''}`).join('\n')  : '';
   const userBubble = [urlLabel, fileLabel, prompt].filter(Boolean).join('\n\n') || t('misc.attachmentOnly');
   state.messages.push({role: 'user', content: userBubble});
   $('prompt').value = '';
@@ -686,7 +686,13 @@ async function send() {
       fd.append('allow_vlms', state.allowVlms ? 'true' : 'false');
       fd.append('pseudonymize', state.prefs.pseudonymize ? 'true' : 'false');
       for (const f of files) fd.append('files', f);
-      for (const u of urls)  fd.append('urls',  u);
+      // All URLs ride the same multipart body; the recursive flag is
+      // a single boolean covering every URL in the batch (Firecrawl
+      // doesn't support per-URL recursive on a single crawl call —
+      // documenting this trade-off here rather than hiding it).
+      const anyRecursive = urls.some(u => u.recursive);
+      for (const u of urls)  fd.append('urls',  u.url);
+      fd.append('url_recursive', anyRecursive ? 'true' : 'false');
       res = await apiPostMultipart('/api/chat/multimodal', fd);
       finalizeChatResponse(res, prompt);
     } else {
@@ -779,12 +785,18 @@ function renderAttachments() {
       <span class="truncate max-w-[180px]">${escapeHtml(f.name)}</span>
       <button data-rm-file="${i}" class="text-gray-400 hover:text-red-500" title="Remove">×</button>
     </span>`).join('');
-  const urlChips = state.urlAttachments.map((u, i) => `
+  const urlChips = state.urlAttachments.map((u, i) => {
+    const recursiveTag = u.recursive
+      ? `<span class="text-[10px] text-sysblue">${escapeHtml(t('composer.urlRecursive.chip'))}</span>`
+      : '';
+    return `
     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.7-1.7"/></svg>
-      <span class="truncate max-w-[260px]">${escapeHtml(u)}</span>
+      <span class="truncate max-w-[260px]">${escapeHtml(u.url)}</span>
+      ${recursiveTag}
       <button data-rm-url="${i}" class="text-gray-400 hover:text-red-500" title="Remove">×</button>
-    </span>`).join('');
+    </span>`;
+  }).join('');
   box.innerHTML = fileChips + urlChips;
   for (const btn of box.querySelectorAll('button[data-rm-file]')) {
     btn.addEventListener('click', () => {
@@ -1198,8 +1210,9 @@ document.addEventListener('DOMContentLoaded', () => {
   $('attachBtn').addEventListener('click', () => $('fileInput').click());
   $('fileInput').addEventListener('change', (e) => { onFilesPicked(e.target.files); e.target.value = ''; });
   $('attachUrlBtn')?.addEventListener('click', () => {
-    // Native prompt is simple and works in both desktop + mobile; the
-    // GUI design language doesn't require a custom modal for one input.
+    // Native prompts are simple and work in both desktop + mobile.
+    // Two prompts (URL → "follow links?") keeps the UI free of a
+    // modal for a feature most users will use occasionally.
     const raw = window.prompt(t('composer.urlPrompt'));
     const url = (raw || '').trim();
     if (!url) return;
@@ -1207,7 +1220,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(t('toast.skippedAttachment', {name: url}));
       return;
     }
-    state.urlAttachments.push(url);
+    const recursive = window.confirm(t('composer.urlRecursive.confirm', {limit: 10}));
+    state.urlAttachments.push({url, recursive});
     renderAttachments();
   });
   $('newChatBtn').addEventListener('click', newChat);

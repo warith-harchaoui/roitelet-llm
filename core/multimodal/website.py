@@ -55,8 +55,54 @@ logger = logging.getLogger(__name__)
 # the whole page.
 _MAX_CHARS = 80_000
 
+# Cap on the number of pages Firecrawl returns for a recursive
+# crawl. The default is meant to be conservative: too many pages
+# blow past the context budget of a small local judge. Override at
+# call time when the user explicitly wants a deeper crawl.
+_DEFAULT_RECURSIVE_LIMIT = 10
 
-async def fetch_website(url: str) -> str:
+
+def _make_client():
+    """Build an AsyncFirecrawl client honouring the environment overrides."""
+    try:
+        from firecrawl import AsyncFirecrawl  # type: ignore[import-not-found]
+    except ImportError as exc:  # pragma: no cover - optional dep
+        raise ImportError(
+            'firecrawl-py is not installed. `pip install -e .[multimodal]` '
+            'to enable website attachments.'
+        ) from exc
+    api_key = os.environ.get('FIRECRAWL_API_KEY') or None
+    api_url = os.environ.get('FIRECRAWL_API_URL') or None
+    kwargs: dict = {}
+    if api_key:
+        kwargs['api_key'] = api_key
+    if api_url:
+        kwargs['api_url'] = api_url
+    return AsyncFirecrawl(**kwargs)
+
+
+def _extract_markdown_and_title(result) -> tuple[str, str | None]:
+    """Pull (markdown, title) out of a Firecrawl scrape/crawl-page result.
+
+    The SDK returns either an object with attributes or a plain dict,
+    depending on version. Cover both shapes here so the rest of the
+    module doesn't have to.
+    """
+    markdown = getattr(result, 'markdown', None) or (
+        result.get('markdown') if isinstance(result, dict) else None
+    )
+    metadata = getattr(result, 'metadata', None) or (
+        result.get('metadata') if isinstance(result, dict) else None
+    )
+    title: str | None = None
+    source_url: str | None = None
+    if isinstance(metadata, dict):
+        title = metadata.get('title') or metadata.get('ogTitle')
+        source_url = metadata.get('sourceURL') or metadata.get('url')
+    return markdown or '', title or source_url
+
+
+async def fetch_website(url: str, *, recursive: bool = False, limit: int | None = None) -> str:
     """Fetch ``url`` and return Firecrawl-rendered markdown.
 
     Parameters
@@ -64,11 +110,21 @@ async def fetch_website(url: str) -> str:
     url:
         Absolute http(s) URL. Validation is intentionally minimal —
         we trust Firecrawl to refuse or redirect anything weird.
+    recursive:
+        When ``True`` Firecrawl follows links from the page and
+        returns up to ``limit`` (default :data:`_DEFAULT_RECURSIVE_LIMIT`)
+        sub-pages. The pages are concatenated with ``---`` separators
+        and a per-page ``# <title or url>`` header so the LLM can tell
+        them apart. Off by default — a single-page scrape is cheaper
+        and almost always what the user wants.
+    limit:
+        Hard cap on the number of pages returned by the recursive
+        crawl. Ignored when ``recursive`` is ``False``.
 
     Returns
     -------
     str
-        Markdown body of the page, possibly truncated to
+        Markdown body of the page(s), possibly truncated to
         :data:`_MAX_CHARS`. The first line of the returned string
         is a labelled header (``# <title>``) when Firecrawl
         provided one — gives the LLM something to anchor on.
@@ -84,48 +140,58 @@ async def fetch_website(url: str) -> str:
         user as part of the multimodal "skipped" note so the
         request still completes with whatever else they sent.
     """
+    client = _make_client()
+
+    if not recursive:
+        try:
+            result = await client.scrape(url=url, formats=['markdown'])
+        except Exception as exc:  # pragma: no cover - network dependent
+            raise RuntimeError(f'Firecrawl scrape failed for {url}: {exc}') from exc
+        markdown, title = _extract_markdown_and_title(result)
+        if not markdown:
+            raise RuntimeError(f'Firecrawl returned no markdown for {url}.')
+        body = markdown.strip()
+        if len(body) > _MAX_CHARS:
+            body = body[:_MAX_CHARS] + f'\n\n*[truncated at {_MAX_CHARS} chars]*'
+        return f'# {title}\n\n{body}' if title else body
+
+    # Recursive path — crawl, then concatenate the returned pages.
+    page_cap = max(1, limit or _DEFAULT_RECURSIVE_LIMIT)
     try:
-        from firecrawl import AsyncFirecrawl  # type: ignore[import-not-found]
-    except ImportError as exc:  # pragma: no cover - optional dep
-        raise ImportError(
-            'firecrawl-py is not installed. `pip install -e .[multimodal]` '
-            'to enable website attachments.'
-        ) from exc
-
-    api_key = os.environ.get('FIRECRAWL_API_KEY') or None
-    api_url = os.environ.get('FIRECRAWL_API_URL') or None
-
-    # The SDK accepts ``api_key`` and ``api_url`` keyword arguments;
-    # passing ``None`` makes it use the hosted defaults.
-    client_kwargs: dict = {}
-    if api_key:
-        client_kwargs['api_key'] = api_key
-    if api_url:
-        client_kwargs['api_url'] = api_url
-    client = AsyncFirecrawl(**client_kwargs)
-
-    try:
-        result = await client.scrape(url=url, formats=['markdown'])
+        crawl_result = await client.crawl(
+            url=url,
+            limit=page_cap,
+            scrape_options={'formats': ['markdown']},
+        )
     except Exception as exc:  # pragma: no cover - network dependent
-        raise RuntimeError(f'Firecrawl scrape failed for {url}: {exc}') from exc
+        raise RuntimeError(f'Firecrawl crawl failed for {url}: {exc}') from exc
 
-    markdown = getattr(result, 'markdown', None) or (
-        result.get('markdown') if isinstance(result, dict) else None
-    )
-    if not markdown:
-        raise RuntimeError(f'Firecrawl returned no markdown for {url}.')
+    pages = getattr(crawl_result, 'data', None) or (
+        crawl_result.get('data') if isinstance(crawl_result, dict) else None
+    ) or []
+    if not pages:
+        raise RuntimeError(f'Firecrawl crawl returned no pages for {url}.')
 
-    title = None
-    metadata = getattr(result, 'metadata', None) or (
-        result.get('metadata') if isinstance(result, dict) else None
-    )
-    if isinstance(metadata, dict):
-        title = metadata.get('title') or metadata.get('ogTitle')
+    blocks: list[str] = []
+    remaining = _MAX_CHARS
+    for page in pages:
+        markdown, title = _extract_markdown_and_title(page)
+        if not markdown:
+            continue
+        body = markdown.strip()
+        # Pro-rate the per-page budget so an early huge page doesn't
+        # starve the rest. Each page gets remaining // pages-left.
+        share = max(1024, remaining // max(1, page_cap))
+        if len(body) > share:
+            body = body[:share] + '\n\n*[truncated]*'
+        header = f'## {title}' if title else '## (untitled page)'
+        blocks.append(f'{header}\n\n{body}')
+        remaining -= len(body) + len(header) + 4
+        if remaining <= 0:
+            break
 
-    body = markdown.strip()
-    if len(body) > _MAX_CHARS:
-        body = body[:_MAX_CHARS] + f'\n\n*[truncated at {_MAX_CHARS} chars]*'
+    if not blocks:
+        raise RuntimeError(f'Firecrawl crawl returned no usable markdown for {url}.')
 
-    if title:
-        return f'# {title}\n\n{body}'
-    return body
+    note = f'*[Firecrawl recursive crawl from {url} — {len(blocks)} page(s)]*'
+    return f'{note}\n\n' + '\n\n---\n\n'.join(blocks)

@@ -57,6 +57,16 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                                 ),
                                 'default': [],
                             },
+                            'url_recursive': {
+                                'type': 'boolean',
+                                'description': 'Follow links from each url (Firecrawl crawl mode).',
+                                'default': False,
+                            },
+                            'url_limit': {
+                                'type': 'integer',
+                                'description': 'Max pages per URL when url_recursive is true.',
+                                'default': 10,
+                            },
                         },
                         'required': ['prompt'],
                     },
@@ -74,6 +84,8 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
         # ``urls`` Form field on POST /api/chat/multimodal.
         prompt = arguments['prompt']
         urls = arguments.get('urls') or []
+        url_recursive = bool(arguments.get('url_recursive', False))
+        url_limit = int(arguments.get('url_limit', 10) or 10)
         if urls:
             from core.multimodal.website import fetch_website
             blocks: list[str] = []
@@ -83,7 +95,7 @@ async def handle_mcp_request(payload: MCPRequest) -> dict[str, Any]:
                 if not url:
                     continue
                 try:
-                    text = await fetch_website(url)
+                    text = await fetch_website(url, recursive=url_recursive, limit=url_limit)
                 except ImportError:
                     raise
                 except RuntimeError as exc:

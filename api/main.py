@@ -363,6 +363,8 @@ async def roitelet_chat_multimodal(
     allow_vlms: bool = Form(False),
     pseudonymize: bool = Form(False),
     urls: list[str] = Form(default_factory=list),
+    url_recursive: bool = Form(False),
+    url_limit: int = Form(10),
     files: list[UploadFile] = File(default_factory=list),
 ):
     """Run one chat turn with attached audio, image, or PDF files.
@@ -392,7 +394,7 @@ async def roitelet_chat_multimodal(
             continue
         try:
             from core.multimodal.website import fetch_website
-            text = await fetch_website(url)
+            text = await fetch_website(url, recursive=url_recursive, limit=url_limit)
         except ImportError as exc:
             raise HTTPException(
                 status_code=503,
