@@ -56,6 +56,45 @@ def _detect(prompt: str) -> dict[str, float]:
 _AMBIGUOUS_GLOBAL_BOOST = 0.25
 
 
+def _attach_quality_probability(candidates: list[ModelCandidate]) -> None:
+    """Annotate each candidate with a normalised quality probability in [0, 1].
+
+    The router's raw ``final_score`` is unit-less — it's a weighted
+    blend of capability score, ecofrugality bonus, and local bonus.
+    For an operating-point knob to be meaningful (the
+    ``quality_threshold`` filter mirrors RouteLLM's threshold), the
+    score needs to live on a comparable scale across turns.
+
+    The simplest defensible mapping that preserves rank order:
+    ``p = (score - min) / (max - min)`` across the eligible
+    pool on this turn. The top candidate is exactly 1.0; the worst
+    is 0.0; everyone else interpolates. This isn't a *calibrated*
+    probability in the RouteLLM sense — RouteLLM's threshold maps to
+    "strong-wins probability" via a logistic head trained on
+    preference labels — but it is *monotonic* in quality and
+    *threshold-able* in the same way, which is the property the
+    Pareto sweep needs. If a future iteration adds a preference-
+    trained head, it can populate this field instead.
+
+    Mutates in place; assumes ``candidates`` is already sorted by
+    descending ``score``.
+    """
+    if not candidates:
+        return
+    top = candidates[0].score
+    bottom = candidates[-1].score
+    spread = top - bottom
+    if spread <= 1e-9:
+        # Degenerate: everyone tied. Every candidate is "best" — give
+        # them the maximum probability so the threshold filter never
+        # accidentally drops the whole pool.
+        for c in candidates:
+            c.quality_probability = 1.0
+        return
+    for c in candidates:
+        c.quality_probability = max(0.0, min(1.0, (c.score - bottom) / spread))
+
+
 class RoiteletRouter:
     """Rank candidate models and choose the best flight formation."""
 
@@ -151,6 +190,34 @@ class RoiteletRouter:
             )
 
         candidates.sort(key=lambda item: item.score, reverse=True)
+        _attach_quality_probability(candidates)
+
+        # Calibrated quality floor — operating-point knob on the
+        # cost/quality Pareto frontier. At threshold 0 every candidate
+        # is eligible; at threshold 1 only the top-ranked one is. The
+        # filter applies *before* top-K selection so the user's K is
+        # honoured among the survivors. Mirrors RouteLLM's threshold
+        # in shape (single scalar, monotonic), though derived from
+        # Roitelet's rolling-Elo quality blend rather than a
+        # preference-trained classifier.
+        if preferences.quality_threshold > 0.0 and candidates:
+            survivors = [c for c in candidates if c.quality_probability >= preferences.quality_threshold]
+            if survivors:
+                pruned = len(candidates) - len(survivors)
+                if pruned:
+                    reasoning.append(
+                        f'Quality-threshold filter ({preferences.quality_threshold:.2f}): '
+                        f'dropped {pruned} candidate(s) below the floor.'
+                    )
+                candidates = survivors
+            else:
+                # Don't ship an empty fan-out on a too-strict floor —
+                # keep the single best candidate and surface the fact.
+                reasoning.append(
+                    f'Quality-threshold {preferences.quality_threshold:.2f} excluded every '
+                    f'candidate; falling back to the single best.'
+                )
+                candidates = candidates[:1]
 
         # Regime ``suggested_top_k`` is **advisory only**. The pipeline's
         # contract is "respect the caller's ``top_k``", and the
